@@ -1,0 +1,29 @@
+# Folder ownership per epic (plan section 0.2). Foundation files are owned by E1.
+# Replace the @placeholders with real handles when the epic owners are assigned.
+*                                         @epic1-owner
+/src/CaseIntake.Contracts/                @epic1-owner @epic2-owner @epic3-owner @epic4-owner @epic5-owner
+/src/CaseIntake.Domain/                   @epic2-owner @epic4-owner @epic1-owner
+/src/CaseIntake.Persistence/              @epic1-owner
+/src/CaseIntake.Persistence/Configurations/Cases/        @epic2-owner
+/src/CaseIntake.Persistence/Configurations/Identity/     @epic3-owner
+/src/CaseIntake.Persistence/Configurations/Attachments/  @epic4-owner
+/src/CaseIntake.ServiceDefaults/          @epic1-owner
+/src/CaseIntake.MigrationService/         @epic1-owner
+/src/CaseIntake.Cases/                    @epic2-owner
+/src/CaseIntake.Identity/                 @epic3-owner
+/src/CaseIntake.Attachments/              @epic4-owner
+/src/CaseIntake.VeteranLookup.Client/     @epic4-owner
+/src/CaseIntake.VeteranLookup.Mock/       @epic4-owner
+/src/CaseIntake.Web/                      @epic5-owner
+/src/CaseIntake.Web/Components/Account/   @epic3-owner
+/tests/CaseIntake.TestKit/                @epic1-owner
+/tests/CaseIntake.IntegrationTests/       @epic1-owner
+/tests/CaseIntake.Cases.Tests/            @epic2-owner
+/tests/CaseIntake.Identity.Tests/         @epic3-owner
+/tests/CaseIntake.Attachments.Tests/      @epic4-owner
+/tests/CaseIntake.VeteranLookup.Tests/    @epic4-owner
+/tests/CaseIntake.Web.Tests/              @epic5-owner
+/tests/CaseIntake.E2E/                    @epic5-owner @epic3-owner
+/docker-compose.yml                       @epic1-owner
+/Dockerfile                               @epic1-owner
+/docs/adr/                                @epic1-owner

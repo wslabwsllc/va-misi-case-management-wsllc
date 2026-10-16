@@ -194,7 +194,7 @@ public static class Telemetry { public const string ActivitySourceName = "CaseIn
 
 **Operation contract:** Each public service method awaits `ICurrentUser.GetAsync(ct)` once and checks the returned actor’s permissions. Case/attachment methods create their own context through `IDbContextFactory<AppDbContext>` and dispose it before returning; lookup needs no database context. No actor is accepted from browser input. Pass the immutable actor to persistence audit helpers; pass primitive actor identifiers to Domain when needed. Download streams transfer disposal responsibility to the HTTP result and do not keep a context open.
 
-**Seed contract:** Persistence owns `ISeedContributor` with `int Order { get; }` and `Task SeedAsync(CancellationToken ct)`. The migrator resolves each contributor in its own DI scope. Contributors resolve their own factory or Identity stores, own their transaction, check stable seed keys, and fail startup if any Identity result or persistence operation fails. No EF `DbContext` parameter leaks into Contracts.
+**Seed contract:** Persistence owns `ISeedContributor` with `static abstract int Order { get; }` (read at registration, so the runner orders contributors without constructing them) and `Task SeedAsync(CancellationToken ct)`. The migrator resolves each contributor in its own DI scope. Contributors resolve their own factory or Identity stores, own their transaction, check stable seed keys, and fail startup if any Identity result or persistence operation fails. No EF `DbContext` parameter leaks into Contracts.
 
 **Other foundation agreements:**
 - **Time:** inject `TimeProvider`. Never use `DateTime.Now` or `DateTimeOffset.Now` (BannedApiAnalyzers enforces this). Every stored timestamp is a UTC `DateTimeOffset` mapped to `timestamptz`.
@@ -292,6 +292,7 @@ Before marking a story complete, record changed artifacts, acceptance criteria e
 - *Consumes:* entity configurations from E2/E3/E4. E4's Dockerfile for `veteran-lookup`. Each module's `AddXxxModule()`.
 
 ### E1-S1 — Solution skeleton, version pinning and contracts project
+**Status: ✅ Done** (verified: Release build 0 warnings; 56 tests incl. architecture rules; see `docs/verification.md`).
 **Story:** As a developer on any epic, I want a buildable solution with pinned SDK and package versions and the agreed contracts project, so that all epic owners can build on a stable base after G0.
 **Acceptance criteria:**
 - Given a clean clone, when I run `dotnet build`, then every project targets `net10.0` and builds with zero warnings.
@@ -305,6 +306,7 @@ Before marking a story complete, record changed artifacts, acceptance criteria e
 Before implementing package APIs, verify the supported .NET LTS, exact SDK/runtime/shared-framework versions, EF Core/Npgsql compatibility, and test-runner options against official documentation. Pin SDK and packages; record resolved runtime and shared-framework versions from the built image. Package pins alone do not pin Blazor's shared framework. Pin image versions or digests as appropriate and document their update process. The Dockerfile tag, Ubuntu variant, healthcheck utilities and non-root volume permissions must be proven by a build, not assumed.
 
 ### E1-S2 — Container images and Docker Compose topology
+**Status: 🟡 Partial.** Dockerfile, Compose topology, healthchecks and volumes done; `db`, `migrator`, `web` verified individually. Blocked: `veteran-lookup` Dockerfile (E4), so full `docker compose up --build` and the offline check are unverified; Playwright layer deferred to E5-S9.
 **Story:** As an evaluator, I want to run `docker compose up --build` from the repo root and get the whole application at http://localhost:8080, so that I can evaluate it without any manual setup.
 **Acceptance criteria:**
 - Given a machine with Docker Compose v2 and no other setup, when I run `docker compose up --build`, then images build, `db` becomes healthy, `migrator` finishes successfully, `veteran-lookup` and `web` become healthy, and http://localhost:8080 serves the login page.
@@ -318,6 +320,7 @@ Before implementing package APIs, verify the supported .NET LTS, exact SDK/runti
 Keep local CSS, fonts, JavaScript, and browser assets in the submitted images. Disable external telemetry exporters by default. Verify startup, the full primary workflow, and the complete test command with external egress unavailable after the initial build. Persist Data Protection keys in the `dataprotection` named volume, and test cookie validity after web-container recreation. Exempt login, static assets and intentionally public liveness/readiness endpoints from fallback authorization as needed. Readiness must exercise useful local dependencies without making its expected unauthenticated probe redirect to login.
 
 ### E1-S3 — AppDbContext, migrations and migration service
+**Status: 🟡 Partial.** Migrator (apply, idempotent, 60 s backoff, web gated on it), factory contexts and design-time factory done and tested. Remaining: E2/E3/E4 mappings in the migration, and the case-plus-audit rollback check (needs E2).
 **Story:** As an operator, I want the database schema created and upgraded automatically at startup, so that the app is usable right after `docker compose up --build`.
 **Acceptance criteria:**
 - Given an empty database, when the `migrator` container runs, then all EF Core migrations are applied and the container exits with code 0.
@@ -332,6 +335,7 @@ Keep local CSS, fonts, JavaScript, and browser assets in the submitted images. D
 Interactive Server DI scopes can last for a circuit. Never retain an `AppDbContext` for that lifetime. Use `IDbContextFactory<AppDbContext>` and create/dispose a context per operation. Queries return materialized DTOs, not tracked entities or deferred queries. A mutation uses one context and transaction for its business changes and audit entry. Concurrent component operations must not share a context.
 
 ### E1-S4 — Deterministic synthetic seeding
+**Status: 🟡 Partial.** `ISeedContributor`, ordered per-scope `SeedRunner`, failure propagation and idempotence tested. Remaining: contributors and Bogus fixtures from E2/E3 and the two-database determinism test.
 **Story:** As an evaluator, I want the app to start with realistic synthetic cases and demo users, so that I can try paging, filtering, sorting and the workflow straight away.
 **Acceptance criteria:**
 - Given a freshly migrated DB, when seeding runs, then every registered `ISeedContributor` runs in `Order`, and the synthetic business fixtures and demo credentials are identical on every clean start. Identity security salts and stamps need not be byte-identical.
@@ -344,6 +348,7 @@ Interactive Server DI scopes can last for a circuit. Never retain an `AppDbConte
 Prove two startup cases: fresh volumes and existing volumes after user edits/uploads. Repeat migrate/seed/start without duplicates, resetting passwords, or overwriting user edits. Seed with stable fixture keys, not just an `Any()` check that skips partially completed work. Identity salts, password hashes and security stamps are intentionally random and excluded from fixture equality checks. Handle contributor failures with a nonzero migrator exit. Do not wrap Identity work in a transaction owned by an unrelated context.
 
 ### E1-S5 — UTC time handling
+**Status: ✅ Done** (converters, `timestamptz` convention incl. Identity fields, banned APIs, session `Timezone=UTC`, raw read-back test).
 **Story:** As a reviewer, I want every stored timestamp to be UTC and enforced by tooling, so that times are unambiguous and the spec's time rule holds.
 **Acceptance criteria:**
 - Given any entity with a timestamp, when it's saved, then the column type is `timestamptz`, application reads use UTC, and the database session uses UTC for textual timestamp output.
@@ -354,6 +359,7 @@ Prove two startup cases: fresh volumes and existing volumes after user edits/upl
 **Traces to:** R-4.5-10
 
 ### E1-S6 — Structured logs and health checks
+**Status: 🟡 Partial.** JSON logs, operation scopes, SSN scrubbing, `/health/live` and `/health/ready` done and tested. Remaining: key domain-operation events emitted by E2–E4, and captured-log checks on their success/failure paths.
 **Story:** As an operator, I want structured logs with operation IDs and health endpoints, so that I can see what the app is doing and diagnose failures.
 **Acceptance criteria:**
 - Given any HTTP request or Blazor circuit action, when it's logged, then the log is JSON on stdout with timestamp (UTC), level, category, EventId and operation ID; include TraceId/SpanId when an activity exists. Create an operation scope for interactive actions so correlation never depends on an HTTP request.
@@ -367,6 +373,7 @@ Prove two startup cases: fresh volumes and existing volumes after user edits/upl
 Do not log SSNs, deterministic hashes of SSNs, passwords, request/response bodies, veteran names/addresses, or attachment content. Redaction packages do not automatically scrub arbitrary log strings and telemetry. Use an allowlist of safe structured fields, disable HTTP body logging, and test captured application and HTTP-client logs on success and failure paths.
 
 ### E1-S7 — Test harness and `tests` compose service
+**Status: 🟡 Partial.** TestKit, `tests` service, wrapper (failing test → non-zero verified) and 56 passing tests in the container done. Remaining: other epics' test projects, E2E/Playwright, run without `--no-deps` (needs E4 service), zero-test check not exercised.
 **Story:** As an evaluator, I want `docker compose run --rm tests` to run the complete automated suite, so that I can check quality with one command.
 **Acceptance criteria:**
 - Given the repo root, when I run `docker compose run --rm tests`, then every test project (unit, bUnit, integration, OpenAPI conformance, E2E/a11y) runs, a summary prints, and the exit code is non-zero if any test fails.
@@ -382,6 +389,7 @@ Put `tests` behind a Compose profile so ordinary startup does not launch the sui
 Give each concurrent integration fixture a unique database or serialize all fixtures sharing a resettable database. Resetting a shared database between classes is unsafe when classes run concurrently. Browser tests use a separate application host/database and temporary attachment root, with the real Identity flow and real local lookup service. Test setup creates required databases automatically and never resets evaluator demo data. A local `dotnet test` path must document browser prerequisites or use an automated helper; the evaluator's required Compose command has no such prerequisites beyond Docker.
 
 ### E1-S8 — Technical decision documentation, versions and README
+**Status: 🟡 Partial.** ADR template/index, E1 ADRs 0001–0004, `versions.md` (drift test), assumptions/limitations and README done. Remaining: other epics' ADRs, `traceability.md`, link check, G3/G4 verification entries.
 **Story:** As an evaluator, I want concise decision records covering choices, alternatives, tradeoffs, assumptions and limitations, so that I can judge the engineering reasoning.
 **Acceptance criteria:**
 - Given `docs/adr/`, when I open it, then there's an index plus ADRs (MADR template: context, decision, alternatives, tradeoffs, consequences) for at least: .NET/Blazor/EF Core versions (E1), render mode (E5), data access and DB engine (E1), auth and roles (E3), workflow design (E2), audit approach (E2), attachment storage (E4), veteran lookup mock/client (E4), telemetry (E1), test strategy (E1), accessibility approach (E5).
@@ -394,6 +402,7 @@ Give each concurrent integration fixture a unique database or serialize all fixt
 **Traces to:** R-4.2-15, R-4.5-2, R-4.5-3, R-4.5-4
 
 ### E1-S9 — Government requirement change and final submission readiness
+**Status: ⏳ Not started** (Government change not received; G4 pending).
 **Story:** As the offeror, I want a defined process to absorb the Government-provided requirement change without regressing anything, so that the final repository submission meets both the original spec and the change.
 **Acceptance criteria:**
 - Given the change is received, when it's analyzed, then an impact note (`docs/requirement-change.md`) maps it to the affected epics and stories, and new stories are added to this plan and to the traceability table.
