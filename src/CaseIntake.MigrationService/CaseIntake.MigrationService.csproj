@@ -4,6 +4,7 @@
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Cases\CaseIntake.Cases.csproj" />
     <ProjectReference Include="..\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
     <ProjectReference Include="..\CaseIntake.ServiceDefaults\CaseIntake.ServiceDefaults.csproj" />
   </ItemGroup>

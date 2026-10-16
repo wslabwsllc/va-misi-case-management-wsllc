@@ -1,0 +1,96 @@
+namespace CaseIntake.Domain.Cases;
+
+/// <summary>Audit action names. Stored as text; never rename an existing value.</summary>
+public static class AuditActions
+{
+    public const string Created = "Created";
+    public const string Edited = "Edited";
+    public const string StatusChanged = "StatusChanged";
+    public const string Reopened = "Reopened";
+    public const string AttachmentUploaded = "AttachmentUploaded";
+}
+
+/// <summary>
+/// What happened to a case, independent of who did it (the actor is supplied by the persistence audit helper).
+/// <paramref name="Details"/> is a short, safe summary such as changed field names; it never contains an SSN,
+/// veteran details or description text.
+/// </summary>
+public sealed record AuditEvent(
+    string Action,
+    DateTimeOffset OccurredAtUtc,
+    CaseStatus? FromStatus = null,
+    CaseStatus? ToStatus = null,
+    string? Details = null)
+{
+    public static AuditEvent Created(DateTimeOffset occurredAtUtc, bool hasVeteranSnapshot) =>
+        new(AuditActions.Created, occurredAtUtc, null, CaseWorkflow.InitialStatus,
+            hasVeteranSnapshot ? "Veteran snapshot recorded" : null);
+
+    public static AuditEvent Edited(DateTimeOffset occurredAtUtc, IReadOnlyCollection<string> changedFields) =>
+        new(AuditActions.Edited, occurredAtUtc, Details: $"Changed: {string.Join(", ", changedFields)}");
+
+    /// <summary>Resolved→InProgress is recorded as <see cref="AuditActions.Reopened"/>; every other edge as <see cref="AuditActions.StatusChanged"/>.</summary>
+    public static AuditEvent StatusChange(DateTimeOffset occurredAtUtc, CaseStatus from, CaseStatus to) =>
+        new(CaseWorkflow.IsReopen(from, to) ? AuditActions.Reopened : AuditActions.StatusChanged, occurredAtUtc, from, to);
+}
+
+/// <summary>
+/// One append-only audit trail row. Created only through <see cref="Record"/>; the persistence layer rejects any
+/// attempt to modify or delete a saved entry.
+/// </summary>
+public sealed class CaseAuditEntry
+{
+    private CaseAuditEntry()
+    {
+    }
+
+    public long Id { get; private set; }
+    public long CaseId { get; private set; }
+    public Case Case { get; private set; } = null!;
+    public DateTimeOffset OccurredAtUtc { get; private set; }
+
+    /// <summary>Identity user ID of the actor.</summary>
+    public string ActorId { get; private set; } = string.Empty;
+
+    /// <summary>Actor's display (user) name at the time of the action.</summary>
+    public string Actor { get; private set; } = string.Empty;
+
+    public string Action { get; private set; } = string.Empty;
+    public CaseStatus? FromStatus { get; private set; }
+    public CaseStatus? ToStatus { get; private set; }
+    public string? Details { get; private set; }
+
+    /// <summary>Creates an entry linked to <paramref name="caseEntity"/> through the navigation, so it also works before the case has an ID.</summary>
+    public static CaseAuditEntry Record(Case caseEntity, string actorId, string actorName, AuditEvent auditEvent)
+    {
+        ArgumentNullException.ThrowIfNull(caseEntity);
+        ArgumentNullException.ThrowIfNull(auditEvent);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(actorName);
+        ArgumentException.ThrowIfNullOrWhiteSpace(auditEvent.Action);
+        if (auditEvent.Action.Length > CaseFieldLimits.AuditActionMaxLength)
+        {
+            throw new ArgumentException("Audit action is too long.", nameof(auditEvent));
+        }
+        if (auditEvent.Details is { Length: > CaseFieldLimits.AuditDetailsMaxLength })
+        {
+            throw new ArgumentException("Audit details are too long.", nameof(auditEvent));
+        }
+
+        return new CaseAuditEntry
+        {
+            Case = caseEntity,
+            CaseId = caseEntity.Id,
+            OccurredAtUtc = auditEvent.OccurredAtUtc.ToUniversalTime(),
+            ActorId = Truncate(actorId),
+            Actor = Truncate(actorName),
+            Action = auditEvent.Action,
+            FromStatus = auditEvent.FromStatus,
+            ToStatus = auditEvent.ToStatus,
+            Details = auditEvent.Details,
+        };
+    }
+
+    private static string Truncate(string value) =>
+        value.Length <= CaseFieldLimits.ActorMaxLength ? value : value[..CaseFieldLimits.ActorMaxLength];
+}

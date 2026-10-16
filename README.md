@@ -2,9 +2,9 @@
 
 Blazor Web App (.NET 10, Interactive Server) with PostgreSQL, built per [docs/Epic_Plan.md](docs/Epic_Plan.md).
 
-> **Status:** Epic 1 (platform, persistence, delivery pipeline) foundation is in place. Case, identity, lookup,
-> attachment and UI features arrive with Epics 2 to 5, so `http://localhost:8080` currently shows a host page only and
-> there are no demo accounts yet. See [docs/verification.md](docs/verification.md) for what has been verified.
+> **Status:** Epic 1 (platform, persistence, delivery pipeline) and Epic 2 (case domain, intake, list, workflow and
+> audit services, with 72 seeded synthetic cases) are in place. Identity, lookup, attachment and UI features arrive
+> with Epics 3 to 5, so `http://localhost:8080` currently shows a host page only and there are no demo accounts yet. See [docs/verification.md](docs/verification.md) for what has been verified.
 
 ## Run
 
@@ -41,13 +41,15 @@ Browser (E2E) prerequisites will be documented here with the first Playwright te
 | Path | Purpose |
 |---|---|
 | `src/CaseIntake.Contracts` | Shared service contracts and DTOs (additive changes only) |
-| `src/CaseIntake.Domain` | Domain types (`CaseStatus`; case/attachment entities and workflow from E2/E4) |
+| `src/CaseIntake.Domain` | Domain types: `Case`, `CaseAuditEntry`, `CaseWorkflow`, `CaseTextRules` (E2); attachment entities (E4) |
+| `src/CaseIntake.Cases` | `ICaseService` implementation (intake, detail, edit, list, status workflow, audit trail) and the case seed |
 | `src/CaseIntake.Persistence` | `AppDbContext`, Identity types, migrations, seeding runner, UTC conventions |
 | `src/CaseIntake.ServiceDefaults` | JSON logging with SSN scrubbing, operation scopes, health checks |
 | `src/CaseIntake.MigrationService` | One-shot migrate and seed worker |
 | `src/CaseIntake.Web` | Blazor host and composition root |
 | `tests/CaseIntake.TestKit` | Fixtures, `CaseIntakeWebFactory`, fakes of every contract |
-| `tests/CaseIntake.IntegrationTests` | Architecture, migration, UTC, seeding, logging and health tests |
+| `tests/CaseIntake.Cases.Tests` | E2 unit tests: workflow (all 25 pairs), text rules, change detection, permissions |
+| `tests/CaseIntake.IntegrationTests` | Architecture, migration, UTC, seeding, logging, health and case-service tests (PostgreSQL) |
 
 ## Documents
 

@@ -40,6 +40,10 @@ public sealed class CaseIntakeWebFactory(
             config.AddInMemoryCollection(settings);
         });
 
+        // Program.cs reads the connection string while registering services, before ConfigureAppConfiguration
+        // callbacks are applied under minimal hosting; host settings are visible from the start.
+        builder.UseSetting($"ConnectionStrings:{Persistence.PersistenceServiceCollectionExtensions.ConnectionStringName}", connectionString);
+
         builder.ConfigureTestServices(services =>
         {
             if (useTestAuthentication)

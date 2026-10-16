@@ -22,6 +22,142 @@ namespace CaseIntake.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CaseIntake.Domain.Cases.Case", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("CreatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(4000)
+                        .HasColumnType("character varying(4000)");
+
+                    b.Property<string>("SeedKey")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UpdatedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<uint>("Version")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("VeteranAddress")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<string>("VeteranName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("VeteranSsnLast4")
+                        .HasMaxLength(4)
+                        .HasColumnType("character(4)")
+                        .IsFixedLength();
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("SeedKey")
+                        .IsUnique()
+                        .HasFilter("\"SeedKey\" IS NOT NULL");
+
+                    b.HasIndex("Status");
+
+                    b.HasIndex("UpdatedAtUtc");
+
+                    b.ToTable("Cases", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Case_Id_Positive", "\"Id\" > 0");
+
+                            t.HasCheckConstraint("CK_Case_Status_Range", "\"Status\" BETWEEN 0 AND 4");
+
+                            t.HasCheckConstraint("CK_Case_Title_Length", "char_length(\"Title\") >= 5");
+
+                            t.HasCheckConstraint("CK_Case_VeteranSsnLast4_Digits", "\"VeteranSsnLast4\" IS NULL OR \"VeteranSsnLast4\" ~ '^[0-9]{4}$'");
+
+                            t.HasCheckConstraint("CK_Case_Veteran_Complete", "(\"VeteranName\" IS NULL) = (\"VeteranAddress\" IS NULL) AND (\"VeteranName\" IS NULL) = (\"VeteranSsnLast4\" IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.Cases.CaseAuditEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("ActorId")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("CaseId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<int?>("FromStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int?>("ToStatus")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CaseId", "OccurredAtUtc", "Id");
+
+                    b.ToTable("CaseAuditEntries", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_CaseAuditEntry_FromStatus_Range", "\"FromStatus\" IS NULL OR \"FromStatus\" BETWEEN 0 AND 4");
+
+                            t.HasCheckConstraint("CK_CaseAuditEntry_ToStatus_Range", "\"ToStatus\" IS NULL OR \"ToStatus\" BETWEEN 0 AND 4");
+                        });
+                });
+
             modelBuilder.Entity("CaseIntake.Persistence.AppRole", b =>
                 {
                     b.Property<string>("Id")
@@ -216,6 +352,17 @@ namespace CaseIntake.Persistence.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.Cases.CaseAuditEntry", b =>
+                {
+                    b.HasOne("CaseIntake.Domain.Cases.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Case");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>

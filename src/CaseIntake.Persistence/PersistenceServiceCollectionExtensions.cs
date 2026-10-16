@@ -34,9 +34,7 @@ public static class PersistenceServiceCollectionExtensions
         services.AddDbContextFactory<AppDbContext>(options => options
             .UseNpgsql(connectionString, ConfigureNpgsql)
             .EnableSensitiveDataLogging(false)
-            .EnableDetailedErrors(false)
-            // Entity configurations arrive with the E2/E3/E4 modules; until then an empty scan is expected.
-            .ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.CoreEventId.NoEntityTypeConfigurationsWarning)));
+            .EnableDetailedErrors(false));
         services.AddSingleton<DatabaseInitializer>();
         return services;
     }

@@ -24,3 +24,25 @@ Runtime inventory from the image: Microsoft.NETCore.App 10.0.13, Microsoft.AspNe
 - Offline (no-egress) run, repeated-start persistence, cookie validity after recreation: G3, need E3/E5.
 - Seeding content, case/audit/attachment migrations, Playwright image layer: E2/E3/E4/E5.
 - Traceability table and ADRs owned by other epics: later gates.
+
+# Verification record (Epic 2 case domain)
+
+Base revision: `8485c71` plus Epic 2 changes on branch `epic-2-case-domain` (uncommitted). Same host as above.
+Docker checks used an isolated Compose project (`-p caseintake-e2v`, removed afterwards with `down -v`) so no demo
+volumes were touched. The Docker rows were recorded before the working tree was accidentally deleted and the
+files were recreated; host build and test results were re-run after recreation.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln` | 0 warnings, 0 errors |
+| `dotnet test CaseIntake.sln` (host) | 261 passed (Cases.Tests 104, IntegrationTests 157), 0 failed |
+| `docker compose -p caseintake-e2v build web` | image built (exit 0) |
+| `docker compose -p caseintake-e2v run --rm migrator` x2 on empty DB | exit 0 both; run 1 applied 2 migrations and seeded 72 of 72 cases; run 2 applied none and added 0 |
+| `psql` row counts after seeding | New 12, Triaged 12, InProgress 24, Resolved 12, Closed 12; 252 audit entries |
+| `docker compose -p caseintake-e2v run --rm --no-deps tests` | Cases.Tests 104/0, IntegrationTests 157/0, `RESULT: PASS` (`--no-deps`: veteran-lookup is E4) |
+
+## Not verified / blocked (E2)
+
+- End-to-end use through the UI and with real Identity users: needs E3 (`ICurrentUser`, demo users) and E5 (pages).
+- Running the web project in `Development` fails DI validation until E3 registers `ICurrentUser` (see assumptions doc).
+- Optional 10k-row list performance check was not run.
