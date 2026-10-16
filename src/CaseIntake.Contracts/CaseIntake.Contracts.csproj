@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Contracts: may reference Domain only. No EF Core, Identity or feature projects (plan 0.2). -->
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Domain\CaseIntake.Domain.csproj" />
+  </ItemGroup>
+</Project>

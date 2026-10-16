@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Cross-cutting plumbing: structured JSON logs, operation scopes, SSN scrubbing, health checks. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Npgsql" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Contracts\CaseIntake.Contracts.csproj" />
+  </ItemGroup>
+</Project>

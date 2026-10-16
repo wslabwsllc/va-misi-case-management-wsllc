@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Worker">
+  <!-- One-shot composition root: migrate, seed, exit. Seed contributors from E2/E3 are registered in Program.cs. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
+    <ProjectReference Include="..\CaseIntake.ServiceDefaults\CaseIntake.ServiceDefaults.csproj" />
+  </ItemGroup>
+</Project>

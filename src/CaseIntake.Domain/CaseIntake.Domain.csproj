@@ -1,0 +1,3 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Domain: no EF Core, Identity, Contracts or feature-project dependencies (plan 0.2). -->
+</Project>

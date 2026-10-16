@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Persistence: references Domain and Contracts only. Owns AppDbContext, Identity entity types,
+       EF configurations and migrations (plan 0.2). -->
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Domain\CaseIntake.Domain.csproj" />
+    <ProjectReference Include="..\CaseIntake.Contracts\CaseIntake.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaseIntake.IntegrationTests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,103 @@
+# One-command evaluation:  docker compose up --build     (http://localhost:8080)
+# Full test suite:         docker compose run --rm tests
+# All services are linux/amd64. Credentials below are synthetic and local-only. No .env file is needed.
+name: caseintake
+
+x-eval-image: &eval-image
+  image: caseintake-eval:local
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: eval
+
+services:
+  db:
+    image: postgres:17
+    platform: linux/amd64
+    environment:
+      POSTGRES_USER: caseintake
+      POSTGRES_PASSWORD: caseintake_local_only
+      POSTGRES_DB: caseintake
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U caseintake -d caseintake"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  migrator:
+    <<: *eval-image
+    command: ["dotnet", "/app/migrator/CaseIntake.MigrationService.dll"]
+    environment:
+      ConnectionStrings__CaseIntake: &conn "Host=db;Port=5432;Database=caseintake;Username=caseintake;Password=caseintake_local_only;Timezone=UTC"
+      Seed__DemoPassword: &demo-password "Demo-Passw0rd!"
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  # Owned by E4: src/CaseIntake.VeteranLookup.Mock/Dockerfile must produce an image serving /health and the lookup endpoint.
+  # The probe is inline (same logic as scripts/healthcheck.sh) so it needs only bash, which the Debian/Ubuntu
+  # mcr.microsoft.com/dotnet/aspnet images ship; it does not depend on files from the eval image.
+  veteran-lookup:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: src/CaseIntake.VeteranLookup.Mock/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8081
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /health HTTP/1.0\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r -t 5 status <&3 && [[ $$status == HTTP/*' 200 '* ]]"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  web:
+    <<: *eval-image
+    command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__CaseIntake: *conn
+      VeteranLookup__BaseUrl: http://veteran-lookup:8081
+      Attachments__RootPath: /attachments
+      DataProtection__KeysPath: /dataprotection
+      Seed__DemoPassword: *demo-password
+    volumes:
+      - attachments:/attachments
+      - dataprotection:/dataprotection
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+      veteran-lookup:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "/src/scripts/healthcheck.sh", "127.0.0.1", "8080", "/health/ready"]
+      interval: 5s
+      timeout: 6s
+      retries: 30
+      start_period: 5s
+
+  tests:
+    <<: *eval-image
+    profiles: ["tests"]
+    command: ["/src/scripts/run-tests.sh"]
+    environment:
+      TESTKIT_POSTGRES_ADMIN: "Host=db;Port=5432;Database=postgres;Username=caseintake;Password=caseintake_local_only"
+      VeteranLookup__BaseUrl: http://veteran-lookup:8081
+    volumes:
+      - testresults:/results
+    depends_on:
+      db:
+        condition: service_healthy
+      veteran-lookup:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  attachments:
+  dataprotection:
+  testresults:

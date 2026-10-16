@@ -1,0 +1,5 @@
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; margin: 0; color: #1b1b1b; background: #fff; }
+header { padding: 0.75rem 1rem; background: #112e51; color: #fff; }
+main { padding: 1rem; }
+.skip-link { position: absolute; left: -999px; }
+.skip-link:focus { left: 0.5rem; top: 0.5rem; background: #fff; padding: 0.5rem; z-index: 10; }
