@@ -1,3 +1,4 @@
+using CaseIntake.Cases;
 using CaseIntake.Persistence;
 using CaseIntake.ServiceDefaults;
 using CaseIntake.Web.Components;
@@ -7,9 +8,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
 builder.Services.AddPersistence(builder.Configuration);
+builder.Services.AddCasesModule(builder.Configuration);           // E2
 // Module registrations (one line each, added by the owning epic):
 //   builder.Services.AddIdentityModule(builder.Configuration);   // E3
-//   builder.Services.AddCasesModule(builder.Configuration);      // E2
 //   builder.Services.AddAttachmentsModule(builder.Configuration);// E4
 //   builder.Services.AddVeteranLookupClient(builder.Configuration); // E4
 

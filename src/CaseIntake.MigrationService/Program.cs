@@ -1,3 +1,4 @@
+using CaseIntake.Cases;
 using CaseIntake.Persistence;
 using CaseIntake.ServiceDefaults;
 using Microsoft.Extensions.DependencyInjection;
@@ -9,6 +10,7 @@ using Microsoft.Extensions.Logging;
 var builder = Host.CreateApplicationBuilder(args);
 builder.AddServiceDefaults(includeHealthChecks: false);
 builder.Services.AddPersistence(builder.Configuration);
+builder.Services.AddCasesSeed();   // E2, order 20
 
 using var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("CaseIntake.MigrationService");
