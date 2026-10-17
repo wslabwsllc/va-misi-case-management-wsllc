@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Identity feature module (E3): references Persistence, Domain and Contracts only; never another feature module (plan 0.2).
+       AppUser/AppRole and AppDbContext live in Persistence to avoid a Persistence -> Identity cycle. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
+    <ProjectReference Include="..\CaseIntake.Domain\CaseIntake.Domain.csproj" />
+    <ProjectReference Include="..\CaseIntake.Contracts\CaseIntake.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaseIntake.Identity.Tests" />
+    <InternalsVisibleTo Include="CaseIntake.IntegrationTests" />
+  </ItemGroup>
+</Project>

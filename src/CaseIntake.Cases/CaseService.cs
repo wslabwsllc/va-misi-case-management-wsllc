@@ -29,7 +29,7 @@ public sealed class CaseService(
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesCreate))
         {
-            return Denied<CaseDetailDto>(nameof(CreateAsync), actor);
+            return Denied<CaseDetailDto>(nameof(CreateAsync), actor, Permissions.CasesCreate, null);
         }
         if (CaseRequestValidator.Validate(request) is { } invalid)
         {
@@ -54,7 +54,7 @@ public sealed class CaseService(
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesView))
         {
-            return Denied<CaseDetailDto>(nameof(GetAsync), actor);
+            return Denied<CaseDetailDto>(nameof(GetAsync), actor, Permissions.CasesView, id);
         }
 
         await using var db = await contextFactory.CreateDbContextAsync(ct);
@@ -70,7 +70,7 @@ public sealed class CaseService(
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesEdit))
         {
-            return Denied<CaseDetailDto>(nameof(UpdateAsync), actor);
+            return Denied<CaseDetailDto>(nameof(UpdateAsync), actor, Permissions.CasesEdit, id);
         }
         if (CaseRequestValidator.Validate(request) is { } invalid)
         {
@@ -117,7 +117,7 @@ public sealed class CaseService(
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesView))
         {
-            return Denied<CaseDetailDto>(nameof(ChangeStatusAsync), actor);
+            return Denied<CaseDetailDto>(nameof(ChangeStatusAsync), actor, Permissions.CasesView, id);
         }
         if (!Enum.IsDefined(request.TargetStatus))
         {
@@ -138,7 +138,7 @@ public sealed class CaseService(
         }
         if (!actor.HasPermission(Permissions.Transition(from, request.TargetStatus)))
         {
-            return Denied<CaseDetailDto>(nameof(ChangeStatusAsync), actor);
+            return Denied<CaseDetailDto>(nameof(ChangeStatusAsync), actor, Permissions.Transition(from, request.TargetStatus), id);
         }
         if (entity.Version != request.Version)
         {
@@ -164,7 +164,7 @@ public sealed class CaseService(
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesView))
         {
-            return Denied<PagedResult<CaseSummaryDto>>(nameof(ListAsync), actor);
+            return Denied<PagedResult<CaseSummaryDto>>(nameof(ListAsync), actor, Permissions.CasesView, null);
         }
         if (CaseListQueryValidator.Validate(query) is { } invalid)
         {
@@ -188,7 +188,7 @@ public sealed class CaseService(
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesView))
         {
-            return Denied<IReadOnlyList<AuditEntryDto>>(nameof(GetAuditTrailAsync), actor);
+            return Denied<IReadOnlyList<AuditEntryDto>>(nameof(GetAuditTrailAsync), actor, Permissions.CasesView, id);
         }
 
         await using var db = await contextFactory.CreateDbContextAsync(ct);
@@ -233,9 +233,9 @@ public sealed class CaseService(
         }
     }
 
-    private Result<T> Denied<T>(string operation, OperationActor actor)
+    private Result<T> Denied<T>(string operation, OperationActor actor, string permission, long? caseId)
     {
-        CaseLog.OperationDenied(logger, operation, actor.UserId);
+        CaseLog.AuthorizationDenied(logger, actor.UserId, permission, caseId?.ToString(System.Globalization.CultureInfo.InvariantCulture), operation);
         return Result<T>.Failure(CaseErrors.Forbidden);
     }
 

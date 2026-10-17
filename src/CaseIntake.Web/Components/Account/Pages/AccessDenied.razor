@@ -1,0 +1,22 @@
+@page "/account/access-denied"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+
+@* Target of the cookie handler's access-denied redirect for HTTP page requests. The denial was already logged by the
+   authorization middleware; this page only answers 403 with an accessible explanation (E3-S5). *@
+<PageTitle>Access denied - Case Intake and Triage</PageTitle>
+
+<AccessDeniedMessage />
+
+@code {
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (HttpContext is { Response.HasStarted: false })
+        {
+            HttpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+        }
+    }
+}

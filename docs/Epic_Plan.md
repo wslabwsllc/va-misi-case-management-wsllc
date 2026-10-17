@@ -560,6 +560,7 @@ All edit/status mutations compare the submitted version and return a conflict wi
 - *Consumes:* `AppDbContext` (E1). The permission constants are used by E2/E4/E5.
 
 ### E3-S1 — Local authentication with ASP.NET Core Identity
+**Status: ✅ Done** (static SSR login/logout, cookie, fallback policy, revalidation, Data Protection; `AuthenticationTests`). Browser focus check of the login error is part of E5-S9.
 **Story:** As a user of the evaluation app, I want to sign in with a local synthetic account, so that I can use the app without any Government or external identity service.
 **Acceptance criteria:**
 - Given valid seeded credentials, when I sign in on `/account/login`, then I'm redirected to the case list and my display name and role are shown.
@@ -571,6 +572,7 @@ All edit/status mutations compare the submitted version and return a conflict wi
 **Traces to:** R-4.1-2, R-4.2-11, R-4.7 (production identity not used)
 
 ### E3-S2 — Roles and permission matrix
+**Status: ✅ Done** (`RolePermissionMap` in Contracts.Security, policy per permission, golden matrix theory, ADR 0007).
 **Story:** As a supervisor, I want different roles to have different permissions, so that only appropriate users can perform sensitive workflow actions.
 **Acceptance criteria:**
 - Given the adopted matrix below, when permissions are evaluated, then each role gets exactly its listed permissions, and the two roles differ. For multiple roles, permissions are the union; unknown roles grant none.
@@ -592,6 +594,7 @@ All edit/status mutations compare the submitted version and return a conflict wi
 **Traces to:** R-4.2-11
 
 ### E3-S3 — `ICurrentUser` for Blazor circuits and endpoints
+**Status: ✅ Done** (`CircuitCurrentUser` unkeyed, `HttpCurrentUser` keyed `CurrentUserSources.Http`; simultaneous-circuit, HTTP and revalidation tests).
 **Story:** As a developer of the domain services, I want one `ICurrentUser` abstraction, so that services can check identity and permissions in the same way whether they're called from an interactive component or an HTTP endpoint.
 **Acceptance criteria:**
 - Given an interactive Server component, when a service resolves `ICurrentUser`, then it reflects the circuit's authenticated user (not a stale or absent `HttpContext`).
@@ -605,6 +608,7 @@ All edit/status mutations compare the submitted version and return a conflict wi
 Use two explicit `ICurrentUser` adapters selected by composition root: the web circuit scope uses the circuit adapter; download endpoints resolve the HTTP adapter explicitly and pass it to a request-scoped service instance. Both implement `GetAsync` and return `OperationActor`. Interactive operations obtain the principal asynchronously from `AuthenticationStateProvider`; HTTP operations use the request principal. Both copy roles and permissions into immutable collections and construct the same actor snapshot for one service operation. Do not block on asynchronous authentication or cache a principal globally. Test separate simultaneous circuits, anonymous access, logout/revalidation, and HTTP downloads to prove identities do not cross operations.
 
 ### E3-S4 — Seeded synthetic demo users
+**Status: ✅ Done** (`IdentitySeedContributor` order 10, stable IDs, idempotent, passwords never reset; README lists the accounts).
 **Story:** As an evaluator, I want ready-made demo accounts for each role, so that I can compare what each role can do during the demo.
 **Acceptance criteria:**
 - Given a fresh start, when seeding runs, then the roles exist and at least one user per role is created (e.g. `caseworker@example.test`, `supervisor@example.test`) with the password from `Seed:DemoPassword` (default set in compose, documented in README).
@@ -614,6 +618,7 @@ Use two explicit `ICurrentUser` adapters selected by composition root: the web c
 **Traces to:** R-4.1-2, R-4.2-11, R-4.5-7
 
 ### E3-S5 — Authorization enforcement across UI, endpoints and services
+**Status: 🟡 Partial — E3 work complete** (policies, 403 access-denied page, `AuthorizationDenied` EventId 3005 everywhere, service matrix, endpoint behavior, interactive access-denied component, and an endpoint guard test that enforces the download rules on E4's endpoint when it lands). Open only through other epics: E4's download endpoint (guarded) and E5's access-denied message for a crafted UI action.
 **Story:** As a supervisor, I want permissions enforced everywhere, not just hidden in the UI, so that users can't bypass role restrictions.
 **Acceptance criteria:**
 - Given a CaseWorker, when they try New→Triaged through the service or a crafted UI action, then they get `Forbidden` (service) and the UI shows an access-denied message.
@@ -627,6 +632,7 @@ Use two explicit `ICurrentUser` adapters selected by composition root: the web c
 Apply permission checks to every public service entry point, including case list, detail, audit retrieval, attachment list, and lookup. Hiding a button is insufficient. Add a test principal with no permissions, since both demo roles can read cases and download files. The browser end-to-end suite must authenticate with real seeded credentials; a test authentication handler is only for isolated authorization tests.
 
 ### E3-S6 — Request security baseline
+**Status: ✅ Done** (antiforgery on login/logout, security headers and CSP, 5-attempt/5-minute lockout, local-only return URLs; limitations documented).
 **Story:** As a reviewer, I want sensible baseline protections on the local app, so that the demo reflects secure defaults even though production hardening is out of scope.
 **Acceptance criteria:**
 - Given a cookie-authenticated HTTP form POST requiring antiforgery, when the token is missing, then it's rejected.
