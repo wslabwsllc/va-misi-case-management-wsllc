@@ -1,0 +1,28 @@
+@using System.Security.Claims
+@using CaseIntake.Identity.CurrentUser
+
+@* Signed-in user's display name and role(s) plus the sign-out button (E3-S1; E5 styles it). Sign-out is a plain HTTP form
+   post carrying an antiforgery token to POST /account/logout. *@
+<AuthorizeView>
+    <Authorized>
+        <div class="user-status">
+            <span>Signed in as <strong data-testid="user-name">@context.User.Identity?.Name</strong>
+                (<span data-testid="user-roles">@RoleText(context.User)</span>)</span>
+            <form method="post" action="account/logout">
+                <AntiforgeryToken />
+                <button type="submit">Sign out</button>
+            </form>
+        </div>
+    </Authorized>
+    <NotAuthorized>
+        <a href="account/login">Sign in</a>
+    </NotAuthorized>
+</AuthorizeView>
+
+@code {
+    private static string RoleText(ClaimsPrincipal user)
+    {
+        var roles = OperationActorFactory.FromPrincipal(user).Roles.Order(StringComparer.Ordinal).ToList();
+        return roles.Count == 0 ? "no role" : string.Join(", ", roles);
+    }
+}

@@ -1,0 +1,74 @@
+@page "/account/login"
+@using System.ComponentModel.DataAnnotations
+@using CaseIntake.Identity.Account
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@inject AccountSignIn AccountSignIn
+@inject NavigationManager Navigation
+
+@* Static SSR (E3-S1): a plain HTTP form post with an antiforgery token; no circuit is needed to sign in. *@
+<PageTitle>Sign in - Case Intake and Triage</PageTitle>
+
+<h1>Sign in</h1>
+<p>Sign in with one of the synthetic demo accounts listed in the README.</p>
+
+@if (errorMessage is not null)
+{
+    @* Focus moves here after a failed attempt (autofocus on a full-page response) and role="alert" announces it. *@
+    <div id="login-error" class="alert alert-error" role="alert" tabindex="-1" autofocus>@errorMessage</div>
+}
+
+<EditForm Model="Input" method="post" OnValidSubmit="SignInAsync" FormName="login" novalidate>
+    <DataAnnotationsValidator />
+    <div class="field">
+        <label for="login-email">Email</label>
+        <InputText id="login-email" @bind-Value="Input.Email" type="email" autocomplete="username" aria-required="true" />
+        <ValidationMessage For="() => Input.Email" />
+    </div>
+    <div class="field">
+        <label for="login-password">Password</label>
+        <InputText id="login-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" aria-required="true" />
+        <ValidationMessage For="() => Input.Password" />
+    </div>
+    <button type="submit">Sign in</button>
+</EditForm>
+
+@code {
+    /// <summary>One message for every failure (unknown account, wrong password, lockout), so accounts cannot be enumerated.</summary>
+    internal const string FailureMessage =
+        "Sign-in failed. Check your email and password and try again. After five failed attempts, sign-in is blocked for five minutes.";
+
+    private string? errorMessage;
+
+    [SupplyParameterFromForm]
+    private InputModel Input { get; set; } = default!;
+
+    [SupplyParameterFromQuery]
+    private string? ReturnUrl { get; set; }
+
+    protected override void OnInitialized() => Input ??= new();
+
+    private async Task SignInAsync()
+    {
+        var outcome = await AccountSignIn.PasswordSignInAsync(Input.Email, Input.Password);
+        if (outcome == SignInOutcome.Succeeded)
+        {
+            // Only application-relative return URLs are honored (open-redirect protection).
+            Navigation.NavigateTo(LocalReturnUrl.Sanitize(ReturnUrl));
+            return;
+        }
+
+        Input.Password = null;
+        errorMessage = FailureMessage;
+    }
+
+    private sealed class InputModel
+    {
+        [Required(ErrorMessage = "Enter your email.")]
+        public string? Email { get; set; }
+
+        [Required(ErrorMessage = "Enter your password.")]
+        [DataType(DataType.Password)]
+        public string? Password { get; set; }
+    }
+}

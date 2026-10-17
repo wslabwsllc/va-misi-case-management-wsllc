@@ -18,6 +18,11 @@ public class PostgresDatabaseFixture : IAsyncLifetime
     public const string AdminConnectionEnvironmentVariable = "TESTKIT_POSTGRES_ADMIN";
     private static readonly Lazy<Task<string>> AdminConnection = new(StartServerAsync);
 
+    // CREATE/DROP DATABASE contend for server-wide locks and can each take seconds on a busy server. Running them one at
+    // a time per test process, with a generous timeout, stops parallel fixtures from timing out (Npgsql's default is 30 s).
+    private static readonly SemaphoreSlim AdminOperations = new(1, 1);
+    private const int AdminCommandTimeoutSeconds = 300;
+
     private string _adminConnectionString = null!;
     private Respawner? _respawner;
 
@@ -32,12 +37,7 @@ public class PostgresDatabaseFixture : IAsyncLifetime
     public async Task InitializeAsync()
     {
         _adminConnectionString = await AdminConnection.Value;
-        await using (var admin = new NpgsqlConnection(_adminConnectionString))
-        {
-            await admin.OpenAsync();
-            await using var create = new NpgsqlCommand($"CREATE DATABASE \"{DatabaseName}\"", admin);
-            await create.ExecuteNonQueryAsync();
-        }
+        await RunAdminCommandAsync($"CREATE DATABASE \"{DatabaseName}\"");
 
         ConnectionString = new NpgsqlConnectionStringBuilder(_adminConnectionString)
         {
@@ -80,10 +80,23 @@ public class PostgresDatabaseFixture : IAsyncLifetime
         }
 
         NpgsqlConnection.ClearAllPools();
-        await using var admin = new NpgsqlConnection(_adminConnectionString);
-        await admin.OpenAsync();
-        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE)", admin);
-        await drop.ExecuteNonQueryAsync();
+        await RunAdminCommandAsync($"DROP DATABASE IF EXISTS \"{DatabaseName}\" WITH (FORCE)");
+    }
+
+    private async Task RunAdminCommandAsync(string sql)
+    {
+        await AdminOperations.WaitAsync();
+        try
+        {
+            await using var admin = new NpgsqlConnection(_adminConnectionString);
+            await admin.OpenAsync();
+            await using var command = new NpgsqlCommand(sql, admin) { CommandTimeout = AdminCommandTimeoutSeconds };
+            await command.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            AdminOperations.Release();
+        }
     }
 
     private static async Task<string> StartServerAsync()

@@ -1,3 +1,4 @@
+using CaseIntake.Contracts.Security;
 using CaseIntake.Contracts.Cases;
 using CaseIntake.Contracts.Common;
 using CaseIntake.Domain.Cases;
@@ -100,7 +101,7 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
         CaseTestHarness.Fail(await harness.Service.CreateAsync(Builders.CreateCase(), CancellationToken.None), ErrorKind.Forbidden);
 
         Assert.Equal(before, await CountCasesAsync());
-        Assert.Equal(2, harness.Logs.Collector.GetSnapshot().Count(r => r.Id.Id == 2004));
+        Assert.Equal(2, harness.Logs.Collector.GetSnapshot().Count(r => r.Id.Id == SecurityEvents.AuthorizationDeniedId));
     }
 
     [Fact]

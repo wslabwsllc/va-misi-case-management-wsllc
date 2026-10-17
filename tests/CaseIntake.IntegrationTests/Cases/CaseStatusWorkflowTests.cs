@@ -1,3 +1,4 @@
+using CaseIntake.Contracts.Security;
 using CaseIntake.Contracts.Cases;
 using CaseIntake.Contracts.Common;
 using CaseIntake.Domain.Cases;
@@ -85,7 +86,7 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         CaseTestHarness.Fail(await harness.Service.ChangeStatusAsync(detail.Id, new ChangeStatusRequest(to, detail.Version), CancellationToken.None), ErrorKind.Forbidden);
 
         Assert.Equal(from, (await harness.LoadAsync(detail.Id)).Status);
-        Assert.Contains(harness.Logs.Collector.GetSnapshot(), r => r.Id.Id == 2004);
+        Assert.Contains(harness.Logs.Collector.GetSnapshot(), r => r.Id.Id == SecurityEvents.AuthorizationDeniedId);
     }
 
     [Theory]

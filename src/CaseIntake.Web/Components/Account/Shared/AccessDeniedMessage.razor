@@ -1,0 +1,40 @@
+@using System.Reflection
+@using CaseIntake.Identity
+@using CaseIntake.Identity.CurrentUser
+@inject NavigationManager Navigation
+@inject ILogger<AccessDeniedMessage> Logger
+
+@* Shared access-denied content (E3-S5; E5 styles it). Used by the /account/access-denied page and, during interactive
+   navigation, by the router's NotAuthorized slot, where PageType is set and the denial is logged here because no HTTP
+   authorization middleware runs. *@
+<h1 tabindex="-1">Access denied</h1>
+<p>You don't have permission to use this page or perform this action with your current role.</p>
+<p><a href="">Back to the case list</a></p>
+
+@code {
+    [Parameter]
+    public Type? PageType { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationState { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (PageType is null || AuthenticationState is null)
+        {
+            return;
+        }
+
+        var actor = OperationActorFactory.FromPrincipal((await AuthenticationState).User);
+        var resource = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
+        var policies = PageType.GetCustomAttributes<AuthorizeAttribute>(inherit: true)
+            .Select(a => a.Policy)
+            .OfType<string>()
+            .Where(p => !actor.HasPermission(p))
+            .DefaultIfEmpty("(policy)");
+        foreach (var permission in policies)
+        {
+            IdentityLog.AuthorizationDenied(Logger, actor.UserId, permission, resource);
+        }
+    }
+}

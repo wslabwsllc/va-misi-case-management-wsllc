@@ -1,10 +1,11 @@
+using CaseIntake.Contracts.Security;
 using Microsoft.Extensions.Logging;
 
 namespace CaseIntake.Cases;
 
 /// <summary>
-/// E2 log events (EventId range 2000-2999). Only safe fields are logged: case IDs, user IDs, statuses, field names
-/// and error codes. Titles, descriptions and veteran details are never logged.
+/// E2 log events (EventId range 2000-2999, plus the shared E3 AuthorizationDenied event). Only safe fields are logged:
+/// case IDs, user IDs, statuses, field names and error codes. Titles, descriptions and veteran details are never logged.
 /// </summary>
 internal static partial class CaseLog
 {
@@ -20,9 +21,10 @@ internal static partial class CaseLog
         Message = "Case {CaseId} moved from {FromStatus} to {ToStatus} by {ActorId}")]
     public static partial void CaseStatusChanged(ILogger logger, long caseId, string fromStatus, string toStatus, string actorId);
 
-    [LoggerMessage(EventId = 2004, EventName = "CaseOperationDenied", Level = LogLevel.Warning,
-        Message = "Case operation {Operation} denied for {ActorId}")]
-    public static partial void OperationDenied(ILogger logger, string operation, string? actorId);
+    /// <summary>The shared E3-S5 <c>AuthorizationDenied</c> event (user, permission, resource), plus the operation name.</summary>
+    [LoggerMessage(EventId = SecurityEvents.AuthorizationDeniedId, EventName = SecurityEvents.AuthorizationDeniedName,
+        Level = LogLevel.Warning, Message = "Authorization denied for {UserId}: {Permission} on {ResourceId} ({Operation})")]
+    public static partial void AuthorizationDenied(ILogger logger, string? userId, string permission, string? resourceId, string operation);
 
     [LoggerMessage(EventId = 2005, EventName = "CaseVersionConflict", Level = LogLevel.Information,
         Message = "Case {CaseId} {Operation} rejected: stale version")]

@@ -10,6 +10,7 @@ MADR-style records (context, decision, alternatives, tradeoffs, consequences). C
 | [0004](0004-test-strategy.md) | Test strategy and the `tests` service | E1 | accepted |
 | [0005](0005-case-workflow.md) | Case status workflow as a domain-owned edge table | E2 | accepted |
 | [0006](0006-audit-trail.md) | Audit information: audit fields plus an append-only trail | E2 | accepted |
+| [0007](0007-roles-and-permissions.md) | Local Identity authentication, roles and the permission matrix | E3 | accepted |
 
 Still to be written by their owners (E1-S8 requires them before G3): render mode and accessibility approach (E5),
-auth and roles (E3), attachment storage and veteran lookup mock/client (E4).
+attachment storage and veteran lookup mock/client (E4).

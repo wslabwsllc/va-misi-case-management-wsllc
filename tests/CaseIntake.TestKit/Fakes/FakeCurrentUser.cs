@@ -24,5 +24,9 @@ public sealed class FakeCurrentUser : ICurrentUser
     public static OperationActor Authenticated(string userId, string displayName, string role, IEnumerable<string> permissions) =>
         new(userId, displayName, [role], [.. permissions]);
 
+    /// <summary>An actor holding exactly the permissions the production <see cref="RolePermissionMap"/> grants <paramref name="role"/>.</summary>
+    public static OperationActor ForRole(string role, string? userId = null) =>
+        new(userId ?? $"user-{role.ToLowerInvariant()}", $"{role.ToLowerInvariant()}@example.test", [role], RolePermissionMap.PermissionsFor([role]));
+
     public Task<OperationActor> GetAsync(CancellationToken ct) => Task.FromResult(Actor);
 }

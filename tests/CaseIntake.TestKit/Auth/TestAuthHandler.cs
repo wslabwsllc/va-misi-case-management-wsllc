@@ -42,8 +42,31 @@ public sealed class TestAuthHandler(
     }
 }
 
+/// <summary>
+/// Role presets for isolated authorization tests (E3). Browser end-to-end tests sign in with the real seeded accounts
+/// instead; this handler is never part of the application.
+/// </summary>
+public static class TestUsers
+{
+    public const string CaseWorkerId = "test-caseworker";
+    public const string SupervisorId = "test-supervisor";
+
+    /// <summary>Authenticated, but with a role the permission matrix does not know, so it holds no permissions.</summary>
+    public const string NoPermissionsId = "test-no-permissions";
+    public const string NoPermissionsRole = "NoSuchRole";
+}
+
 public static class TestAuthExtensions
 {
+    public static HttpClient AsCaseWorker(this HttpClient client) =>
+        client.WithUser(CaseIntake.Contracts.Security.AppRoles.CaseWorker, TestUsers.CaseWorkerId);
+
+    public static HttpClient AsSupervisor(this HttpClient client) =>
+        client.WithUser(CaseIntake.Contracts.Security.AppRoles.Supervisor, TestUsers.SupervisorId);
+
+    public static HttpClient AsUserWithoutPermissions(this HttpClient client) =>
+        client.WithUser(TestUsers.NoPermissionsRole, TestUsers.NoPermissionsId);
+
     /// <summary>Authenticates requests from this client as the given user and role (e.g. <c>AppRoles.Supervisor</c>).</summary>
     public static HttpClient WithUser(this HttpClient client, string role, string userId = "test-user")
     {
