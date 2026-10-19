@@ -12,6 +12,7 @@ using CaseIntake.Web.Components;
 using CaseIntake.Web.Endpoints.Attachments;
 using CaseIntake.Web.Endpoints.Exports;
 using CaseIntake.Web.Endpoints.TestResults;
+using CaseIntake.Web.Health;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,6 +24,8 @@ builder.Services.AddIdentityModule(builder.Configuration);        // E3
 builder.Services.AddAttachmentsModule(builder.Configuration);     // E4
 builder.Services.AddVeteranLookupClient(builder.Configuration);   // E4
 builder.Services.AddTestResultsModule(builder.Configuration);     // E5 test results and evidence
+builder.Services.AddHealthChecks().AddCheck<AttachmentStorageHealthCheck>("attachment-storage",
+    tags: [ServiceDefaultsExtensions.ReadyTag], timeout: ServiceDefaultsExtensions.CheckTimeout);
 
 // Persist Data Protection keys on the 'dataprotection' volume so auth cookies survive web-container recreation.
 if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)

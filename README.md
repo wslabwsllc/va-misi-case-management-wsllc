@@ -118,10 +118,29 @@ the migrator to succeed and the lookup to be healthy.
 
 ```bash
 docker compose ps                                # web: running (healthy); migrator: exited (0)
-curl -fsS http://localhost:8080/health/live      # Healthy (process up)
-curl -fsS http://localhost:8080/health/ready     # Healthy (database and veteran lookup reachable)
+curl -fsS http://localhost:8080/health/live      # {"status":"Healthy",...} (process up; runs no checks)
+curl -fsS http://localhost:8080/health/ready     # JSON per component: database, veteran-lookup, attachment-storage
+curl -sS  http://localhost:8080/health           # every registered check, same JSON shape
 scripts/smoke-docker.sh                          # expects "SMOKE: PASS" (framework JS and static assets)
 ```
+
+The health endpoints answer JSON. The top-level `status` is the worst component status. Any `Unhealthy` component
+makes the response 503, so the app never reports healthy while one of its dependencies is down:
+
+```json
+{
+  "status": "Unhealthy",
+  "totalDurationMs": 1012.4,
+  "components": {
+    "database": { "status": "Unhealthy", "durationMs": 1004.9, "description": "Database is unreachable.", "data": { "errorType": "NpgsqlException" } },
+    "veteran-lookup": { "status": "Healthy", "durationMs": 8.2 },
+    "attachment-storage": { "status": "Healthy", "durationMs": 0.6 }
+  }
+}
+```
+
+Exception messages are never included, because they can contain connection strings. Each check times out after 5
+seconds.
 
 `scripts/verify-clean-start.sh` checks a completely fresh install from empty volumes. **It runs `docker compose down -v`
 first, which deletes all existing data.**
