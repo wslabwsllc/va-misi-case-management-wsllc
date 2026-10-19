@@ -1,0 +1,184 @@
+@page "/test-results/runs"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Domain.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject ILogger<TestRuns> Logger
+
+@* Imported test runs, newest first, filtered by run key/branch/commit/build, status, environment and UTC dates. *@
+<PageShell Title="Test runs" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Quality assurance", "test-results")])" />
+<TestResultsTabs Current="runs" />
+
+<div class="card card--flush">
+    <form class="grid-toolbar" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter test runs" data-testid="run-filters">
+        <div class="field grid-toolbar__search">
+            <label class="field__label" for="run-search">Run, branch, commit or build</label>
+            <input id="run-search" type="search" @bind="_search" @bind:event="oninput" maxlength="200" enterkeyhint="search" autocomplete="off" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="run-status">Status</label>
+            <select id="run-status" @bind="_status">
+                <option value="">Any status</option>
+                @foreach (var status in Enum.GetValues<TestRunStatus>())
+                {
+                    <option value="@status">@TestResultsText.RunStatus(status)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="run-environment">Environment</label>
+            <select id="run-environment" @bind="_environment">
+                <option value="">Any environment</option>
+                @foreach (var environment in _environments)
+                {
+                    <option value="@environment">@environment</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="run-from">From (UTC date)</label>
+            <input id="run-from" type="date" @bind="_from" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="run-to">To (UTC date)</label>
+            <input id="run-to" type="date" @bind="_to" />
+        </div>
+        <button type="submit" class="btn btn--primary" data-testid="apply-run-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
+    </form>
+
+    <ErrorAlert Message="@_error" TestId="runs-error" />
+
+    @if (_page is null && _loading)
+    {
+        <LoadingIndicator Text="Loading test runs…" />
+    }
+    else if (_page is { TotalCount: 0 })
+    {
+        <EmptyState Title="No test runs match" Message="@(_filtered ? "Try a different search or fewer filters." : TestResultsText.HowToProduceRuns)" IconName="beaker" TestId="runs-empty" />
+    }
+    else if (_page is { } page)
+    {
+        <div class="table-wrap desktop-only">
+            <table class="data-grid" aria-busy="@(_loading ? "true" : "false")" data-testid="runs-table">
+                <caption>Test runs</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Run</th>
+                        <th scope="col">Started (UTC)</th>
+                        <th scope="col">Result</th>
+                        <th scope="col" class="num">Total</th>
+                        <th scope="col" class="num">Passed</th>
+                        <th scope="col" class="num">Failed</th>
+                        <th scope="col" class="num">Not executed</th>
+                        <th scope="col" class="num">Duration</th>
+                        <th scope="col">Branch and commit</th>
+                        <th scope="col">Environment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var run in page.Items)
+                    {
+                        <tr>
+                            <td><a href="@TestResultsText.RunHref(run.Id)">@run.RunKey</a></td>
+                            <td class="nowrap">@UiText.Utc(run.StartedAtUtc)</td>
+                            <td><RunResultPill Run="run" /></td>
+                            <td class="num">@UiText.Number(run.Counts.Total)</td>
+                            <td class="num">@UiText.Number(run.Counts.Passed)</td>
+                            <td class="num">@UiText.Number(run.Counts.Failed)</td>
+                            <td class="num">@UiText.Number(run.Counts.NotExecuted)</td>
+                            <td class="num nowrap">@UiText.Duration(run.Duration)</td>
+                            <td>@(run.GitBranch ?? "unknown") <span class="mono">@TestResultsText.ShortCommit(run.GitCommit)</span></td>
+                            <td>@run.Environment</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <ul class="record-list mobile-only" aria-label="Test runs" data-testid="run-cards">
+            @foreach (var run in page.Items)
+            {
+                <li class="record-card">
+                    <div class="record-card__top">
+                        <div class="record-card__title"><a href="@TestResultsText.RunHref(run.Id)">@run.RunKey</a></div>
+                        <RunResultPill Run="run" />
+                    </div>
+                    <div class="record-card__meta">
+                        <span>@UiText.Utc(run.StartedAtUtc)</span>
+                        <span>@run.Counts.Passed passed · @run.Counts.Failed failed · @run.Counts.NotExecuted not executed</span>
+                        <span>@UiText.Duration(run.Duration)</span>
+                    </div>
+                </li>
+            }
+        </ul>
+        <PagerControl Page="_query.Page" PageSize="_query.PageSize" TotalCount="page.TotalCount" Noun="runs" Label="Test run pages" OnPageChanged="PageAsync" />
+    }
+</div>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private TestRunQuery _query = new();
+    private PagedList<TestRunSummaryDto>? _page;
+    private IReadOnlyList<string> _environments = [];
+    private string? _search;
+    private TestRunStatus? _status;
+    private string? _environment;
+    private DateOnly? _from;
+    private DateOnly? _to;
+    private bool _loading;
+    private bool _filtered;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var environments = await Results.ListEnvironmentsAsync(_cts.Token);
+        _environments = environments.IsSuccess ? environments.Value! : [];
+        await LoadAsync();
+    }
+
+    private Task ApplyAsync()
+    {
+        _query = new TestRunQuery(1, _query.PageSize, _status, string.IsNullOrEmpty(_environment) ? null : _environment,
+            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(), _from, _to);
+        _filtered = _query.Status is not null || _query.Environment is not null || _query.Search is not null || _from is not null || _to is not null;
+        return LoadAsync();
+    }
+
+    private Task PageAsync(int page)
+    {
+        _query = _query with { Page = page };
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Results.ListRunsAsync(_query, _cts.Token);
+            _page = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5211, "TestRunsLoadFailed"), "Test run list load failed ({ExceptionType})", ex.GetType().Name);
+            _page = null;
+            _error = "The test runs could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

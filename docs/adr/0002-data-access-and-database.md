@@ -1,4 +1,4 @@
-# 0002. PostgreSQL 17 with EF Core and per-operation contexts
+# 0002. PostgreSQL 18 with EF Core and per-operation contexts
 
 * Status: accepted
 * Owner: E1
@@ -10,7 +10,7 @@ component operations and would hold stale tracked state. The spec leaves the eng
 
 ## Decision
 
-PostgreSQL 17 (container, named volume) through EF Core 10 and Npgsql. `AppDbContext` is registered only through
+PostgreSQL 18 (container, named volume; upgraded from 17) through EF Core 10 and Npgsql. `AppDbContext` is registered only through
 `IDbContextFactory<AppDbContext>`; every operation creates and disposes its own context. Queries return DTOs. Npgsql
 retry-on-failure is enabled, so explicit transactions run inside the provider execution strategy. Sensitive data
 logging is off. `Timezone=UTC` is set on the connection. A one-shot `migrator` service applies migrations (with

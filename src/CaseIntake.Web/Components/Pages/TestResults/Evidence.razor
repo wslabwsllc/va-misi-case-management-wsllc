@@ -1,0 +1,169 @@
+@page "/test-results/evidence"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Domain.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject ILogger<Evidence> Logger
+
+@* Evidence gallery: screenshots (with preview), traces, videos and logs across runs, filtered by test, run and kind. *@
+<PageShell Title="Screenshots and evidence" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Quality assurance", "test-results")])" />
+<TestResultsTabs Current="evidence" />
+
+<div class="card">
+    <form class="grid-toolbar grid-toolbar--plain" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter evidence" data-testid="evidence-filters">
+        <div class="field grid-toolbar__search">
+            <label class="field__label" for="evidence-search">Test, caption or file name</label>
+            <input id="evidence-search" type="search" @bind="_search" @bind:event="oninput" maxlength="200" autocomplete="off" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="evidence-run">Run</label>
+            <select id="evidence-run" @bind="_runId">
+                <option value="">Any run</option>
+                @foreach (var run in _runs)
+                {
+                    <option value="@run.Id">@run.RunKey</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="evidence-kind">Kind</label>
+            <select id="evidence-kind" @bind="_kind">
+                <option value="">Any kind</option>
+                @foreach (var kind in Enum.GetValues<TestArtifactKind>())
+                {
+                    <option value="@kind">@TestResultsText.Kind(kind)</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn--primary"><Icon Name="filter" Small="true" /> Apply filters</button>
+    </form>
+
+    <ErrorAlert Message="@_error" TestId="evidence-error" />
+
+    @if (_page is null && _loading)
+    {
+        <LoadingIndicator Text="Loading evidence…" />
+    }
+    else if (_page is { TotalCount: 0 })
+    {
+        <EmptyState Title="No evidence files match" Message="Browser tests record screenshots and other evidence; they appear here after their run is imported." IconName="image" TestId="evidence-empty" />
+    }
+    else if (_page is { } page)
+    {
+        <ul class="thumb-grid" data-testid="evidence-gallery">
+            @foreach (var item in page.Items)
+            {
+                var a = item.Artifact;
+                var entry = item;
+                <li class="thumb">
+                    @if (a.Kind == TestArtifactKind.Screenshot && !a.Purged)
+                    {
+                        <button type="button" @ref="_thumbs[a.Id]" @onclick="() => PreviewAsync(entry.Artifact)" aria-label="@($"Preview screenshot: {a.Caption ?? a.FileName}")">
+                            <img src="@TestResultRoutes.Artifact(a.Id)" alt="" loading="lazy" />
+                        </button>
+                    }
+                    <div class="thumb__meta">
+                        <div>@(a.Caption ?? a.FileName)</div>
+                        <div>@TestResultsText.Kind(a.Kind) · @UiText.FileSize(a.SizeBytes)@(a.Purged ? " · removed by retention" : null)</div>
+                        <div>
+                            @if (entry.ExecutionId is { } executionId)
+                            {
+                                <a href="@TestResultsText.ExecutionHref(executionId)">@(entry.TestTitle ?? "Test result")</a>
+                            }
+                            else
+                            {
+                                <a href="@TestResultsText.RunHref(entry.RunId)">Run @entry.RunKey</a>
+                            }
+                            @if (entry.Outcome is { } outcome)
+                            {
+                                <span> · @TestResultsText.Outcome(outcome)</span>
+                            }
+                        </div>
+                        @if (!a.Purged)
+                        {
+                            <a href="@TestResultRoutes.ArtifactDownload(a.Id)" download data-enhance-nav="false">Download<span class="visually-hidden"> @a.FileName</span></a>
+                        }
+                    </div>
+                </li>
+            }
+        </ul>
+        <PagerControl Page="_query.Page" PageSize="_query.PageSize" TotalCount="page.TotalCount" Noun="evidence files" Label="Evidence pages" OnPageChanged="PageAsync" />
+    }
+</div>
+
+<EvidencePreview @ref="_preview" />
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Dictionary<Guid, ElementReference> _thumbs = [];
+    private EvidencePreview? _preview;
+    private TestArtifactQuery _query = new(Kind: TestArtifactKind.Screenshot);
+    private PagedList<TestArtifactListItemDto>? _page;
+    private IReadOnlyList<TestRunSummaryDto> _runs = [];
+    private string? _search;
+    private long? _runId;
+    private TestArtifactKind? _kind = TestArtifactKind.Screenshot;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var runs = await Results.ListRunsAsync(new TestRunQuery(1, 50), _cts.Token);
+        _runs = runs.IsSuccess ? runs.Value!.Items : [];
+        await LoadAsync();
+    }
+
+    private Task ApplyAsync()
+    {
+        _query = new TestArtifactQuery(_runId, _kind, string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(), 1, _query.PageSize);
+        return LoadAsync();
+    }
+
+    private Task PageAsync(int page)
+    {
+        _query = _query with { Page = page };
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Results.ListArtifactsAsync(_query, _cts.Token);
+            _page = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5216, "TestEvidenceLoadFailed"), "Evidence gallery load failed ({ExceptionType})", ex.GetType().Name);
+            _page = null;
+            _error = "The evidence could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task PreviewAsync(TestArtifactDto artifact)
+    {
+        if (_preview is null)
+        {
+            return Task.CompletedTask;
+        }
+        var thumb = _thumbs.GetValueOrDefault(artifact.Id);
+        return _preview.OpenAsync(artifact, () => thumb.FocusAsync());
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

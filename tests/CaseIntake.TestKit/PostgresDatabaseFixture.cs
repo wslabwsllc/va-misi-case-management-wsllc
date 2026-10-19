@@ -11,7 +11,7 @@ namespace CaseIntake.TestKit;
 /// Gives each fixture instance its own freshly created database, so fixtures that run concurrently never share or
 /// reset each other's data, and never touch the demo database. The server is the <c>db</c> service when
 /// <c>TESTKIT_POSTGRES_ADMIN</c> is set (Compose <c>tests</c> service); otherwise a disposable Testcontainers
-/// PostgreSQL 17 is started once per test process. The database is dropped on disposal.
+/// PostgreSQL 18 is started once per test process. The database is dropped on disposal.
 /// </summary>
 public class PostgresDatabaseFixture : IAsyncLifetime
 {
@@ -107,7 +107,7 @@ public class PostgresDatabaseFixture : IAsyncLifetime
             return configured;
         }
 
-        var container = new PostgreSqlBuilder("postgres:17").Build();
+        var container = new PostgreSqlBuilder("postgres:18").Build();
         await container.StartAsync();   // reaped by Testcontainers' Ryuk when the process exits
         return container.GetConnectionString();
     }

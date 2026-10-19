@@ -2,14 +2,21 @@
 
 ## How the containers are put together
 
-One multi-stage `Dockerfile` builds the solution once (Release), publishes `web` and `migrator`, and produces the shared
-`caseintake-eval:local` image used by `migrator`, `web`, the test copy (`migrator-e2e`, `web-e2e`) and `tests`. The image
-contains the published apps (`/app/web`, `/app/migrator`), the compiled tests (`/src`), the NuGet cache, and Playwright
-Chromium with its Linux packages (`/ms-playwright`). Nothing is restored, built or downloaded when containers run.
+One multi-stage `Dockerfile` produces two images:
+
+- `caseintake-app:local` (target `runtime`): the published `web` and `migrator` (`/app/web`, `/app/migrator`) on the ASP.NET
+  runtime image. Used by `migrator`, `web` and the test copy (`migrator-e2e`, `web-e2e`).
+- `caseintake-eval:local` (target `eval`, tests profile only): the compiled Release solution (`/src`), the NuGet cache and
+  Playwright Chromium with its Linux packages (`/ms-playwright`). Used by `tests`.
+
+`docker compose up --build` builds only the first. Restore is a separate layer keyed on the project files, so code
+changes do not re-download packages. The SDK stages run on the build machine's platform (`--platform=$BUILDPLATFORM`)
+and the final images are `linux/amd64`; framework-dependent .NET output is architecture-neutral, so Apple Silicon
+compiles natively instead of under emulation. Nothing is restored, built or downloaded when containers run.
 
 | Service | Purpose | Notes |
 |---|---|---|
-| `db` | PostgreSQL 17 | volume `pgdata` |
+| `db` | PostgreSQL 18 | volume `pgdata18` (mounted at `/var/lib/postgresql`) |
 | `migrator` | migrate + seed (demo DB `caseintake`), reconcile attachments | `working_dir: /app/migrator` |
 | `veteran-lookup` | synthetic lookup mock | Compose network only |
 | `web` | the app on <http://localhost:8080> | `working_dir: /app/web`; volumes `attachments`, `dataprotection`, `testresults` |
@@ -26,7 +33,7 @@ Symptom: in Docker the pages rendered (prerendered HTML) but nothing was interac
 console showed the framework script refused because its MIME type was `text/html`. `curl -I http://localhost:8080/_framework/blazor.web.js`
 returned `302 Location: /account/login?ReturnUrl=%2F_framework%2Fblazor.web.js`.
 
-Cause: the image's `WORKDIR` is `/src` (the tests service needs it), and `web` started `dotnet /app/web/CaseIntake.Web.dll`
+Cause: the image's `WORKDIR` was `/src` (the tests service needed it), and `web` started `dotnet /app/web/CaseIntake.Web.dll`
 from there, so its **content root was `/src`** (log: `"Content root path: /src"`). `/src/wwwroot` does not exist, so
 static files were never found; the request fell through to endpoint routing, where the authenticated-user fallback policy
 challenged it and the cookie handler redirected to the sign-in page. The published files were present all along in
@@ -76,6 +83,7 @@ the Console has no errors. The automated equivalent is `CaseIntake.E2E.Framework
 | `tests` reports `FAILED TO START (application not reachable)` | `web-e2e` is not healthy | `docker compose --profile tests logs web-e2e`; `docker compose --profile tests up -d web-e2e` |
 | Playwright: "Executable doesn't exist at /ms-playwright/..." | an image built before the E2E project | `docker compose --profile tests build --no-cache` |
 | Test results page is empty | runs not imported yet | wait a minute (background import) or press **Import new runs**; check `docker compose logs web` for event 5202 |
+| An old `caseintake_pgdata` volume is left over | PostgreSQL 17 data from before the move to 18 (the stack now uses `pgdata18`) | nothing uses it; `docker volume rm caseintake_pgdata` when you no longer need that data |
 | Port 8080 in use | another stack | `docker compose ls`; stop it; never use `down -v` unless you mean to delete data |
 
 `docker compose down` keeps all volumes (data, attachments, keys, test history). `docker compose down -v` deletes them.

@@ -1,0 +1,272 @@
+@page "/test-results/executions/{Id:long}"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Domain.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject ILogger<ExecutionDetail> Logger
+
+@* One test result: what the test is (general), where and when it ran (execution), the validation (preconditions,
+   expected and actual results, failure, steps), redacted logs, and evidence. Screenshots open in the preview dialog;
+   every file is served by the authorized evidence endpoint. *@
+<PageShell Title="@PageTitle" Breadcrumbs="@Crumbs" />
+
+<ErrorAlert Message="@_error" TestId="execution-error" />
+
+@if (_e is null)
+{
+    @if (_loading)
+    {
+        <LoadingIndicator Text="Loading test result…" />
+    }
+}
+else
+{
+    var e = _e;
+    var t = e.TestCase;
+    <div class="record-header" data-testid="record-header">
+        <div class="record-header__top">
+            <div class="record-header__title">
+                <span class="page-header__subtitle">@t.Module · @TestResultsText.Type(t.Type)</span>
+            </div>
+            <OutcomePill Outcome="e.Outcome" Large="true" TestId="execution-outcome" />
+        </div>
+        <ul class="record-header__facts">
+            <li><span class="label">Duration</span><span>@UiText.Duration(e.Duration)</span></li>
+            <li><span class="label">Run</span><a href="@TestResultsText.RunHref(e.Run.Id)">@e.Run.RunKey</a></li>
+            <li><span class="label">History</span><a href="@TestResultsText.TestCaseHref(t.Id)">All runs of this test</a></li>
+        </ul>
+    </div>
+
+    <div class="grid grid--2">
+        <section class="card" aria-labelledby="general-heading">
+            <div class="card__header"><h2 id="general-heading">General</h2></div>
+            <dl class="field-list">
+                <dt>Test ID</dt><dd>@t.Id</dd>
+                <dt>Title</dt><dd>@t.Title</dd>
+                <dt>Full name</dt><dd class="mono">@t.FullName</dd>
+                <dt>Module</dt><dd>@t.Module</dd>
+                <dt>Test type</dt><dd>@TestResultsText.Type(t.Type)</dd>
+                <dt>Description</dt><dd class="pre-wrap">@(t.Description ?? "Not recorded")</dd>
+                <dt>Story</dt><dd>@(t.Story ?? "Not recorded")</dd>
+                <dt>Requirements</dt><dd>@(e.Requirements.Count == 0 ? "Not recorded" : string.Join(", ", e.Requirements))</dd>
+                <dt>Acceptance criteria</dt><dd class="pre-wrap">@(t.AcceptanceCriteria ?? "Not recorded")</dd>
+                <dt>Priority</dt><dd>@(t.Priority ?? "Not recorded")</dd>
+                <dt>Last status</dt><dd>@(t.LastOutcome is { } last ? TestResultsText.Outcome(last) : "Unknown")</dd>
+            </dl>
+        </section>
+        <section class="card" aria-labelledby="execution-heading">
+            <div class="card__header"><h2 id="execution-heading">Execution</h2></div>
+            <dl class="field-list">
+                <dt>Run ID</dt><dd>@e.Run.Id (@e.Run.RunKey)</dd>
+                <dt>Started (UTC)</dt><dd>@(e.StartedAtUtc is { } s ? UiText.Utc(s) : "Not recorded")</dd>
+                <dt>Finished (UTC)</dt><dd>@(e.FinishedAtUtc is { } f ? UiText.Utc(f) : "Not recorded")</dd>
+                <dt>Duration</dt><dd>@UiText.Duration(e.Duration)</dd>
+                <dt>Test runner</dt><dd>@e.Run.Runner</dd>
+                <dt>Environment</dt><dd>@e.Run.Environment</dd>
+                <dt>Git branch</dt><dd>@(e.Run.GitBranch ?? "unknown")</dd>
+                <dt>Commit SHA</dt><dd class="mono">@(e.Run.GitCommit ?? "unknown")</dd>
+                <dt>Build ID</dt><dd>@(e.Run.BuildId ?? "unknown")</dd>
+                <dt>Browser and viewport</dt><dd>@(e.Browser is null ? "Not a browser test" : $"{e.Browser}, {e.Viewport}")</dd>
+                <dt>Docker image</dt><dd>@(e.Run.ImageVersion ?? "unknown")</dd>
+            </dl>
+        </section>
+    </div>
+
+    <section class="card mt-4" aria-labelledby="validation-heading">
+        <div class="card__header"><h2 id="validation-heading">Validation</h2></div>
+        <dl class="field-list">
+            <dt>Preconditions</dt><dd class="pre-wrap">@(t.Preconditions ?? "Not recorded")</dd>
+            <dt>Expected result</dt><dd class="pre-wrap">@(t.ExpectedResult ?? "Not recorded")</dd>
+            <dt>Actual result</dt><dd class="pre-wrap" data-testid="actual-result">@(e.ActualResult ?? "Not recorded")</dd>
+            <dt>Final status</dt><dd><OutcomePill Outcome="e.Outcome" /></dd>
+        </dl>
+        @if (e.ErrorMessage is { } message)
+        {
+            <div class="message message--error mt-4" data-testid="failure-message">
+                <Icon Name="error" />
+                <div class="message__body">
+                    <p class="message__title">Failure</p>
+                    <p class="pre-wrap">@message</p>
+                </div>
+            </div>
+        }
+        @if (e.StackTrace is { } stack)
+        {
+            <details class="mt-4">
+                <summary>Stack trace</summary>
+                <pre class="log" data-testid="stack-trace">@stack</pre>
+            </details>
+        }
+
+        @if (e.Steps.Count > 0)
+        {
+            <h3 class="mt-4">Test steps</h3>
+            <div class="table-wrap">
+                <table class="data-grid" data-testid="steps-table">
+                    <caption class="visually-hidden">Recorded steps</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col" class="num">#</th>
+                            <th scope="col">Step</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Expected</th>
+                            <th scope="col">Actual</th>
+                            <th scope="col" class="num">Duration</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var step in e.Steps)
+                        {
+                            <tr>
+                                <td class="num">@step.Order</td>
+                                <td>@step.Name@(step.Message is { } m ? $" ({m})" : null)</td>
+                                <td><OutcomePill Outcome="step.Outcome" /></td>
+                                <td>@step.Expected</td>
+                                <td>@step.Actual</td>
+                                <td class="num nowrap">@UiText.Duration(step.Duration)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+
+    @if (e.ConsoleLog is not null || e.NetworkLog is not null || e.StandardOutput is not null)
+    {
+        <section class="card mt-4" aria-labelledby="logs-heading">
+            <div class="card__header"><h2 id="logs-heading">Logs (redacted)</h2></div>
+            @if (e.ConsoleLog is { } console)
+            {
+                <h3>Browser console errors</h3>
+                <pre class="log" data-testid="console-log">@console</pre>
+            }
+            @if (e.NetworkLog is { } network)
+            {
+                <h3 class="mt-4">Network failures</h3>
+                <pre class="log" data-testid="network-log">@network</pre>
+            }
+            @if (e.StandardOutput is { } output)
+            {
+                <h3 class="mt-4">Standard output</h3>
+                <pre class="log" data-testid="standard-output">@output</pre>
+            }
+        </section>
+    }
+
+    <section class="card mt-4" aria-labelledby="evidence-heading">
+        <div class="card__header"><h2 id="evidence-heading">Evidence</h2></div>
+        @if (e.Artifacts.Count == 0)
+        {
+            <p class="page-header__subtitle" data-testid="no-evidence">No evidence files were recorded for this test.</p>
+        }
+        else
+        {
+            var screenshots = e.Artifacts.Where(a => a.Kind == TestArtifactKind.Screenshot).ToList();
+            @if (screenshots.Count > 0)
+            {
+                <h3>Screenshots</h3>
+                <ul class="thumb-grid" data-testid="screenshots">
+                    @foreach (var shot in screenshots)
+                    {
+                        var a = shot;
+                        <li class="thumb">
+                            @if (a.Purged)
+                            {
+                                <p class="thumb__meta">Removed by the retention policy.</p>
+                            }
+                            else
+                            {
+                                <button type="button" @ref="_thumbs[a.Id]" @onclick="() => PreviewAsync(a)" aria-label="@($"Preview screenshot: {a.Caption ?? a.FileName}")">
+                                    <img src="@TestResultRoutes.Artifact(a.Id)" alt="" loading="lazy" />
+                                </button>
+                            }
+                            <span class="thumb__meta">@(a.Caption ?? a.FileName)</span>
+                        </li>
+                    }
+                </ul>
+            }
+            <h3 class="mt-4">Files</h3>
+            <ul class="compact-list" data-testid="evidence-files">
+                @foreach (var a in e.Artifacts)
+                {
+                    <li>
+                        <span class="compact-list__main">
+                            @if (a.Purged)
+                            {
+                                <span>@a.FileName</span>
+                            }
+                            else
+                            {
+                                <a href="@TestResultRoutes.ArtifactDownload(a.Id)" download data-enhance-nav="false">@a.FileName</a>
+                            }
+                            <br /><span class="compact-list__meta">@TestResultsText.Kind(a.Kind) · @UiText.FileSize(a.SizeBytes)@(a.Purged ? " · removed by retention" : null)</span>
+                        </span>
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+
+    <EvidencePreview @ref="_preview" />
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private readonly Dictionary<Guid, ElementReference> _thumbs = [];
+    private EvidencePreview? _preview;
+    private TestExecutionDetailDto? _e;
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public long Id { get; set; }
+
+    private string PageTitle => _e?.TestCase.Title ?? "Test result";
+
+    private IReadOnlyList<Crumb> Crumbs => _e is { } e
+        ? [new Crumb("Dashboard", ""), new Crumb("Test runs", "test-results/runs"), new Crumb($"Run {e.Run.RunKey}", TestResultsText.RunHref(e.Run.Id))]
+        : [new Crumb("Dashboard", ""), new Crumb("Test runs", "test-results/runs")];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Results.GetExecutionAsync(Id, _cts.Token);
+            _e = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5213, "TestExecutionLoadFailed"), "Test result {ExecutionId} load failed ({ExceptionType})", Id, ex.GetType().Name);
+            _e = null;
+            _error = "The test result could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task PreviewAsync(TestArtifactDto artifact)
+    {
+        if (_preview is null)
+        {
+            return Task.CompletedTask;
+        }
+        var thumb = _thumbs.GetValueOrDefault(artifact.Id);
+        return _preview.OpenAsync(artifact, () => thumb.FocusAsync());
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

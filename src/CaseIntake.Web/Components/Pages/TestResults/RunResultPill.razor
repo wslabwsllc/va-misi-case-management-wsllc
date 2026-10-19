@@ -1,0 +1,13 @@
+@using CaseIntake.Contracts.TestResults
+@* The headline result of a run ("Passed", "2 failed", "Failed to start") as text plus colour. *@
+<span class="status-pill @_result.Css @(Large ? "status-pill--lg" : null)" data-testid="@TestId">@_result.Text</span>
+
+@code {
+    private (string Text, string Css) _result;
+
+    [Parameter, EditorRequired] public TestRunSummaryDto Run { get; set; } = null!;
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public string? TestId { get; set; }
+
+    protected override void OnParametersSet() => _result = TestResultsText.RunResult(Run);
+}

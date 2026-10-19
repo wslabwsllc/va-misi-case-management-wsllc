@@ -16,7 +16,7 @@ service (Compose profile `tests`) runs `scripts/run-tests.sh`, which runs each `
 --no-restore`, writes one TRX per project, and fails on: a test project missing from the solution, no result file,
 zero discovered tests, or any failing test. Each fixture creates its own uniquely named database on the `db`
 service (`TESTKIT_POSTGRES_ADMIN`) and drops it on disposal; without that variable locally, a Testcontainers
-PostgreSQL 17 is started. Demo data is never touched. `CaseIntake.TestKit` provides the fixtures, `CaseIntakeWebFactory`,
+PostgreSQL 18 is started. Demo data is never touched. `CaseIntake.TestKit` provides the fixtures, `CaseIntakeWebFactory`,
 header-driven `TestAuthHandler`, builders and in-memory fakes of every contract (`AddFakeModules()`, test-only).
 Dependency rules are enforced by an architecture test over the csproj graph plus NetArchTest on assemblies.
 

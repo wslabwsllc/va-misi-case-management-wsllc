@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <!-- Composition root. Program.cs merges stay one-line changes: each module adds AddXxxModule(configuration) and MapXxxEndpoints(). -->
+  <PropertyGroup>
+    <!-- The SDK infers this from .razor files; the Docker restore layer sees project files only, so state it explicitly
+         or restore skips Microsoft.AspNetCore.App.Internal.Assets and publish ships no _framework/blazor.web.js. -->
+    <RequiresAspNetWebAssets>true</RequiresAspNetWebAssets>
+  </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\CaseIntake.Attachments\CaseIntake.Attachments.csproj" />
     <ProjectReference Include="..\CaseIntake.Cases\CaseIntake.Cases.csproj" />

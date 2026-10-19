@@ -2,7 +2,9 @@ bin/
 obj/
 .vs/
 *.user
-TestResults/
+# VSTest output only: an unanchored "TestResults/" also hid the Test Results feature folders in src/.
+/TestResults/
+/tests/*/TestResults/
 /results/
 .idea/
 .DS_Store

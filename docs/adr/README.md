@@ -5,7 +5,7 @@ MADR-style records (context, decision, alternatives, tradeoffs, consequences). C
 | # | Title | Owner | Status |
 |---|---|---|---|
 | [0001](0001-dotnet-blazor-efcore-versions.md) | .NET 10 LTS, Blazor and EF Core versions | E1 | accepted |
-| [0002](0002-data-access-and-database.md) | PostgreSQL 17 with EF Core and per-operation contexts | E1 | accepted |
+| [0002](0002-data-access-and-database.md) | PostgreSQL 18 with EF Core and per-operation contexts | E1 | accepted |
 | [0003](0003-telemetry-and-logging.md) | Structured JSON logs; no telemetry exporters | E1 | accepted |
 | [0004](0004-test-strategy.md) | Test strategy and the `tests` service | E1 | accepted |
 | [0005](0005-case-workflow.md) | Case status workflow as a domain-owned edge table | E2 | accepted |

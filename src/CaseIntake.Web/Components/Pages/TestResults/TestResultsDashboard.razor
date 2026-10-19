@@ -1,0 +1,259 @@
+@page "/test-results"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Domain.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject StatusAnnouncer Announcer
+@inject ILogger<TestResultsDashboard> Logger
+
+@* Test results dashboard (E5 test management): KPIs of the latest imported run, trends over recent runs, breakdowns by
+   status, module, browser and test type, and the comparison with the previous run. Every figure comes from
+   ITestResultsService; import is offered only with testresults.manage (tests are never started from here). *@
+<PageShell Title="Test results" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Quality assurance")])"
+           Subtitle="Automated unit, component, integration and browser test results, with evidence." />
+<TestResultsTabs Current="dashboard" />
+
+<div class="command-bar" role="toolbar" aria-label="Test result commands">
+    <AuthorizeView Policy="@Permissions.TestResultsManage">
+        <button type="button" class="command" @onclick="ImportAsync" disabled="@_importing" aria-busy="@(_importing ? "true" : "false")" data-testid="import-runs">
+            <Icon Name="import" /> @(_importing ? "Importing…" : "Import new runs")
+        </button>
+    </AuthorizeView>
+    <button type="button" class="command" @onclick="LoadAsync" disabled="@_loading" data-testid="tr-refresh"><Icon Name="refresh" /> Refresh</button>
+    @if (_data?.Latest is { } latestRun)
+    {
+        <a class="command" href="@TestResultRoutes.Export(latestRun.Id, "html")" download data-enhance-nav="false" data-testid="export-latest-html"><Icon Name="export" /> Latest run report (HTML)</a>
+        <a class="command" href="@TestResultRoutes.Export(latestRun.Id, "csv")" download data-enhance-nav="false" data-testid="export-latest-csv"><Icon Name="export" /> Latest run (CSV)</a>
+    }
+</div>
+
+<ErrorAlert Title="@(_error is null ? null : "Test results could not be loaded")" Message="@_error" TestId="tr-error" />
+
+@if (_problems is { Count: > 0 } problems)
+{
+    <div class="message message--warning" data-testid="import-problems">
+        <Icon Name="warning" />
+        <div class="message__body">
+            <p class="message__title">Some files could not be imported</p>
+            <ul>
+                @foreach (var problem in problems.Take(10))
+                {
+                    <li>@problem</li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
+@if (_data is null && _loading)
+{
+    <LoadingIndicator Text="Loading test results…" />
+}
+else if (_data is { Latest: null })
+{
+    <div class="card">
+        <EmptyState Title="No test runs imported yet" Message="@TestResultsText.HowToProduceRuns" IconName="beaker" TestId="tr-empty" />
+    </div>
+}
+else if (_data is { Latest: { } latest } d)
+{
+    var c = latest.Counts;
+    var (resultText, _) = TestResultsText.RunResult(latest);
+    <h2 class="visually-hidden">Latest run</h2>
+    <ul class="kpi-grid" data-testid="tr-kpis">
+        <KpiTile Label="Total tests" Value="@UiText.Number(c.Total)" Hint="@($"Run {latest.RunKey}")" Href="@TestResultsText.RunHref(latest.Id)" TestId="tr-kpi-total" />
+        <KpiTile Label="Passed" Value="@UiText.Number(c.Passed)" Variant="success" TestId="tr-kpi-passed" />
+        <KpiTile Label="Failed" Value="@UiText.Number(c.Failed)" Variant="danger" TestId="tr-kpi-failed" />
+        <KpiTile Label="Skipped" Value="@UiText.Number(c.Skipped)" Variant="neutral" TestId="tr-kpi-skipped" />
+        <KpiTile Label="Blocked" Value="@UiText.Number(c.Blocked)" Variant="warning" TestId="tr-kpi-blocked" />
+        <KpiTile Label="Not executed" Value="@UiText.Number(c.NotExecuted)" Hint="Suite did not run" Variant="warning" TestId="tr-kpi-notexecuted" />
+        <KpiTile Label="Pass rate" Value="@TestResultsText.PassRate(c)" Hint="Passed of executed tests" Variant="success" TestId="tr-kpi-passrate" />
+        <KpiTile Label="Duration" Value="@UiText.Duration(latest.Duration)" Hint="Whole run" Variant="neutral" TestId="tr-kpi-duration" />
+        <KpiTile Label="Latest run" Value="@resultText" Hint="@($"{TestResultsText.RunStatus(latest.Status)} · {UiText.Utc(latest.StartedAtUtc)}")"
+                 Variant="@(c.Failed > 0 || latest.Status != TestRunStatus.Completed ? "danger" : "success")" TestId="tr-kpi-status" />
+        <KpiTile Label="Known test cases" Value="@UiText.Number(d.KnownTestCases)" Hint="Across all runs" Href="test-results/cases" Variant="neutral" TestId="tr-kpi-known" />
+        <KpiTile Label="Newly failed" Value="@UiText.Number(d.Comparison?.NewlyFailed.Count ?? 0)" Hint="Passed in the previous run" Variant="danger" TestId="tr-kpi-newly-failed" />
+        <KpiTile Label="Newly fixed" Value="@UiText.Number(d.Comparison?.NewlyFixed.Count ?? 0)" Hint="Failed in the previous run" Variant="success" TestId="tr-kpi-newly-fixed" />
+    </ul>
+
+    <div class="grid grid--3">
+        <section class="card">
+            <Chart Id="tr-trend" Title="Pass vs. fail trend" Description="Recent runs, oldest to newest." Kind="ChartKind.Line"
+                   Categories="_trendLabels" CategoryHeader="Run (UTC)" TestId="tr-chart-trend"
+                   Series="@([new ChartSeries("Passed", [.. _trend.Select(r => (double)r.Counts.Passed)], "--series-3"), new ChartSeries("Failed", [.. _trend.Select(r => (double)r.Counts.Failed)], "--series-2")])" />
+        </section>
+        <section class="card">
+            <Chart Id="tr-status" Title="Test status distribution" Description="Latest run." Kind="ChartKind.Bar" CategoryHeader="Outcome" TestId="tr-chart-status"
+                   Categories="@(["Passed", "Failed", "Skipped", "Blocked", "Not executed"])"
+                   Series="@([new ChartSeries("Tests", [c.Passed, c.Failed, c.Skipped, c.Blocked, c.NotExecuted])])" />
+        </section>
+        <section class="card">
+            <Chart Id="tr-modules" Title="Failures by module" Description="Latest run." Kind="ChartKind.Bar" CategoryHeader="Module" TestId="tr-chart-modules"
+                   EmptyText="No failures in the latest run."
+                   Categories="@([.. d.FailuresByModule.Select(m => m.Label)])"
+                   Series="@([new ChartSeries("Failed", [.. d.FailuresByModule.Select(m => (double)m.Count)], "--series-2")])" />
+        </section>
+        <section class="card">
+            <Chart Id="tr-duration" Title="Execution duration trend" Description="Whole-run duration in seconds." CategoryHeader="Run (UTC)" TestId="tr-chart-duration"
+                   Categories="_trendLabels"
+                   Series="@([new ChartSeries("Duration (s)", [.. _trend.Select(r => Math.Round(r.Duration.TotalSeconds))], "--series-4")])" />
+        </section>
+        <section class="card">
+            <Chart Id="tr-coverage" Title="Browser and device coverage" Description="Browser tests in the latest run, by browser and viewport." Kind="ChartKind.Bar"
+                   CategoryHeader="Browser and viewport" TestId="tr-chart-coverage" EmptyText="No browser tests in the latest run."
+                   Categories="@([.. d.BrowserCoverage.Select(b => b.Label)])"
+                   Series="@([new ChartSeries("Tests", [.. d.BrowserCoverage.Select(b => (double)b.Count)])])" />
+        </section>
+        <section class="card">
+            <Chart Id="tr-types" Title="Tests by type" Description="Latest run." Kind="ChartKind.Bar" CategoryHeader="Type" TestId="tr-chart-types"
+                   Categories="@([.. d.TestsByType.Select(t => t.Label)])"
+                   Series="@([new ChartSeries("Tests", [.. d.TestsByType.Select(t => (double)t.Count)], "--series-5")])" />
+        </section>
+    </div>
+
+    <div class="grid grid--2 mt-4">
+        <section class="card" aria-labelledby="tr-compare-heading" data-testid="tr-comparison">
+            <div class="card__header"><h2 id="tr-compare-heading">Newly failed and newly fixed</h2></div>
+            @if (d.Comparison?.Previous is not { } previous)
+            {
+                <p class="page-header__subtitle">This is the first imported run, so there is nothing to compare with.</p>
+            }
+            else
+            {
+                var comparison = d.Comparison!;
+                <p class="page-header__subtitle">Compared with run @previous.RunKey.</p>
+                <h3 class="mt-4">Newly failed (@comparison.NewlyFailed.Count)</h3>
+                @if (comparison.NewlyFailed.Count == 0)
+                {
+                    <p class="page-header__subtitle">No test started failing.</p>
+                }
+                else
+                {
+                    <ul class="compact-list">
+                        @foreach (var row in comparison.NewlyFailed)
+                        {
+                            <li><span class="compact-list__main"><a href="@TestResultsText.ExecutionHref(row.Id)">@row.TestTitle</a><br /><span class="compact-list__meta">@row.Module</span></span><OutcomePill Outcome="row.Outcome" /></li>
+                        }
+                    </ul>
+                }
+                <h3 class="mt-4">Newly fixed (@comparison.NewlyFixed.Count)</h3>
+                @if (comparison.NewlyFixed.Count == 0)
+                {
+                    <p class="page-header__subtitle">No test was fixed.</p>
+                }
+                else
+                {
+                    <ul class="compact-list">
+                        @foreach (var row in comparison.NewlyFixed)
+                        {
+                            <li><span class="compact-list__main"><a href="@TestResultsText.ExecutionHref(row.Id)">@row.TestTitle</a><br /><span class="compact-list__meta">@row.Module</span></span><OutcomePill Outcome="row.Outcome" /></li>
+                        }
+                    </ul>
+                }
+            }
+        </section>
+        <section class="card card--flush" aria-labelledby="tr-recent-heading" data-testid="tr-recent">
+            <div class="card__header"><h2 id="tr-recent-heading">Recent runs</h2><a href="test-results/runs">All runs</a></div>
+            <ul class="record-list" aria-label="Recent runs">
+                @foreach (var run in d.RecentRuns.Take(10))
+                {
+                    <li class="record-card">
+                        <div class="record-card__top">
+                            <div class="record-card__title"><a href="@TestResultsText.RunHref(run.Id)">@run.RunKey</a></div>
+                            <RunResultPill Run="run" />
+                        </div>
+                        <div class="record-card__meta">
+                            <span>@UiText.Utc(run.StartedAtUtc)</span>
+                            <span>@run.Counts.Passed passed · @run.Counts.Failed failed · @run.Counts.NotExecuted not executed</span>
+                            <span>@(run.GitBranch ?? "unknown branch") @@ @TestResultsText.ShortCommit(run.GitCommit)</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private TestDashboardDto? _data;
+    private List<TestRunSummaryDto> _trend = [];
+    private List<string> _trendLabels = [];
+    private IReadOnlyList<string>? _problems;
+    private bool _loading;
+    private bool _importing;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Results.GetDashboardAsync(_cts.Token);
+            if (result.IsSuccess)
+            {
+                _data = result.Value!;
+                // Recent runs arrive newest first; the trend charts read oldest to newest.
+                _trend = [.. _data.RecentRuns.Reverse()];
+                _trendLabels = [.. _trend.Select(TestResultsText.ChartLabel)];
+            }
+            else
+            {
+                _data = null;
+                _error = result.Error!.Message;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5210, "TestDashboardLoadFailed"), "Test results dashboard load failed ({ExceptionType})", ex.GetType().Name);
+            _data = null;
+            _error = "The test results could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ImportAsync()
+    {
+        _importing = true;
+        _error = null;
+        try
+        {
+            var result = await Results.ImportAsync(_cts.Token);
+            if (!result.IsSuccess)
+            {
+                _error = result.Error!.Message;
+                return;
+            }
+            var summary = result.Value!;
+            _problems = summary.Problems;
+            Announcer.Announce(summary.Imported == 0
+                ? "No new runs to import; 0 run(s) imported."
+                : $"{summary.Imported} run(s) imported with {summary.Executions} results and {summary.Artifacts} evidence files.");
+            await LoadAsync();
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _importing = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

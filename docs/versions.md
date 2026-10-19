@@ -10,7 +10,7 @@ tag. A test (`VersionConsistencyTests`) fails if the tables below drift from tho
 |---|---|
 | .NET SDK | 10.0.402 |
 | Base image | `mcr.microsoft.com/dotnet/sdk:10.0.402-noble` (Ubuntu 24.04, linux/amd64) |
-| Database image | `postgres:17` |
+| Database image | `postgres:18` |
 
 The runtime and ASP.NET Core / Blazor shared-framework versions come from that SDK image. The exact inventory
 is recorded from the built image in [verification.md](verification.md) (output of `dotnet --list-runtimes`).

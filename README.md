@@ -10,7 +10,7 @@ Blazor Web App (.NET 10, Interactive Server) with PostgreSQL, built per [docs/Ep
 
 ## Run
 
-Requires Docker with Compose v2. Services run as `linux/amd64` (Apple Silicon runs them under emulation, which is slower).
+Requires Docker with Compose v2. Containers run as `linux/amd64`; the .NET build runs natively on the host's architecture, so on Apple Silicon only the running apps are emulated. Works the same on Windows, macOS and Linux.
 
 ```bash
 docker compose up --build        # http://localhost:8080

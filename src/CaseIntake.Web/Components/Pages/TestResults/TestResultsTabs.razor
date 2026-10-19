@@ -1,0 +1,21 @@
+@* The test results sections as a pivot of real links (each tab is a URL); the current one has aria-current. *@
+<nav class="pivot" aria-label="Test results sections" data-testid="tr-tabs">
+    @foreach (var (key, text, href) in Tabs)
+    {
+        <a href="@href" aria-current="@(key == Current ? "page" : null)">@text</a>
+    }
+</nav>
+
+@code {
+    private static readonly (string Key, string Text, string Href)[] Tabs =
+    [
+        ("dashboard", "Dashboard", "test-results"),
+        ("runs", "Test runs", "test-results/runs"),
+        ("cases", "Test cases", "test-results/cases"),
+        ("evidence", "Screenshots and evidence", "test-results/evidence"),
+        ("history", "History and trends", "test-results/history"),
+    ];
+
+    /// <summary>dashboard, runs, cases, evidence or history.</summary>
+    [Parameter, EditorRequired] public string Current { get; set; } = "dashboard";
+}
