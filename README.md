@@ -11,7 +11,7 @@ results module, built per [docs/Epic_Plan.md](docs/Epic_Plan.md). It works the s
 | Docker Desktop or Docker Engine with **Compose v2** | everything (the old `docker-compose` v1 is not supported) | `docker compose version` |
 | Git | cloning | `git --version` |
 | bash | the helper scripts in `scripts/` | `bash --version` |
-| .NET SDK **10.0.402** exactly | **local development only** (`global.json` sets `rollForward: disable`) | `dotnet --version` in the repo folder |
+| .NET SDK **10.0.402** exactly | building, running and testing from source (`global.json` sets `rollForward: disable`) | `dotnet --version` in the repo folder |
 
 Also needed: free host port **8080**, several GB of disk, and network access at **build** time only (nothing is
 downloaded when containers run). Images are `linux/amd64`; the .NET build runs natively, so on Apple Silicon only the
@@ -20,11 +20,27 @@ running containers are emulated. All pinned versions: [docs/versions.md](docs/ve
 <details>
 <summary>macOS</summary>
 
+0. [Homebrew](https://brew.sh/), if `brew --version` fails:
+
+   ```bash
+   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile   # Apple Silicon; Intel: /usr/local/bin/brew
+   eval "$(/opt/homebrew/bin/brew shellenv)"
+   brew --version
+   ```
+
 1. Install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/) (Apple Silicon or Intel)
    and start it. Compose v2 is included.
 2. Git: `xcode-select --install` (or `brew install git`). bash is preinstalled.
-3. Local development only: install [.NET SDK 10.0.402](https://dotnet.microsoft.com/download/dotnet/10.0)
-   (`brew install --cask dotnet-sdk` may install a different patch version; check `dotnet --version`).
+3. .NET SDK 10.0.402 with [mise](https://mise.jdx.dev/):
+
+   ```bash
+   brew install mise                                  # or: curl https://mise.run | sh
+   echo 'eval "$(mise activate zsh)"' >> ~/.zshrc     # bash: mise activate bash >> ~/.bashrc
+   exec $SHELL                                        # reload the shell
+   mise use -g dotnet@10.0.402
+   dotnet --version                                   # 10.0.402
+   ```
 
 </details>
 
@@ -34,7 +50,16 @@ running containers are emulated. All pinned versions: [docs/versions.md](docs/ve
 1. Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) with the
    **WSL 2 backend** and **Linux containers**, and start it.
 2. Install [Git for Windows](https://git-scm.com/download/win); it includes **Git Bash**. Run the `scripts/` from Git Bash.
-3. Local development only: install [.NET SDK 10.0.402](https://dotnet.microsoft.com/download/dotnet/10.0).
+3. .NET SDK 10.0.402: download the **SDK 10.0.402** x64 installer from the
+   [.NET 10.0 downloads page](https://dotnet.microsoft.com/download/dotnet/10.0), or in PowerShell:
+
+   ```powershell
+   Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1
+   ./dotnet-install.ps1 -Version 10.0.402             # installs to %LOCALAPPDATA%\Microsoft\dotnet; add it to PATH
+   dotnet --version                                   # 10.0.402
+   ```
+
+   `winget install Microsoft.DotNet.SDK.10` installs the latest 10.0 patch, which `global.json` rejects if it isn't 10.0.402.
 
 Notes:
 - `.gitattributes` keeps shell scripts in LF. If you see `bash\r: No such file or directory`, the scripts were copied
@@ -51,8 +76,15 @@ Notes:
    [Compose plugin](https://docs.docker.com/compose/install/linux/) (`docker-compose-plugin`). Optionally
    [run Docker without sudo](https://docs.docker.com/engine/install/linux-postinstall/).
 2. Git and bash from your package manager (for example `sudo apt install git`).
-3. Local development only: install [.NET SDK 10.0.402](https://learn.microsoft.com/dotnet/core/install/linux)
-   (the `dotnet-install.sh --version 10.0.402` script installs the exact version).
+3. .NET SDK 10.0.402 with the official install script (or with mise, as on macOS):
+
+   ```bash
+   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version 10.0.402
+   echo 'export DOTNET_ROOT=$HOME/.dotnet PATH=$HOME/.dotnet:$PATH' >> ~/.bashrc && exec $SHELL
+   dotnet --version                                   # 10.0.402
+   ```
+
+   Distribution packages (`apt install dotnet-sdk-10.0`) usually ship a different patch version.
 
 </details>
 
@@ -61,7 +93,28 @@ Notes:
 ---
 
 <details>
-<summary><b>Verify the install</b></summary>
+<summary><b>Quick start</b></summary>
+
+Needs Docker with Compose v2, Git and free port 8080 (see **Install prerequisites** above).
+
+```bash
+git clone https://github.com/wslabwsllc/va-misi-case-management-wsllc.git
+cd va-misi-case-management-wsllc
+docker compose up --build --wait       # runs in the background, returns once web is healthy
+```
+
+Open <http://localhost:8080> and sign in. The first build takes several minutes. No `.env` file or secrets are needed:
+every setting, including the synthetic local database credentials, is in `docker-compose.yml`.
+
+Startup order: `db` (PostgreSQL 18) → `migrator` (migrates, seeds, exits 0) → `veteran-lookup` → `web`. `web` waits for
+the migrator to succeed and the lookup to be healthy.
+
+</details>
+
+---
+
+<details>
+<summary><b>Verify the running app</b></summary>
 
 ```bash
 docker compose ps                                # web: running (healthy); migrator: exited (0)
@@ -72,27 +125,6 @@ scripts/smoke-docker.sh                          # expects "SMOKE: PASS" (framew
 
 `scripts/verify-clean-start.sh` checks a completely fresh install from empty volumes. **It runs `docker compose down -v`
 first, which deletes all existing data.**
-
-</details>
-
----
-
-<details>
-<summary><b>Quick start</b></summary>
-
-Needs Docker with Compose v2, Git and free port 8080 (see **Install prerequisites** below).
-
-```bash
-git clone https://github.com/wslabwsllc/va-misi-case-management-wsllc.git
-cd va-misi-case-management-wsllc
-docker compose up --build --wait       # add -d to run in the background
-```
-
-Open <http://localhost:8080> and sign in. The first build takes several minutes. No `.env` file or secrets are needed:
-every setting, including the synthetic local database credentials, is in `docker-compose.yml`.
-
-Startup order: `db` (PostgreSQL 18) → `migrator` (migrates, seeds, exits 0) → `veteran-lookup` → `web`. `web` waits for
-the migrator to succeed and the lookup to be healthy.
 
 </details>
 
