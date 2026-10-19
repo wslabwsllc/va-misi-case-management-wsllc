@@ -12,6 +12,9 @@ public static class ServiceDefaultsExtensions
 {
     public const string ReadyTag = "ready";
 
+    /// <summary>Upper bound for one health check, so a hung dependency cannot stall the probe.</summary>
+    public static readonly TimeSpan CheckTimeout = TimeSpan.FromSeconds(5);
+
     /// <summary>
     /// JSON logs on stdout (UTC timestamp, level, category, EventId, scopes with OperationId and TraceId/SpanId),
     /// SSN scrubbing, quiet framework categories, and the readiness health checks. Telemetry exporters are
@@ -39,8 +42,8 @@ public static class ServiceDefaultsExtensions
             builder.Services.AddHttpClient(VeteranLookupHealthCheck.HttpClientName,
                 client => client.Timeout = TimeSpan.FromSeconds(3));
             builder.Services.AddHealthChecks()
-                .AddCheck<DatabaseHealthCheck>("database", tags: [ReadyTag])
-                .AddCheck<VeteranLookupHealthCheck>("veteran-lookup", tags: [ReadyTag]);
+                .AddCheck<DatabaseHealthCheck>("database", tags: [ReadyTag], timeout: CheckTimeout)
+                .AddCheck<VeteranLookupHealthCheck>("veteran-lookup", tags: [ReadyTag], timeout: CheckTimeout);
         }
 
         return builder;
@@ -51,13 +54,27 @@ public static class ServiceDefaultsExtensions
         app.UseMiddleware<OperationContextMiddleware>();
 
     /// <summary>
-    /// <c>/health/live</c> runs no checks (process is up); <c>/health/ready</c> requires the database and the veteran
-    /// lookup service. Both are anonymous so probes never redirect to login.
+    /// <c>/health/live</c> runs no checks (process is up), so an orchestrator never restarts the app because a
+    /// dependency is down. <c>/health/ready</c> runs the checks tagged <see cref="ReadyTag"/>; <c>/health</c> runs every
+    /// registered check. All three answer JSON (<see cref="HealthResponseWriter"/>) with 200 when Healthy or Degraded
+    /// and 503 when any check is Unhealthy. They are anonymous so probes never redirect to login.
     /// </summary>
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
-        app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
-        app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = r => r.Tags.Contains(ReadyTag) }).AllowAnonymous();
+        app.MapHealthChecks("/health", new HealthCheckOptions
+        {
+            ResponseWriter = HealthResponseWriter.WriteJsonAsync,
+        }).AllowAnonymous();
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = _ => false,
+            ResponseWriter = HealthResponseWriter.WriteJsonAsync,
+        }).AllowAnonymous();
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = r => r.Tags.Contains(ReadyTag),
+            ResponseWriter = HealthResponseWriter.WriteJsonAsync,
+        }).AllowAnonymous();
         return app;
     }
 }
