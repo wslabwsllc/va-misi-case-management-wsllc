@@ -4,14 +4,27 @@
 @inject NavigationManager Navigation
 @inject ILogger<AccessDeniedMessage> Logger
 
-@* Shared access-denied content (E3-S5; E5 styles it). Used by the /account/access-denied page and, during interactive
+@* Shared access-denied content (E3-S5; styled by E5-S8). Used by the /account/access-denied page and, during interactive
    navigation, by the router's NotAuthorized slot, where PageType is set and the denial is logged here because no HTTP
-   authorization middleware runs. *@
-<h1 tabindex="-1">Access denied</h1>
-<p>You don't have permission to use this page or perform this action with your current role.</p>
-<p><a href="">Back to the case list</a></p>
+   authorization middleware runs. The reason names the user's role but never the permission or policy (no internal
+   authorization details). Focus moves to the h1 after navigation. *@
+<div class="status-page status-page--error" data-testid="access-denied">
+    <Icon Name="lock" />
+    <h1 tabindex="-1">Access denied</h1>
+    <p>You don't have permission to use this page or perform this action with your current role.</p>
+    @if (_roleText is { } roles)
+    {
+        <p class="page-header__subtitle">You are signed in with the role: <strong>@roles</strong>. If you need access, ask an administrator to change your role.</p>
+    }
+    <div class="btn-row">
+        <a class="btn btn--primary" href="cases">Back to the case list</a>
+        <a class="btn" href="">Go to the dashboard</a>
+    </div>
+</div>
 
 @code {
+    private string? _roleText;
+
     [Parameter]
     public Type? PageType { get; set; }
 
@@ -20,12 +33,21 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (PageType is null || AuthenticationState is null)
+        if (AuthenticationState is null)
         {
             return;
         }
 
         var actor = OperationActorFactory.FromPrincipal((await AuthenticationState).User);
+        if (actor.IsAuthenticated)
+        {
+            _roleText = actor.Roles.Count == 0 ? "no role" : string.Join(", ", actor.Roles.Order(StringComparer.Ordinal));
+        }
+        if (PageType is null)
+        {
+            return;
+        }
+
         var resource = "/" + Navigation.ToBaseRelativePath(Navigation.Uri);
         var policies = PageType.GetCustomAttributes<AuthorizeAttribute>(inherit: true)
             .Select(a => a.Policy)

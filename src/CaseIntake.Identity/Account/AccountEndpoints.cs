@@ -15,6 +15,9 @@ public static class AccountRoutes
     public const string Login = "/account/login";
     public const string Logout = "/account/logout";
     public const string AccessDenied = "/account/access-denied";
+
+    /// <summary>Where sign-out lands: the login page with its "You have signed out." confirmation.</summary>
+    public const string SignedOut = Login + "?signedOut=true";
 }
 
 public static class AccountEndpoints
@@ -36,7 +39,8 @@ public static class AccountEndpoints
                 var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
                 await signInManager.SignOutAsync();
                 IdentityLog.LoggedOut(loggerFactory.CreateLogger(typeof(AccountEndpoints).FullName!), userId);
-                return TypedResults.LocalRedirect(AccountRoutes.Login);
+                // The login page confirms the sign-out in a status message (E5-S8).
+                return TypedResults.LocalRedirect(AccountRoutes.SignedOut);
             })
             .AllowAnonymous()
             .WithName("AccountLogout");

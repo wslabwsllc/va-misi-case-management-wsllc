@@ -2,15 +2,36 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <base href="/" />
-    <link rel="stylesheet" href="app.css" />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#0f6cbd" />
+    <meta name="application-name" content="Case Intake" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Case Intake" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="@Assets["icons/icon.svg"]" type="image/svg+xml" />
+    <link rel="icon" href="@Assets["icons/icon-192.png"]" type="image/png" sizes="192x192" />
+    <link rel="apple-touch-icon" href="@Assets["icons/apple-touch-icon.png"]" />
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    @* No <ImportMap />: it is an inline script, which the CSP (script-src 'self') forbids. JS modules are imported by
+       their fingerprinted URLs instead (Assets[...] / JsModule), so no import map is needed. *@
     <HeadOutlet @rendermode="PageRenderMode" />
-    <title>Case Intake and Triage</title>
 </head>
 <body>
     <Routes @rendermode="PageRenderMode" />
-    <script src="_framework/blazor.web.js"></script>
+    <ReconnectModal />
+    <div id="blazor-error-ui" role="alert" data-nosnippet>
+        Something went wrong. Reload the page to continue.
+        <a href="" class="reload">Reload</a>
+        <button type="button" class="btn btn--subtle dismiss" aria-label="Dismiss">&#x2715;</button>
+    </div>
+    @* The one framework bootstrap script for a .NET 10 Blazor Web App, served by MapStaticAssets from the published
+       static web assets (fingerprinted URL, immutable caching). *@
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script type="module" src="@Assets["js/app.js"]"></script>
 </body>
 </html>
 
@@ -19,7 +40,7 @@
     private HttpContext HttpContext { get; set; } = default!;
 
     // App pages are Interactive Server; the Identity account pages ([ExcludeFromInteractiveRouting]) stay static SSR
-    // so sign-in and sign-out are plain HTTP form posts that can set and clear the auth cookie (plan A2).
+    // so sign-in and sign-out are plain HTTP form posts that can set and clear the auth cookie (plan A2, ADR 0010).
     private IComponentRenderMode? PageRenderMode =>
         HttpContext.AcceptsInteractiveRouting() ? InteractiveServer : null;
 }

@@ -1,0 +1,38 @@
+@page "/not-found"
+@attribute [AllowAnonymous]
+@layout MainLayout
+@using CaseIntake.Web.Services
+@inject UiInterop Interop
+@inject ShellState Shell
+@inject NavigationManager Navigation
+
+@* The Router's NotFoundPage (.NET 10): shown for unknown routes, for NavigationManager.NotFound() (for example a case
+   ID that does not exist) and, through status-code re-execution, for unknown URLs loaded directly (HTTP 404). *@
+<PageShell Title="Page not found" Breadcrumbs="@([new Crumb("Dashboard", "")])" BackHref="" />
+<div class="status-page" data-testid="not-found">
+    <Icon Name="search" />
+    <p>The page or record you asked for doesn't exist, or it may have been moved.</p>
+    <p>Check the address, or use one of these links.</p>
+    <div class="btn-row">
+        <a class="btn btn--primary" href="cases">Go to the case list</a>
+        <a class="btn" href="">Go to the dashboard</a>
+    </div>
+</div>
+
+@code {
+    private bool _focus;
+
+    protected override void OnInitialized()
+    {
+        // Rendered outside the router's Found branch, so it applies the same focus rule as FocusOnNavigation itself.
+        _focus = Shell.ShouldFocusAfterNavigation("not-found|" + Navigation.ToBaseRelativePath(Navigation.Uri).Split('?')[0]);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _focus && RendererInfo.IsInteractive)
+        {
+            await Interop.FocusSelectorAsync("h1");
+        }
+    }
+}

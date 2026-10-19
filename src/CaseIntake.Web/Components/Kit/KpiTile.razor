@@ -1,0 +1,43 @@
+@* A KPI card. With Href it is one link whose accessible name reads label, value and hint in order. *@
+@if (Href is not null)
+{
+    <li class="@Class">
+        <a class="kpi @VariantClass" href="@Href" data-testid="@TestId">
+            <span class="kpi__label">@Label</span>
+            <span class="kpi__value">@Value</span>
+            @if (!string.IsNullOrEmpty(Hint))
+            {
+                <span class="kpi__hint">@Hint</span>
+            }
+        </a>
+    </li>
+}
+else
+{
+    <li class="@Class">
+        <div class="kpi @VariantClass" data-testid="@TestId">
+            <span class="kpi__label">@Label</span>
+            <span class="kpi__value">@Value</span>
+            @if (!string.IsNullOrEmpty(Hint))
+            {
+                <span class="kpi__hint">@Hint</span>
+            }
+        </div>
+    </li>
+}
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public string? Hint { get; set; }
+    [Parameter] public string? Href { get; set; }
+
+    /// <summary>brand (default), danger, success, warning or neutral: the coloured top border.</summary>
+    [Parameter] public string Variant { get; set; } = "brand";
+
+    /// <summary>Extra classes on the list item (for example desktop-only).</summary>
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? TestId { get; set; }
+
+    private string? VariantClass => Variant == "brand" ? null : $"kpi--{Variant}";
+}

@@ -1,0 +1,9 @@
+@* Loading state: a spinner with text in a polite status region (not only a visual skeleton). *@
+<div class="loading-row" role="status" data-testid="loading">
+    <span class="spinner" aria-hidden="true"></span>
+    <span>@Text</span>
+</div>
+
+@code {
+    [Parameter] public string Text { get; set; } = "Loading…";
+}

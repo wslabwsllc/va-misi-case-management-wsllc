@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Razor">
+  <!-- E5 bUnit component tests: layout landmarks, the accessible form kit, pages and role-aware rendering
+       (bUnit authorization context per role), using TestKit fakes for isolated component work. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CaseIntake.Web\CaseIntake.Web.csproj" />
+    <ProjectReference Include="..\CaseIntake.TestKit\CaseIntake.TestKit.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="bunit" />
+    <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+    <Using Include="Bunit" />
+    <Using Include="Bunit.TestDoubles" />
+  </ItemGroup>
+</Project>

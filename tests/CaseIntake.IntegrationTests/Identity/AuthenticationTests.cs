@@ -114,7 +114,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         using var logout = await session.LogoutAsync();
 
         Assert.Equal(HttpStatusCode.Redirect, logout.StatusCode);
-        Assert.Equal("/account/login", logout.Headers.Location!.OriginalString);
+        Assert.Equal("/account/login?signedOut=true", logout.Headers.Location!.OriginalString);
         var cleared = AuthCookie(logout);
         Assert.NotNull(cleared);
         Assert.Contains("expires=Thu, 01 Jan 1970", cleared, StringComparison.OrdinalIgnoreCase);
@@ -212,10 +212,10 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
 
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
         var html = await page.Content.ReadAsStringAsync();
-        Assert.Contains("<label for=\"login-email\">Email</label>", html);
-        Assert.Contains("<label for=\"login-password\">Password</label>", html);
+        Assert.Matches("<label class=\"field__label\" for=\"login-email\">\\s*Email", html);
+        Assert.Matches("<label class=\"field__label\" for=\"login-password\">\\s*Password", html);
         Assert.Contains("autocomplete=\"current-password\"", html);
-        Assert.Contains("_framework/blazor.web.js", html);
+        Assert.Matches(@"_framework/blazor\.web(\.[a-z0-9]+)?\.js", html);   // fingerprinted by MapStaticAssets
         Assert.DoesNotContain("<!--Blazor:", html);   // static SSR: no interactive component markers on the account page
     }
 

@@ -1,10 +1,101 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@using CaseIntake.Web.Services
+@inject ShellState Shell
+@inject NavigationManager Navigation
 
-<a class="skip-link" href="#main">Skip to main content</a>
-<header>
-    <strong>Case Intake and Triage</strong>
-    <UserStatus />
-</header>
-<main id="main" tabindex="-1">
-    @Body
-</main>
+@* App shell (E5-S1): skip link, one banner (desktop bar and phone app bar), the labelled site map, main, the phone
+   bottom bar, and the persistent polite live region. Desktop >= 1024 px shows the sidebar; 768-1023 px the same
+   sidebar is collapsible to an icon rail; below 768 px the sidebar is replaced by the bottom bar and the "More" sheet. *@
+<div class="app-shell">
+    <a class="skip-link" href="#main" @onclick="SkipToMainAsync" @onclick:preventDefault="RendererInfo.IsInteractive">Skip to main content</a>
+
+    <header class="app-header-wrap">
+        <div class="app-header">
+            @if (RendererInfo.IsInteractive)
+            {
+                <button type="button" class="btn btn--subtle btn--icon app-header__toggle" aria-controls="app-nav"
+                        aria-expanded="@(_navCollapsed ? "false" : "true")" @onclick="ToggleNav" data-testid="nav-toggle">
+                    <Icon Name="menu" />
+                    <span class="visually-hidden">@(_navCollapsed ? "Expand navigation" : "Collapse navigation")</span>
+                </button>
+            }
+            <a class="brand" href="" aria-label="Case Management, Case Intake and Triage, dashboard">
+                <img class="brand__mark" src="@Assets["icons/icon.svg"]" alt="" />
+                <span class="brand__name">Case Management</span>
+            </a>
+            <span class="brand__divider" aria-hidden="true"></span>
+            <span class="app-title desktop-only">Case Intake and Triage</span>
+            <nav class="breadcrumb desktop-only" aria-label="Breadcrumb">
+                <ol>
+                    @foreach (var crumb in Shell.Breadcrumbs)
+                    {
+                        <li>
+                            @if (crumb.Href is not null)
+                            {
+                                <a href="@crumb.Href">@crumb.Text</a>
+                            }
+                            else
+                            {
+                                <span aria-current="page">@crumb.Text</span>
+                            }
+                        </li>
+                    }
+                </ol>
+            </nav>
+            <div class="user-menu">
+                <UserStatus />
+            </div>
+        </div>
+
+        <MobileAppBar OnOpenProfile="OpenProfileAsync" @ref="_mobileBar" />
+    </header>
+
+    <div class="app-body">
+        <SideNav Collapsed="_navCollapsed" />
+        <main id="main" class="app-main" tabindex="-1" @ref="_main">
+            <div class="page">
+                @Body
+            </div>
+        </main>
+    </div>
+
+    <BottomNav OnOpenMore="OpenMoreAsync" @ref="_bottomNav" />
+    <FloatingNewCase />
+    <StatusAnnouncerOutlet />
+
+    <MoreSheet @ref="_moreSheet" />
+    <ProfileSheet @ref="_profileSheet" />
+</div>
+
+@code {
+    private ElementReference _main;
+    private bool _navCollapsed;
+    private MoreSheet? _moreSheet;
+    private ProfileSheet? _profileSheet;
+    private BottomNav? _bottomNav;
+    private MobileAppBar? _mobileBar;
+
+    protected override void OnInitialized()
+    {
+        Shell.Changed += OnShellChanged;
+    }
+
+    private void OnShellChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private async Task SkipToMainAsync()
+    {
+        if (RendererInfo.IsInteractive)
+        {
+            await _main.FocusAsync();
+        }
+    }
+
+    private void ToggleNav() => _navCollapsed = !_navCollapsed;
+
+    private Task OpenMoreAsync() => _moreSheet?.OpenAsync(() => _bottomNav!.FocusMoreAsync()) ?? Task.CompletedTask;
+
+    private Task OpenProfileAsync() => _profileSheet?.OpenAsync(() => _mobileBar!.FocusProfileAsync()) ?? Task.CompletedTask;
+
+    public void Dispose() => Shell.Changed -= OnShellChanged;
+}

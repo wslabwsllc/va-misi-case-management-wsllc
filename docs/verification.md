@@ -157,3 +157,60 @@ brought in line with the delivered design. No production code changed. Host: 649
   instances over the same root and database) and by the named volume mounted on `migrator` and `web`.
 - Offline (no-egress) runtime check: G3.
 - The intake lookup UI and its five announced outcomes: E5-S4.
+
+# Verification record (Epic 5: UI, accessibility, mobile, test results)
+
+Base revision: `748e2c0` (EPIC-5 branch = `main`) plus the E5 changes on branch
+`feature/e5-enterprise-ui-mobile-test-results`. Host: Windows Server 2025, Docker 29.8.2 (linux/amd64 engine),
+.NET SDK 10.0.402. Docker runs used the repository's own Compose project (`caseintake`); the `pgdata`, `attachments`
+and `dataprotection` volumes were kept (no `down -v`). Browser tests ran against `web-e2e` (own database
+`caseintake_e2e`).
+
+## Docker JavaScript defect: diagnosis
+
+| Check | Finding |
+|---|---|
+| .NET / hosting model | .NET 10.0.13 Blazor Web App (`AddRazorComponents().AddInteractiveServerComponents()`), global Interactive Server routing, account pages static SSR |
+| Published output | `/app/web/wwwroot/_framework/blazor.web.js` present (from `Microsoft.AspNetCore.App.Internal.Assets` 10.0.13) |
+| `curl -I http://localhost:8080/_framework/blazor.web.js` (before) | **302** to `/account/login?ReturnUrl=...`; same for `/app.css` |
+| Web log (before) | `"Content root path: /src"`: the image's `WORKDIR`; `/src/wwwroot` does not exist |
+| Cause | static files not found from `/src`, request fell through to the authenticated fallback policy and was redirected |
+| Second defect | `web` **unhealthy**: `healthcheck.sh` had CRLF endings (`/usr/bin/env: 'bash\r'`) from a `core.autocrlf=true` checkout |
+| After fix | content root `/app/web`; `scripts/smoke-docker.sh`: **SMOKE: PASS** (framework script, CSS, JS modules, manifest 200 with JS/CSS types; one framework script reference; asset present in image); `web` healthy (health check now also probes `blazor.web.js`) |
+
+Further defects found and fixed by the Docker browser runs: kit inputs lost characters typed during a server round
+trip (now `@bind:event="oninput"`), the audit trail rendered the literal text `_auditError`, empty alert boxes rendered
+when an alert had only child content, and `Cross-Origin-Opener-Policy` caused Chrome console errors on non-loopback HTTP
+(now sent only on HTTPS or loopback).
+
+## Commands and results (final code)
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln -c Release` | 0 warnings, 0 errors |
+| `scripts/run-all-tests.sh all` (rebuild + `tests` service against `web-e2e`), run `20261019T180910Z-748e2c0d` | **RESULT: PASS**, exit 0, 847 tests |
+| same, final run `20261019T182341Z-748e2c0d` after the last fixes | **RESULT: PASS**, exit 0, 847 tests |
+| per suite (final run) | Attachments 86/0, Cases 106/0, Identity 104/0, VeteranLookup 100/0, Web.Tests (bUnit) 112/0, IntegrationTests 323/0, E2E (Playwright + axe) 16/0; 0 skipped; E2E 39 s, whole run about 2 min |
+| `docker compose up -d --wait` then `scripts/smoke-docker.sh` | all services healthy; SMOKE: PASS |
+| Demo `web` background import | all 7 completed runs imported automatically (event 5201) and kept, including the 5 earlier failing ones (78, then 1 failure each); the first attempt never started and wrote no run |
+| `scripts/capture-screenshots.sh` | 18 screenshots in [screenshots/](screenshots/) (desktop, tablet 768, phone 390; cases and test results) |
+
+Earlier runs on the way (kept in the Test results history): 78 failures (`UseStaticWebAssets` package paths differed
+between build and run images; fixed by one NuGet cache path), then single E2E failures (COOP console error, lost
+keystrokes, test timing, mid-animation contrast scan, a test typing before focus moved), each fixed at the cause.
+
+E2E coverage: framework script delivery and interactivity (WebSocket circuit, button, navigation after reload, no
+console errors), PWA manifest and worker policy, the primary keyboard workflow (37 recorded steps incl. all five
+transitions, lookup outcomes, validation focus, upload/download byte check, sign-out), edit conflict, CaseWorker /
+Supervisor / QualityAnalyst differences, access denied (HTTP and in-app with h1 focus), Not Found, anonymous 401s,
+390x844, 375x812, 768x1024 and 1440x900 layouts (no horizontal overflow, 44 px bottom-bar targets), test results import,
+failure evidence, screenshot preview and zoom, exports, phone dashboard. axe (WCAG 2.0/2.1/2.2 A and AA tags) found no
+violations on the 16 scanned views.
+
+## Not verified / open (E5)
+
+- Manual accessibility review (native file picker, download prompt, screen reader, zoom 200%/400%, high contrast,
+  reconnect, real iOS/Android devices): not performed; see [accessibility-review.md](accessibility-review.md).
+- iOS Safari / Android Chrome: only Chromium device emulation in automation.
+- The clean-clone and offline (no egress) checks of G3 were not rerun for this change.
+- Runs imported before the `run-tests.sh` status fix are labelled Partial although every suite ran.

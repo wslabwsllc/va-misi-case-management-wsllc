@@ -1,21 +1,28 @@
 @using System.Security.Claims
 @using CaseIntake.Identity.CurrentUser
+@using CaseIntake.Web.Services
 
-@* Signed-in user's display name and role(s) plus the sign-out button (E3-S1; E5 styles it). Sign-out is a plain HTTP form
-   post carrying an antiforgery token to POST /account/logout. *@
+@* Signed-in user's display name and role(s) plus the sign-out button (E3-S1; styled with the E5 kit, E5-S8). Roles
+   come from the authenticated identity's role claims through OperationActorFactory, never from the UI. Sign-out is a
+   plain HTTP form post carrying an antiforgery token to POST /account/logout. *@
 <AuthorizeView>
     <Authorized>
         <div class="user-status">
-            <span>Signed in as <strong data-testid="user-name">@context.User.Identity?.Name</strong>
-                (<span data-testid="user-roles">@RoleText(context.User)</span>)</span>
+            <div class="user-status__identity">
+                <span class="avatar" aria-hidden="true">@UiText.Initials(context.User.Identity?.Name)</span>
+                <span class="user-status__text">
+                    <span class="visually-hidden">Signed in as </span><strong class="user-status__name" data-testid="user-name">@context.User.Identity?.Name</strong>
+                    <span class="user-status__roles"><span class="visually-hidden">Role: </span><span data-testid="user-roles">@RoleText(context.User)</span></span>
+                </span>
+            </div>
             <form method="post" action="account/logout">
                 <AntiforgeryToken />
-                <button type="submit">Sign out</button>
+                <button type="submit" class="btn" data-testid="sign-out"><Icon Name="signout" Small="true" /> Sign out</button>
             </form>
         </div>
     </Authorized>
     <NotAuthorized>
-        <a href="account/login">Sign in</a>
+        <a class="btn btn--primary" href="account/login">Sign in</a>
     </NotAuthorized>
 </AuthorizeView>
 

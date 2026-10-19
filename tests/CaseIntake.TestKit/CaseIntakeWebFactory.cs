@@ -23,6 +23,9 @@ public sealed class CaseIntakeWebFactory(
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        // Outside Development the static web assets manifest (package assets such as _framework/blazor.web.js and
+        // collocated *.razor.js modules) is not enabled automatically; a published app has them in wwwroot instead.
+        builder.UseStaticWebAssets();
         builder.ConfigureAppConfiguration((_, config) =>
         {
             var settings = new Dictionary<string, string?> { ["ConnectionStrings:CaseIntake"] = connectionString };

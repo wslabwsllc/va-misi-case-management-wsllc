@@ -3,10 +3,12 @@
 @using CaseIntake.Identity.Account
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
+@layout CaseIntake.Web.Components.Layout.AccountLayout
 @inject AccountSignIn AccountSignIn
 @inject NavigationManager Navigation
 
-@* Static SSR (E3-S1): a plain HTTP form post with an antiforgery token; no circuit is needed to sign in. *@
+@* Static SSR (E3-S1): a plain HTTP form post with an antiforgery token; no circuit is needed to sign in. Styled with the
+   E5 kit (E5-S8). The existing Identity sign-in flow is unchanged. *@
 <PageTitle>Sign in - Case Intake and Triage</PageTitle>
 
 <h1>Sign in</h1>
@@ -15,22 +17,35 @@
 @if (errorMessage is not null)
 {
     @* Focus moves here after a failed attempt (autofocus on a full-page response) and role="alert" announces it. *@
-    <div id="login-error" class="alert alert-error" role="alert" tabindex="-1" autofocus>@errorMessage</div>
+    <div id="login-error" class="message message--error alert alert-error" role="alert" tabindex="-1" autofocus>
+        <Icon Name="error" />
+        <div class="message__body">@errorMessage</div>
+    </div>
+}
+else if (SignedOut)
+{
+    <div class="message message--success" role="status" data-testid="signed-out">
+        <Icon Name="success" />
+        <div class="message__body">You have signed out.</div>
+    </div>
+}
+else if (IsReturnToProtectedPage)
+{
+    <div class="message message--info" role="status" data-testid="sign-in-required">
+        <Icon Name="info" />
+        <div class="message__body">Sign in to continue. If you were already signed in, your session has ended.</div>
+    </div>
 }
 
 <EditForm Model="Input" method="post" OnValidSubmit="SignInAsync" FormName="login" novalidate>
     <DataAnnotationsValidator />
-    <div class="field">
-        <label for="login-email">Email</label>
-        <InputText id="login-email" @bind-Value="Input.Email" type="email" autocomplete="username" aria-required="true" />
-        <ValidationMessage For="() => Input.Email" />
+    <LabeledInputText Id="login-email" Label="Email" Type="email" AutoComplete="username" Spellcheck="false"
+                      Required="true" @bind-Value="Input.Email" />
+    <LabeledInputText Id="login-password" Label="Password" Type="password" AutoComplete="current-password"
+                      Required="true" @bind-Value="Input.Password" />
+    <div class="form-actions">
+        <button type="submit" class="btn btn--primary">Sign in</button>
     </div>
-    <div class="field">
-        <label for="login-password">Password</label>
-        <InputText id="login-password" @bind-Value="Input.Password" type="password" autocomplete="current-password" aria-required="true" />
-        <ValidationMessage For="() => Input.Password" />
-    </div>
-    <button type="submit">Sign in</button>
 </EditForm>
 
 @code {
@@ -45,6 +60,12 @@
 
     [SupplyParameterFromQuery]
     private string? ReturnUrl { get; set; }
+
+    /// <summary>Set by the sign-out endpoint's redirect, so the page confirms the sign-out.</summary>
+    [SupplyParameterFromQuery(Name = "signedOut")]
+    private bool SignedOut { get; set; }
+
+    private bool IsReturnToProtectedPage => LocalReturnUrl.IsLocal(ReturnUrl) && ReturnUrl != LocalReturnUrl.Default;
 
     protected override void OnInitialized() => Input ??= new();
 

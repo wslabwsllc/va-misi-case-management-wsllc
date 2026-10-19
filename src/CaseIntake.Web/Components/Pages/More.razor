@@ -1,0 +1,36 @@
+@page "/more"
+@attribute [Authorize(Policy = Permissions.CasesView)]
+@inherits NavigationAwareBase
+@using CaseIntake.Identity.CurrentUser
+@using CaseIntake.Web.Services
+
+@* The phone "More" page: the full permitted site map and the profile with sign-out. The bottom bar opens the same
+   content as a sheet when the page is interactive; this page is the no-script fallback and a stable URL. *@
+<PageShell Title="More" />
+<div class="card">
+    <div class="user-status__identity">
+        <span class="avatar avatar--lg" aria-hidden="true">@UiText.Initials(User.Identity?.Name)</span>
+        <div class="user-status__text user-status__text--always">
+            <span class="user-status__name">@User.Identity?.Name</span>
+            <span class="user-status__roles">Role: @RoleText</span>
+        </div>
+    </div>
+    <form method="post" action="account/logout" class="form-actions">
+        <AntiforgeryToken />
+        <button type="submit" class="btn"><Icon Name="signout" /> Sign out</button>
+    </form>
+</div>
+<div class="card">
+    <SiteMapList Groups="VisibleGroups" />
+</div>
+
+@code {
+    private string RoleText
+    {
+        get
+        {
+            var roles = OperationActorFactory.FromPrincipal(User).Roles.Order(StringComparer.Ordinal).ToList();
+            return roles.Count == 0 ? "no role" : string.Join(", ", roles);
+        }
+    }
+}

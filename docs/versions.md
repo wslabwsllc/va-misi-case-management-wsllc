@@ -43,6 +43,9 @@ is recorded from the built image in [verification.md](verification.md) (output o
 | `Testcontainers.PostgreSql` | 4.16.0 |
 | `Respawn` | 7.0.0 |
 | `NetArchTest.Rules` | 1.3.2 |
+| `bunit` | 2.11.3 |
+| `Microsoft.Playwright` | 1.63.0 |
+| `Deque.AxeCore.Playwright` | 4.13.0 |
 
 Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
 

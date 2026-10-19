@@ -1,0 +1,29 @@
+@inject NavigationManager Navigation
+
+@* The permitted site map as touch-sized lists (used by the More sheet and the /more page). *@
+<nav aria-label="All pages">
+    @foreach (var group in Groups)
+    {
+        var groupId = "sitemap-" + (group.Label ?? "home").Replace(' ', '-').ToLowerInvariant();
+        @if (group.Label is not null)
+        {
+            <p class="sheet-nav__group" id="@groupId">@group.Label</p>
+        }
+        <ul class="sheet-nav" aria-labelledby="@(group.Label is null ? null : groupId)">
+            @foreach (var item in group.Items)
+            {
+                <li>
+                    <a href="@item.Href" @onclick="OnNavigate"
+                       aria-current="@(AppNavigation.CurrentHref(Navigation.ToBaseRelativePath(Navigation.Uri), Groups.SelectMany(g => g.Items)) == item.Href ? "page" : null)">
+                        <Icon Name="@item.Icon" /> <span>@item.Text</span>
+                    </a>
+                </li>
+            }
+        </ul>
+    }
+</nav>
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<NavGroup> Groups { get; set; } = [];
+    [Parameter] public EventCallback OnNavigate { get; set; }
+}

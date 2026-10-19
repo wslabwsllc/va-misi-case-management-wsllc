@@ -1,0 +1,46 @@
+@inherits NavigationAwareBase
+
+@* Phone bottom bar (below 768 px): Home, Cases, My Tasks, Notifications and More, each a 44 px+ touch target, kept
+   above the device safe area. More opens the full site map as a sheet; without a circuit it links to the /more page. *@
+@if (IsAuthenticated)
+{
+    var items = AppNavigation.BottomBar.Where(i => GrantedPolicies.Contains(i.Policy)).ToList();
+    var moreCurrent = items.All(i => CurrentAttr(i, items) is null) && RelativePath.Split('?')[0] == "more";
+    <nav class="bottom-nav" aria-label="Mobile navigation" data-testid="bottom-nav">
+        <ul>
+            @foreach (var item in items)
+            {
+                <li>
+                    <a class="bottom-nav__item" href="@item.Href" aria-current="@CurrentAttr(item, items)">
+                        <Icon Name="@item.Icon" />
+                        <span>@item.Text</span>
+                    </a>
+                </li>
+            }
+            <li>
+                @if (RendererInfo.IsInteractive)
+                {
+                    <button type="button" class="bottom-nav__item" aria-haspopup="dialog" @onclick="OnOpenMore" @ref="_more" data-testid="bottom-nav-more">
+                        <Icon Name="more" />
+                        <span>More</span>
+                    </button>
+                }
+                else
+                {
+                    <a class="bottom-nav__item" href="more" aria-current="@(moreCurrent ? "page" : null)">
+                        <Icon Name="more" />
+                        <span>More</span>
+                    </a>
+                }
+            </li>
+        </ul>
+    </nav>
+}
+
+@code {
+    private ElementReference _more;
+
+    [Parameter] public EventCallback OnOpenMore { get; set; }
+
+    public ValueTask FocusMoreAsync() => _more.FocusAsync();
+}

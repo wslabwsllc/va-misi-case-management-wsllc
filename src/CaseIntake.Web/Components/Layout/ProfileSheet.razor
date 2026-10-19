@@ -1,0 +1,33 @@
+@using CaseIntake.Identity.CurrentUser
+@using CaseIntake.Web.Services
+
+@* Phone profile menu: who is signed in, with which role(s), and sign-out (a form post with an antiforgery token). *@
+<ModalDialog @ref="_dialog" Id="profile-sheet" Title="Profile" TestId="profile-sheet">
+    <AuthorizeView>
+        <Authorized>
+            <div class="user-status__identity">
+                <span class="avatar avatar--lg" aria-hidden="true">@UiText.Initials(context.User.Identity?.Name)</span>
+                <div class="user-status__text user-status__text--always">
+                    <span class="user-status__name">@context.User.Identity?.Name</span>
+                    <span class="user-status__roles">Role: @RoleText(context.User)</span>
+                </div>
+            </div>
+            <form method="post" action="account/logout" class="form-actions">
+                <AntiforgeryToken />
+                <button type="submit" class="btn btn--primary"><Icon Name="signout" /> Sign out</button>
+            </form>
+        </Authorized>
+    </AuthorizeView>
+</ModalDialog>
+
+@code {
+    private ModalDialog? _dialog;
+
+    public Task OpenAsync(Func<ValueTask> returnFocus) => _dialog?.OpenAsync(returnFocus) ?? Task.CompletedTask;
+
+    private static string RoleText(System.Security.Claims.ClaimsPrincipal user)
+    {
+        var roles = OperationActorFactory.FromPrincipal(user).Roles.Order(StringComparer.Ordinal).ToList();
+        return roles.Count == 0 ? "no role" : string.Join(", ", roles);
+    }
+}

@@ -15,10 +15,30 @@ namespace CaseIntake.IntegrationTests.Identity;
 /// </summary>
 public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
 {
-    private static readonly string[] AnonymousByDesign = ["/account/login", "/account/access-denied", "/account/logout", "/health/live", "/health/ready"];
+    // E5 adds the error and Not Found pages (an anonymous visitor can hit either). Static asset endpoints (MapStaticAssets:
+    // CSS, framework and app scripts, icons) are anonymous by design and are checked separately below.
+    private static readonly string[] AnonymousByDesign = ["/account/login", "/account/access-denied", "/account/logout", "/health/live", "/health/ready", "/error", "/not-found"];
 
-    private IReadOnlyList<RouteEndpoint> Endpoints() =>
+    private static bool IsStaticAsset(Endpoint e) => e.Metadata.GetMetadata<Microsoft.AspNetCore.StaticAssets.StaticAssetDescriptor>() is not null;
+
+    private IReadOnlyList<RouteEndpoint> AllEndpoints() =>
         [.. fixture.Factory.Services.GetRequiredService<EndpointDataSource>().Endpoints.OfType<RouteEndpoint>()];
+
+    private IReadOnlyList<RouteEndpoint> Endpoints() => [.. AllEndpoints().Where(e => !IsStaticAsset(e))];
+
+    [Fact]
+    public void Static_asset_endpoints_serve_only_files_and_never_pages_or_handlers()
+    {
+        var assets = AllEndpoints().Where(IsStaticAsset).ToList();
+
+        Assert.Contains(assets, e => Route(e) == "/_framework/blazor.web.js");
+        Assert.All(assets, e =>
+        {
+            Assert.Null(e.Metadata.GetMetadata<ComponentTypeMetadata>());
+            Assert.Null(e.Metadata.GetMetadata<MethodInfo>());
+            Assert.DoesNotContain(e.Metadata.GetOrderedMetadata<IAuthorizeData>(), a => a.Policy is not null);
+        });
+    }
 
     private static string Route(RouteEndpoint e) => "/" + (e.RoutePattern.RawText ?? "").TrimStart('/');
 

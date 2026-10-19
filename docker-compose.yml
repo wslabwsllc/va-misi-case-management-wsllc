@@ -1,5 +1,5 @@
 # One-command evaluation:  docker compose up --build     (http://localhost:8080)
-# Full test suite:         docker compose run --rm tests
+# Full test suite:         docker compose run --rm tests             (or scripts/run-all-tests.sh, which also records git metadata and server logs)
 # All services are linux/amd64. Credentials below are synthetic and local-only. No .env file is needed.
 name: caseintake
 
@@ -10,6 +10,19 @@ x-eval-image: &eval-image
     context: .
     dockerfile: Dockerfile
     target: eval
+    args:
+      GIT_COMMIT: ${GIT_COMMIT:-unknown}
+      GIT_BRANCH: ${GIT_BRANCH:-unknown}
+      BUILD_ID: ${BUILD_ID:-local}
+
+# The web container serves static assets (blazor.web.js, CSS, JS modules) from its content root, so it must start
+# in its publish folder; both checks below must pass for the container to count as healthy.
+x-web-healthcheck: &web-healthcheck
+  test: ["CMD-SHELL", "/src/scripts/healthcheck.sh 127.0.0.1 8080 /health/ready && /src/scripts/healthcheck.sh 127.0.0.1 8080 /_framework/blazor.web.js"]
+  interval: 5s
+  timeout: 12s
+  retries: 30
+  start_period: 5s
 
 services:
   db:
@@ -30,6 +43,7 @@ services:
   migrator:
     <<: *eval-image
     command: ["dotnet", "/app/migrator/CaseIntake.MigrationService.dll"]
+    working_dir: /app/migrator
     environment:
       ConnectionStrings__CaseIntake: &conn "Host=db;Port=5432;Database=caseintake;Username=caseintake;Password=caseintake_local_only;Timezone=UTC"
       Seed__DemoPassword: &demo-password "Demo-Passw0rd!"
@@ -62,6 +76,9 @@ services:
   web:
     <<: *eval-image
     command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
+    # Content root = publish folder, so wwwroot (and _framework/blazor.web.js) is found. The image's WORKDIR is /src
+    # for the tests service; without this the app answered every asset request with the sign-in redirect.
+    working_dir: /app/web
     ports:
       - "8080:8080"
     environment:
@@ -71,20 +88,60 @@ services:
       Attachments__RootPath: /attachments
       DataProtection__KeysPath: /dataprotection
       Seed__DemoPassword: *demo-password
+      # Test results and evidence written by the tests service (same volume), imported automatically and served only
+      # through the authorized evidence endpoint.
+      TestResults__RootPath: /test-results
     volumes:
       - attachments:/attachments
       - dataprotection:/dataprotection
+      - testresults:/test-results
     depends_on:
       migrator:
         condition: service_completed_successfully
       veteran-lookup:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "/src/scripts/healthcheck.sh", "127.0.0.1", "8080", "/health/ready"]
-      interval: 5s
-      timeout: 6s
-      retries: 30
-      start_period: 5s
+    healthcheck: *web-healthcheck
+
+  # ---- Test profile: an isolated copy of the production app for the browser suite (its own database, attachments and
+  # results folder), so end-to-end runs never change the demo data. Same image as web. ----
+  migrator-e2e:
+    <<: *eval-image
+    profiles: ["tests"]
+    command: ["dotnet", "/app/migrator/CaseIntake.MigrationService.dll"]
+    working_dir: /app/migrator
+    environment:
+      ConnectionStrings__CaseIntake: &conn-e2e "Host=db;Port=5432;Database=caseintake_e2e;Username=caseintake;Password=caseintake_local_only;Timezone=UTC"
+      Seed__DemoPassword: *demo-password
+      Attachments__RootPath: /attachments-e2e
+    volumes:
+      - attachments-e2e:/attachments-e2e
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  web-e2e:
+    <<: *eval-image
+    profiles: ["tests"]
+    command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
+    working_dir: /app/web
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__CaseIntake: *conn-e2e
+      VeteranLookup__BaseUrl: http://veteran-lookup:8081
+      Attachments__RootPath: /attachments-e2e
+      Seed__DemoPassword: *demo-password
+      TestResults__RootPath: /e2e-fixtures
+      TestResults__ScanInterval: "00:00:00"
+    volumes:
+      - attachments-e2e:/attachments-e2e
+      - testfixtures:/e2e-fixtures
+    depends_on:
+      migrator-e2e:
+        condition: service_completed_successfully
+      veteran-lookup:
+        condition: service_healthy
+    healthcheck: *web-healthcheck
 
   tests:
     <<: *eval-image
@@ -93,16 +150,30 @@ services:
     environment:
       TESTKIT_POSTGRES_ADMIN: "Host=db;Port=5432;Database=postgres;Username=caseintake;Password=caseintake_local_only"
       VeteranLookup__BaseUrl: http://veteran-lookup:8081
+      E2E_BASE_URL: http://web-e2e:8080
+      E2E_FIXTURES_ROOT: /e2e-fixtures
+      E2E_TRACE: ${E2E_TRACE:-}
+      E2E_VIDEO: ${E2E_VIDEO:-}
+      GIT_COMMIT: ${GIT_COMMIT:-}
+      GIT_BRANCH: ${GIT_BRANCH:-}
+      BUILD_ID: ${BUILD_ID:-}
+      TEST_RUN_KEY: ${TEST_RUN_KEY:-}
+      CAPTURE_SERVER_LOGS: ${CAPTURE_SERVER_LOGS:-}
     volumes:
       - testresults:/results
+      - testfixtures:/e2e-fixtures
     depends_on:
       db:
         condition: service_healthy
       veteran-lookup:
         condition: service_healthy
+      web-e2e:
+        condition: service_healthy
 
 volumes:
   pgdata:
   attachments:
+  attachments-e2e:
   dataprotection:
   testresults:
+  testfixtures:

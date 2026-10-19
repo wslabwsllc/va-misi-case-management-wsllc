@@ -1,0 +1,56 @@
+@using CaseIntake.Web.Services
+@using CaseIntake.Identity.CurrentUser
+@implements IDisposable
+@inject ShellState Shell
+
+@* Phone app bar: back button (to the logical parent page), the page title, notifications and the profile menu. *@
+<div class="mobile-header" data-testid="mobile-header">
+    <div class="mobile-header__slot">
+        @if (Shell.BackHref is { } back)
+        {
+            <a class="icon-button" href="@back" aria-label="@($"Back to {Shell.Breadcrumbs.LastOrDefault(c => c.Href == back)?.Text ?? "previous page"}")" data-testid="mobile-back"><Icon Name="back" /></a>
+        }
+        else
+        {
+            <a class="icon-button" href="" aria-label="Case Management, dashboard"><img class="brand__mark" src="@Assets["icons/icon.svg"]" alt="" /></a>
+        }
+    </div>
+    <div class="mobile-header__title" aria-hidden="true">@Shell.Title</div>
+    <div class="mobile-header__slot mobile-header__slot--end">
+        <AuthorizeView>
+            <Authorized>
+                <a class="icon-button" href="notifications" aria-label="Notifications"><Icon Name="bell" /></a>
+                @if (RendererInfo.IsInteractive)
+                {
+                    <button type="button" class="icon-button" aria-haspopup="dialog" @onclick="OnOpenProfile" @ref="_profile"
+                            aria-label="@($"Profile and sign out, signed in as {context.User.Identity?.Name}")" data-testid="mobile-profile">
+                        <span class="avatar" aria-hidden="true">@UiText.Initials(context.User.Identity?.Name)</span>
+                    </button>
+                }
+                else
+                {
+                    <a class="icon-button" href="more" aria-label="@($"Profile and sign out, signed in as {context.User.Identity?.Name}")">
+                        <span class="avatar" aria-hidden="true">@UiText.Initials(context.User.Identity?.Name)</span>
+                    </a>
+                }
+            </Authorized>
+            <NotAuthorized>
+                <a class="icon-button" href="account/login" aria-label="Sign in"><Icon Name="person" /></a>
+            </NotAuthorized>
+        </AuthorizeView>
+    </div>
+</div>
+
+@code {
+    private ElementReference _profile;
+
+    [Parameter] public EventCallback OnOpenProfile { get; set; }
+
+    protected override void OnInitialized() => Shell.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public ValueTask FocusProfileAsync() => _profile.FocusAsync();
+
+    public void Dispose() => Shell.Changed -= OnChanged;
+}

@@ -1,0 +1,83 @@
+@page "/reports"
+@attribute [Authorize(Policy = Permissions.CasesView)]
+@implements IDisposable
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@inject CaseDashboardService Dashboard
+
+@* Case reports: the dashboard figures as tables (the accessible equivalent of the charts) and a CSV export of the case
+   list, all from the authorized case service. *@
+<PageShell Title="Case reports" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="Case figures as tables, and a CSV export of the case list." />
+
+<div class="command-bar" role="toolbar" aria-label="Report commands">
+    <a class="command" href="exports/cases.csv" download data-enhance-nav="false" data-testid="report-export"><Icon Name="export" /> Export all cases to CSV</a>
+</div>
+
+<ErrorAlert Message="@_error" TestId="reports-error" />
+
+@if (_data is null && _error is null)
+{
+    <LoadingIndicator Text="Loading reports…" />
+}
+else if (_data is { } d)
+{
+    <div class="grid grid--2">
+        <section class="card card--flush" aria-labelledby="by-status">
+            <div class="card__header"><h2 id="by-status">Cases by status</h2></div>
+            <table class="data-grid">
+                <caption class="visually-hidden">Cases by status</caption>
+                <thead><tr><th scope="col">Status</th><th scope="col" class="num">Cases</th><th scope="col" class="num">Share</th></tr></thead>
+                <tbody>
+                    @foreach (var (status, count) in d.ByStatus)
+                    {
+                        <tr>
+                            <th scope="row"><StatusPill Status="status" /></th>
+                            <td class="num">@UiText.Number(count)</td>
+                            <td class="num">@(d.Total == 0 ? "0%" : UiText.Percent(count / (double)d.Total))</td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot><tr><th scope="row">Total</th><td class="num">@UiText.Number(d.Total)</td><td class="num">100%</td></tr></tfoot>
+            </table>
+        </section>
+        <section class="card card--flush" aria-labelledby="by-month">
+            <div class="card__header"><h2 id="by-month">Created and completed by month (UTC)</h2></div>
+            <div class="table-wrap">
+                <table class="data-grid">
+                    <caption class="visually-hidden">Cases created and completed by month</caption>
+                    <thead><tr><th scope="col">Month</th><th scope="col" class="num">Created</th><th scope="col" class="num">Resolved or closed</th></tr></thead>
+                    <tbody>
+                        @for (var i = d.CreatedByMonth.Count - 1; i >= 0; i--)
+                        {
+                            <tr>
+                                <th scope="row">@d.CreatedByMonth[i].Label</th>
+                                <td class="num">@d.CreatedByMonth[i].Count</td>
+                                <td class="num">@d.CompletedByMonth[i].Count</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <p class="page-header__subtitle card__note">Completion month is the month of the case's last update.</p>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private CaseDashboard? _data;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Dashboard.LoadAsync(_cts.Token);
+        _data = result.IsSuccess ? result.Value : null;
+        _error = result.IsSuccess ? null : result.Error!.Message;
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

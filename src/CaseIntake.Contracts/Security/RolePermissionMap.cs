@@ -28,8 +28,14 @@ public static class RolePermissionMap
         Permissions.Transition(CaseStatus.Resolved, CaseStatus.InProgress),
     ];
 
-    /// <summary>Every permission an authorization policy is registered for: the six fixed ones plus the five transitions.</summary>
-    public static ImmutableArray<string> AllPermissions { get; } = [.. Common, .. TransitionPermissions];
+    /// <summary>The test results module (E5): viewing evidence and importing executed runs.</summary>
+    public static ImmutableArray<string> TestResultsPermissions { get; } = [Permissions.TestResultsView, Permissions.TestResultsManage];
+
+    /// <summary>
+    /// Every permission an authorization policy is registered for: the six fixed ones, the five transitions and the two
+    /// test results permissions.
+    /// </summary>
+    public static ImmutableArray<string> AllPermissions { get; } = [.. Common, .. TransitionPermissions, .. TestResultsPermissions];
 
     private static readonly FrozenDictionary<string, ImmutableHashSet<string>> ByRole =
         new Dictionary<string, ImmutableHashSet<string>>(StringComparer.Ordinal)
@@ -41,10 +47,12 @@ public static class RolePermissionMap
                 Permissions.Transition(CaseStatus.InProgress, CaseStatus.Resolved),
             ],
             [AppRoles.Supervisor] = [.. Common, .. TransitionPermissions],
+            // QA reads cases (to follow evidence back to the application) and owns test evidence; it cannot change cases.
+            [AppRoles.QualityAnalyst] = [Permissions.CasesView, .. TestResultsPermissions],
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The roles the matrix defines.</summary>
-    public static ImmutableArray<string> Roles { get; } = [AppRoles.CaseWorker, AppRoles.Supervisor];
+    public static ImmutableArray<string> Roles { get; } = [AppRoles.CaseWorker, AppRoles.Supervisor, AppRoles.QualityAnalyst];
 
     /// <summary>Union of the permissions of <paramref name="roles"/>; unknown roles contribute nothing. Role names are case-sensitive.</summary>
     public static ImmutableHashSet<string> PermissionsFor(IEnumerable<string> roles)

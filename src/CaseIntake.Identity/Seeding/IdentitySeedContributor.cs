@@ -14,7 +14,8 @@ public static class DemoUsers
 {
     public static DemoUser CaseWorker { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000001", "caseworker@example.test", AppRoles.CaseWorker);
     public static DemoUser Supervisor { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000002", "supervisor@example.test", AppRoles.Supervisor);
-    public static IReadOnlyList<DemoUser> All { get; } = [CaseWorker, Supervisor];
+    public static DemoUser QualityAnalyst { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000003", "qa@example.test", AppRoles.QualityAnalyst);
+    public static IReadOnlyList<DemoUser> All { get; } = [CaseWorker, Supervisor, QualityAnalyst];
 
     /// <summary>Stable role IDs, so two fresh databases seed identically.</summary>
     internal static string RoleId(string role) => $"role-{role.ToLowerInvariant()}";

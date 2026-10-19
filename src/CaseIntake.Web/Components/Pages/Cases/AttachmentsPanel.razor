@@ -1,0 +1,241 @@
+@implements IDisposable
+@using CaseIntake.Attachments
+@using CaseIntake.Contracts.Attachments
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Web.Services
+@using Microsoft.Extensions.Options
+@inject IAttachmentService Attachments
+@inject IOptions<AttachmentOptions> AttachmentOptions
+@inject StatusAnnouncer Announcer
+@inject ILogger<AttachmentsPanel> Logger
+
+@* Attachments (E5-S7). Upload streams the file over the circuit (InputFile, read limit = the configured maximum) into
+   IAttachmentService, which enforces the permission, type allowlist, size and content checks. Each row links to the
+   E4 download endpoint (AttachmentRoutes.Content); the download attribute keeps Blazor's router out of the way.
+   Upload controls are shown only with attachments.upload and while the case is not Closed. *@
+<section class="card" aria-labelledby="attachments-heading" data-testid="attachments-section">
+    <div class="card__header"><h2 id="attachments-heading">Attachments</h2></div>
+
+    @if (!Closed)
+    {
+        <AuthorizeView Policy="@Permissions.AttachmentsUpload">
+            <form class="form" @onsubmit="UploadAsync" @onsubmit:preventDefault="true" data-testid="upload-form" aria-labelledby="upload-label">
+                <div class="field">
+                    <label class="field__label" for="attachment-file" id="upload-label">Choose a file to attach</label>
+                    <span class="field__hint" id="attachment-file-hint">@AttachmentOptions.Value.Describe()</span>
+                    <InputFile id="attachment-file" class="input-file" OnChange="OnFileSelected" @key="_inputKey" @ref="_fileInput"
+                               aria-describedby="@(_error is null ? "attachment-file-hint" : "attachment-file-hint attachment-file-error")"
+                               aria-invalid="@(_error is null ? null : "true")"
+                               accept="@Accept" data-testid="attachment-input" />
+                    @if (_error is not null)
+                    {
+                        <div class="field__error" id="attachment-file-error"><Icon Name="error" Small="true" /><span>@_error</span></div>
+                    }
+                </div>
+                <div class="btn-row">
+                    <button type="submit" class="btn btn--primary" disabled="@_uploading" aria-busy="@(_uploading ? "true" : "false")" data-testid="upload-button">
+                        @if (_uploading)
+                        {
+                            <span class="spinner" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <Icon Name="upload" Small="true" />
+                        }
+                        Upload
+                    </button>
+                </div>
+                <p class="visually-hidden" role="status" aria-live="polite" data-testid="upload-progress">@_progress</p>
+            </form>
+            <ErrorAlert Title="@(_error is null ? null : "The file was not uploaded")" Message="@_error" TestId="upload-error" />
+        </AuthorizeView>
+    }
+    else
+    {
+        <p class="page-header__subtitle">Closed cases cannot receive new files.</p>
+    }
+
+    <ErrorAlert Message="@_listError" TestId="attachments-error" />
+
+    @if (_items is null && _listError is null)
+    {
+        <LoadingIndicator Text="Loading attachments…" />
+    }
+    else if (_items is { Count: 0 })
+    {
+        <p class="page-header__subtitle" data-testid="attachments-empty">No files are attached to this case.</p>
+    }
+    else if (_items is { } items)
+    {
+        <div class="table-wrap">
+            <table class="data-grid" data-testid="attachments-table">
+                <caption class="visually-hidden">Files attached to case @CaseId</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Name</th>
+                        <th scope="col" class="num">Size</th>
+                        <th scope="col" class="desktop-only">Uploaded at (UTC)</th>
+                        <th scope="col" class="desktop-only">By</th>
+                        <th scope="col"><span class="visually-hidden">Actions</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in items)
+                    {
+                        <tr>
+                            <td>
+                                @a.FileName
+                                <div class="compact-list__meta mobile-only">@UiText.Utc(a.UploadedAtUtc) · @a.UploadedBy</div>
+                            </td>
+                            <td class="num nowrap">@UiText.FileSize(a.SizeBytes)</td>
+                            <td class="nowrap desktop-only">@UiText.Utc(a.UploadedAtUtc)</td>
+                            <td class="desktop-only">@a.UploadedBy</td>
+                            <td>
+                                <AuthorizeView Policy="@Permissions.AttachmentsDownload">
+                                    <a href="@AttachmentRoutes.Content(a.CaseId, a.Id)" download="@a.FileName" data-enhance-nav="false"
+                                       class="btn btn--subtle" data-testid="download-link">
+                                        <Icon Name="download" Small="true" /> Download<span class="visually-hidden">@(" " + a.FileName)</span>
+                                    </a>
+                                </AuthorizeView>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<AttachmentDto>? _items;
+    private IBrowserFile? _file;
+    private InputFile? _fileInput;
+    private int _inputKey;
+    private bool _uploading;
+    private bool _focusInput;
+    private string? _error;
+    private string? _listError;
+    private string? _progress;
+
+    [Parameter, EditorRequired] public long CaseId { get; set; }
+    [Parameter] public bool Closed { get; set; }
+
+    /// <summary>Raised after an upload (it adds an audit entry).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private string Accept => string.Join(',', AttachmentOptions.Value.AllowedTypes.SelectMany(t => t.Extensions));
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_items is null)
+        {
+            await LoadAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var result = await Attachments.ListAsync(CaseId, _cts.Token);
+            _items = result.IsSuccess ? result.Value : null;
+            _listError = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5008, "AttachmentListUiFailed"), "Attachment list failed for {CaseId} ({ExceptionType})", CaseId, ex.GetType().Name);
+            _listError = "The attachments could not be loaded.";
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        _file = e.File;
+        _error = null;
+        _progress = $"Selected {e.File.Name}, {UiText.FileSize(e.File.Size)}.";
+    }
+
+    private async Task UploadAsync()
+    {
+        if (_uploading)
+        {
+            return;
+        }
+        if (_file is not { } file)
+        {
+            Fail("Choose a file to upload first.");
+            return;
+        }
+
+        _uploading = true;
+        _error = null;
+        _progress = $"Uploading {file.Name}…";
+        StateHasChanged();
+        var maxBytes = AttachmentOptions.Value.MaxBytes;
+        try
+        {
+            // The service rejects an over-limit declared size before reading, so a too-large file is never streamed;
+            // otherwise the read limit is the configured maximum and the service checks the actual byte count.
+            await using var stream = file.OpenReadStream(maxAllowedSize: Math.Max(maxBytes, file.Size), _cts.Token);
+            var result = await Attachments.UploadAsync(CaseId, file.Name, file.ContentType, file.Size, stream, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _file = null;
+                _inputKey++;   // a fresh, empty file input
+                _progress = null;
+                await LoadAsync();
+                Announcer.Announce($"File uploaded: {result.Value!.FileName}");
+                await OnChanged.InvokeAsync();
+            }
+            else
+            {
+                Fail(result.Error!.Message);
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (IOException)
+        {
+            Fail("The file could not be read completely. Choose it again and retry.");
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5009, "AttachmentUploadUiFailed"), "Attachment upload failed for {CaseId} ({ExceptionType})", CaseId, ex.GetType().Name);
+            Fail("Something went wrong and the file was not uploaded. Try again.");
+        }
+        finally
+        {
+            _uploading = false;
+        }
+    }
+
+    private void Fail(string message)
+    {
+        _error = message;
+        _progress = null;
+        _focusInput = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusInput)
+        {
+            _focusInput = false;
+            if (_fileInput?.Element is { } element)
+            {
+                await element.FocusSafeAsync();
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

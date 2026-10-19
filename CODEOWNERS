@@ -7,6 +7,7 @@
 /src/CaseIntake.Persistence/Configurations/Cases/        @epic2-owner
 /src/CaseIntake.Persistence/Configurations/Identity/     @epic3-owner
 /src/CaseIntake.Persistence/Configurations/Attachments/  @epic4-owner
+/src/CaseIntake.Persistence/Configurations/TestResults/  @epic5-owner
 /src/CaseIntake.ServiceDefaults/          @epic1-owner
 /src/CaseIntake.MigrationService/         @epic1-owner
 /src/CaseIntake.Cases/                    @epic2-owner
@@ -14,9 +15,11 @@
 /src/CaseIntake.Attachments/              @epic4-owner
 /src/CaseIntake.VeteranLookup.Client/     @epic4-owner
 /src/CaseIntake.VeteranLookup.Mock/       @epic4-owner
+/src/CaseIntake.TestResults/              @epic5-owner
 /src/CaseIntake.Web/                      @epic5-owner
 /src/CaseIntake.Web/Components/Account/   @epic3-owner
 /src/CaseIntake.Web/Endpoints/Attachments/ @epic4-owner
+/src/CaseIntake.Web/Endpoints/TestResults/ @epic5-owner
 /docs/contracts/                          @epic4-owner
 /tests/CaseIntake.TestKit/                @epic1-owner
 /tests/CaseIntake.IntegrationTests/       @epic1-owner

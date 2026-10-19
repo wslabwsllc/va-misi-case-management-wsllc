@@ -27,12 +27,30 @@ public sealed partial class SecurityHeadersMiddleware(RequestDelegate next)
             headers.XContentTypeOptions = "nosniff";
             headers["Referrer-Policy"] = "same-origin";
             headers.XFrameOptions = "DENY";
-            headers["Cross-Origin-Opener-Policy"] = "same-origin";
+            // Browsers honour COOP only on potentially trustworthy origins (HTTPS or loopback) and log a console error
+            // for it elsewhere (for example http://web-e2e:8080 on the Compose network), so it is sent only where it applies.
+            if (IsTrustworthy(ctx.Request))
+            {
+                headers["Cross-Origin-Opener-Policy"] = "same-origin";
+            }
             headers.ContentSecurityPolicy = ContentSecurityPolicy(ctx.Request.Host);
             return Task.CompletedTask;
         }, context);
 
         return next(context);
+    }
+
+    /// <summary>HTTPS, or a loopback host (localhost, 127.0.0.0/8, ::1): where browsers apply Cross-Origin-Opener-Policy.</summary>
+    public static bool IsTrustworthy(HttpRequest request)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (request.IsHttps)
+        {
+            return true;
+        }
+        var host = request.Host.Host;
+        return string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || (System.Net.IPAddress.TryParse(host.Trim('[', ']'), out var address) && System.Net.IPAddress.IsLoopback(address));
     }
 
     /// <summary>The policy for a request to <paramref name="host"/>; <c>connect-src</c> adds that host's ws/wss origin when it is well formed.</summary>

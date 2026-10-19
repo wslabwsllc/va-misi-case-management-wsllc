@@ -1,0 +1,54 @@
+@using CaseIntake.Web.Services
+@implements IDisposable
+@inject StatusAnnouncer Announcer
+
+@* The persistent polite live region (role="status") behind StatusAnnouncer, rendered once by the layout. It doubles as
+   a visible toast. The region is emptied briefly before each message so that a repeated message is announced again,
+   and the visible toast hides after a few seconds (emptying a live region announces nothing). *@
+<div class="announcer">
+    <div class="announcer__toast" role="status" aria-live="polite" aria-atomic="true" data-testid="status-announcer">@_text</div>
+</div>
+
+@code {
+    private static readonly TimeSpan RefreshGap = TimeSpan.FromMilliseconds(60);
+    private static readonly TimeSpan VisibleFor = TimeSpan.FromSeconds(8);
+    private string? _text;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnInitialized() => Announcer.Changed += OnChanged;
+
+    private void OnChanged() => _ = ShowAsync(Announcer.Message);
+
+    private async Task ShowAsync(string? message)
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        var cts = _cts = new CancellationTokenSource();
+        try
+        {
+            _text = null;
+            await InvokeAsync(StateHasChanged);
+            if (message is null)
+            {
+                return;
+            }
+            await Task.Delay(RefreshGap, cts.Token);
+            _text = message;
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(VisibleFor, cts.Token);
+            _text = null;
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (TaskCanceledException)
+        {
+            // A newer announcement took over.
+        }
+    }
+
+    public void Dispose()
+    {
+        Announcer.Changed -= OnChanged;
+        _cts?.Cancel();
+        _cts?.Dispose();
+    }
+}

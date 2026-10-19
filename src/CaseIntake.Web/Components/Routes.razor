@@ -1,23 +1,23 @@
-<Router AppAssembly="typeof(Program).Assembly">
+<Router AppAssembly="typeof(Program).Assembly" NotFoundPage="typeof(Pages.NotFound)">
     <Found Context="routeData">
         <AuthorizeRouteView RouteData="routeData" DefaultLayout="typeof(Layout.MainLayout)">
+            <Authorizing>
+                <div class="loading-row" role="status"><span class="spinner" aria-hidden="true"></span> Checking your access&hellip;</div>
+            </Authorizing>
             <NotAuthorized>
+                @* Signed out (or session ended): go to sign-in. Signed in without the permission: explain, don't redirect. *@
                 @if (context.User.Identity?.IsAuthenticated != true)
                 {
                     <RedirectToLogin />
                 }
                 else
                 {
+                    <PageTitle>Access denied - Case Intake and Triage</PageTitle>
                     <AccessDeniedMessage PageType="routeData.PageType" />
                 }
             </NotAuthorized>
         </AuthorizeRouteView>
-        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+        @* Moves focus to the new page's h1 after in-app navigation (E5-S1, ADR 0011). *@
+        <FocusOnNavigation RouteData="routeData" Selector="h1" />
     </Found>
-    <NotFound>
-        <LayoutView Layout="typeof(Layout.MainLayout)">
-            <h1>Page not found</h1>
-            <p>The page you requested does not exist.</p>
-        </LayoutView>
-    </NotFound>
 </Router>

@@ -1,0 +1,74 @@
+@inject CaseIntake.Web.Services.UiInterop Interop
+
+@* Validation summary at the top of a form (E5-S2): appears after a failed submit, takes focus (the page calls
+   FocusAsync after it renders), and links each message to its field. Activating a link moves focus to the field. *@
+@if (Visible && Items.Count > 0)
+{
+    <div class="message message--error error-summary" role="alert" tabindex="-1" @ref="_element" aria-labelledby="@($"{Id}-title")" id="@Id">
+        <Icon Name="error" />
+        <div class="message__body">
+            <h2 class="message__title" id="@($"{Id}-title")">@Title</h2>
+            <ul>
+                @foreach (var item in Items)
+                {
+                    <li>
+                        @if (item.InputId is { } inputId)
+                        {
+                            <a href="@($"#{inputId}")" @onclick="() => FocusFieldAsync(inputId)" @onclick:preventDefault="true">@item.Message</a>
+                        }
+                        else
+                        {
+                            @item.Message
+                        }
+                    </li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
+@code {
+    private ElementReference _element;
+
+    [CascadingParameter] private EditContext? EditContext { get; set; }
+
+    [Parameter] public string Id { get; set; } = "error-summary";
+    [Parameter] public string Title { get; set; } = "There is a problem";
+    [Parameter] public bool Visible { get; set; }
+
+    /// <summary>Field name (as in <c>Error.FieldErrors</c>) to input element ID, in display order.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<KeyValuePair<string, string>> Fields { get; set; } = [];
+
+    /// <summary>Messages that belong to no field (for example a form-level error), shown without a link.</summary>
+    [Parameter] public IReadOnlyList<string> FormMessages { get; set; } = [];
+
+    private sealed record SummaryItem(string Message, string? InputId);
+
+    private List<SummaryItem> Items
+    {
+        get
+        {
+            List<SummaryItem> items = [];
+            if (EditContext is not null)
+            {
+                foreach (var (fieldName, inputId) in Fields)
+                {
+                    var identifier = new FieldIdentifier(EditContext.Model, fieldName);
+                    items.AddRange(EditContext.GetValidationMessages(identifier).Select(m => new SummaryItem(m, inputId)));
+                }
+            }
+            items.AddRange(FormMessages.Select(m => new SummaryItem(m, null)));
+            return items;
+        }
+    }
+
+    public async ValueTask FocusAsync()
+    {
+        if (Visible && Items.Count > 0)
+        {
+            await _element.FocusAsync();
+        }
+    }
+
+    private Task FocusFieldAsync(string inputId) => Interop.FocusSelectorAsync($"#{inputId}");
+}

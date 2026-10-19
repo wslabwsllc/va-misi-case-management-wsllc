@@ -1,0 +1,22 @@
+@implements IDisposable
+@inject NavigationManager Navigation
+
+@* Phone-only floating "New case" action, rendered only for users with cases.create and only on the list-style pages. *@
+<AuthorizeView Policy="@Permissions.CasesCreate">
+    @if (ShowOnThisPage)
+    {
+        <a class="fab" href="cases/new" data-testid="fab-new-case"><Icon Name="add" /><span>New case</span></a>
+    }
+</AuthorizeView>
+
+@code {
+    private static readonly string[] Pages = ["", "cases", "my-work", "notifications"];
+
+    private bool ShowOnThisPage => Pages.Contains(Navigation.ToBaseRelativePath(Navigation.Uri).Split('?', '#')[0].TrimEnd('/'), StringComparer.Ordinal);
+
+    protected override void OnInitialized() => Navigation.LocationChanged += OnLocationChanged;
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Navigation.LocationChanged -= OnLocationChanged;
+}

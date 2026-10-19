@@ -1,0 +1,136 @@
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@inject ICaseService Cases
+@inject StatusAnnouncer Announcer
+@inject ILogger<StatusTransitions> Logger
+
+@* Status controls (E5-S6). One button per entry of the server's AllowedNextStatuses (workflow edges the signed-in user
+   may take), so the UI never duplicates workflow or permission rules. Each change is confirmed in a native modal
+   dialog (focus trapped, Esc cancels, cancelling returns focus to the button). After a change the persistent status
+   heading takes focus and the change is announced; a rejected change shows an alert and the status is refreshed. *@
+<section class="card" aria-labelledby="status-heading" data-testid="status-section">
+    <div class="card__header">
+        <h2 id="status-heading" tabindex="-1" @ref="_heading" data-testid="status-heading">Status: @UiText.Status(Case.Status)</h2>
+    </div>
+    <ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The status was not changed")" Message="@_error" TestId="status-error" />
+    <div role="group" aria-labelledby="change-status-label" data-testid="change-status-group">
+        <p id="change-status-label" class="field__label">Change status</p>
+        @if (Case.AllowedNextStatuses.Count == 0)
+        {
+            <p class="page-header__subtitle" data-testid="no-transitions">No status changes available</p>
+        }
+        else
+        {
+            <div class="btn-row">
+                @foreach (var target in Case.AllowedNextStatuses)
+                {
+                    var t = target;
+                    <button type="button" class="btn @(t == CaseStatus.Closed ? null : "btn--primary")" @ref="_buttons[t]"
+                            @onclick="() => AskAsync(t)" disabled="@_busy" data-testid="@($"transition-{t}")">
+                        @UiText.TransitionLabel(Case.Status, t)
+                    </button>
+                }
+            </div>
+        }
+    </div>
+</section>
+
+<ModalDialog @ref="_dialog" Id="confirm-status" Title="@($"Change status to {UiText.Status(_pending)}?")" TestId="confirm-status-dialog"
+             Description="@($"Case {Case.Id} will move from {UiText.Status(Case.Status)} to {UiText.Status(_pending)}. The change is recorded in the audit trail.")">
+    <Footer>
+        <button type="button" class="btn" @onclick="CancelAsync" data-testid="confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn--primary" @onclick="ConfirmAsync" disabled="@_busy" aria-busy="@(_busy ? "true" : "false")" autofocus data-testid="confirm-status">
+            @UiText.TransitionLabel(Case.Status, _pending)
+        </button>
+    </Footer>
+</ModalDialog>
+
+@code {
+    private readonly Dictionary<CaseStatus, ElementReference> _buttons = [];
+    private ModalDialog? _dialog;
+    private ErrorAlert? _alert;
+    private ElementReference _heading;
+    private CaseStatus _pending;
+    private bool _busy;
+    private string? _error;
+    private string? _focusAfterRender;
+
+    [Parameter, EditorRequired] public CaseDetailDto Case { get; set; } = default!;
+
+    /// <summary>The case after a successful change.</summary>
+    [Parameter] public EventCallback<CaseDetailDto> OnChanged { get; set; }
+
+    /// <summary>Raised after a rejected change, so the page reloads the case (and its displayed status).</summary>
+    [Parameter] public EventCallback OnFailed { get; set; }
+
+    private Task AskAsync(CaseStatus target)
+    {
+        _error = null;
+        _pending = target;
+        var trigger = _buttons.GetValueOrDefault(target);
+        return _dialog!.OpenAsync(() => trigger.FocusSafeAsync());
+    }
+
+    private Task CancelAsync() => _dialog!.CloseAsync(restoreFocus: true);
+
+    private async Task ConfirmAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+        _busy = true;
+        var target = _pending;
+        try
+        {
+            var result = await Cases.ChangeStatusAsync(Case.Id, new ChangeStatusRequest(target, Case.Version), CancellationToken.None);
+            await _dialog!.CloseAsync();
+            if (result.IsSuccess)
+            {
+                await OnChanged.InvokeAsync(result.Value!);
+                Announcer.Announce($"Status changed to {UiText.Status(result.Value!.Status)}");
+                _focusAfterRender = "heading";
+            }
+            else
+            {
+                _error = result.Error!.Kind switch
+                {
+                    ErrorKind.Conflict => "This case was changed by someone else, so the status was not changed. The latest status is shown; check it and try again.",
+                    ErrorKind.InvalidTransition => result.Error.Message + " The current status is shown.",
+                    ErrorKind.Forbidden => "Your role is not allowed to make this status change.",
+                    _ => result.Error.Message,
+                };
+                await OnFailed.InvokeAsync();
+                _focusAfterRender = "alert";
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5007, "StatusChangeUiFailed"), "Status change from the UI failed for {CaseId} ({ExceptionType})", Case.Id, ex.GetType().Name);
+            await _dialog!.CloseAsync();
+            _error = "Something went wrong and the status was not changed. Try again.";
+            await OnFailed.InvokeAsync();
+            _focusAfterRender = "alert";
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var target = _focusAfterRender;
+        _focusAfterRender = null;
+        if (target == "heading")
+        {
+            await _heading.FocusSafeAsync();
+        }
+        else if (target == "alert" && _alert is not null)
+        {
+            await _alert.FocusAsync();
+        }
+    }
+}

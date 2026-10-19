@@ -6,6 +6,7 @@
     <ProjectReference Include="..\CaseIntake.Identity\CaseIntake.Identity.csproj" />
     <ProjectReference Include="..\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
     <ProjectReference Include="..\CaseIntake.ServiceDefaults\CaseIntake.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\CaseIntake.TestResults\CaseIntake.TestResults.csproj" />
     <ProjectReference Include="..\CaseIntake.VeteranLookup.Client\CaseIntake.VeteranLookup.Client.csproj" />
   </ItemGroup>
 </Project>

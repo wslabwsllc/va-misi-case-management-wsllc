@@ -30,12 +30,12 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         await IdentityTestSupport.SeedAsync(database.ConnectionString);
 
         await using var db = database.CreateContext();
-        Assert.Equal([AppRoles.CaseWorker, AppRoles.Supervisor], await db.Roles.Select(r => r.Name!).OrderBy(n => n).ToListAsync());
+        Assert.Equal(RolePermissionMap.Roles.Order(StringComparer.Ordinal), await db.Roles.Select(r => r.Name!).OrderBy(n => n).ToListAsync());
         var memberships = await (from ur in db.UserRoles
                                  join u in db.Users on ur.UserId equals u.Id
                                  join r in db.Roles on ur.RoleId equals r.Id
                                  select new { u.Id, u.UserName, Role = r.Name }).ToListAsync();
-        Assert.Equal(2, memberships.Count);
+        Assert.Equal(DemoUsers.All.Count, memberships.Count);
         foreach (var demo in DemoUsers.All)
         {
             var row = Assert.Single(memberships, m => m.UserName == demo.UserName);
@@ -74,9 +74,9 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
 
         await using (var db = database.CreateContext())
         {
-            Assert.Equal(2, await db.Roles.CountAsync());
-            Assert.Equal(2, await db.Users.CountAsync());
-            Assert.Equal(2, await db.UserRoles.CountAsync());
+            Assert.Equal(RolePermissionMap.Roles.Length, await db.Roles.CountAsync());
+            Assert.Equal(DemoUsers.All.Count, await db.Users.CountAsync());
+            Assert.Equal(DemoUsers.All.Count, await db.UserRoles.CountAsync());
         }
         await WithUserManagerAsync(async users =>
         {

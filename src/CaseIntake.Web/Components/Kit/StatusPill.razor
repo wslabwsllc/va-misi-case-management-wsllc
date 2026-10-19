@@ -1,0 +1,9 @@
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@* Case status as text plus colour (never colour alone). *@
+<span class="status-pill @UiText.StatusCss(Status) @(Large ? "status-pill--lg" : null)" data-status="@Status">@UiText.Status(Status)</span>
+
+@code {
+    [Parameter, EditorRequired] public CaseStatus Status { get; set; }
+    [Parameter] public bool Large { get; set; }
+}
