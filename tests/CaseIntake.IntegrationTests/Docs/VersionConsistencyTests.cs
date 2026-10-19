@@ -4,7 +4,7 @@ using System.Xml.Linq;
 namespace CaseIntake.IntegrationTests.Docs;
 
 /// <summary>Keeps docs/versions.md, global.json, Directory.Packages.props and the banned-API setup from drifting.</summary>
-public class VersionConsistencyTests
+public partial class VersionConsistencyTests
 {
     private static string VersionsDoc => File.ReadAllText(RepositoryRoot.File("docs", "versions.md"));
 
@@ -71,6 +71,48 @@ public class VersionConsistencyTests
                      .Concat(Directory.EnumerateFiles(RepositoryRoot.File("tests"), "*.csproj", SearchOption.AllDirectories)))
         {
             Assert.DoesNotContain("<TargetFramework>", File.ReadAllText(csproj));
+        }
+    }
+
+    // FROM [--platform=...] <image> in Dockerfiles, and image: <image> in Compose. Stage names have no ':' and are skipped.
+    [GeneratedRegex(@"^\s*(?:FROM\s+(?:--platform=\S+\s+)?|image:\s*)(?<image>\S+:\S+)", RegexOptions.Multiline)]
+    private static partial Regex ImageReference();
+
+    private static List<string> ContainerImages() =>
+    [
+        .. Directory.EnumerateFiles(RepositoryRoot.Path, "Dockerfile", SearchOption.AllDirectories)
+            .Where(f => !f.Split(Path.DirectorySeparatorChar).Any(d => d is "bin" or "obj" or ".git" or "node_modules"))
+            .Append(RepositoryRoot.File("docker-compose.yml"))
+            .SelectMany(f => ImageReference().Matches(File.ReadAllText(f)).Select(m => m.Groups["image"].Value))
+            .Where(image => !image.StartsWith("caseintake-", StringComparison.Ordinal))   // built locally from this repository
+            .Distinct(),
+    ];
+
+    [Fact]
+    public void Every_container_image_used_by_a_Dockerfile_or_Compose_is_listed_in_versions_md()
+    {
+        var images = ContainerImages();
+        Assert.Contains(images, i => i.StartsWith("mcr.microsoft.com/dotnet/aspnet:", StringComparison.Ordinal));
+        Assert.Contains(images, i => i.StartsWith("postgres:", StringComparison.Ordinal));
+
+        foreach (var image in images)
+        {
+            Assert.True(VersionsDoc.Contains($"`{image}`", StringComparison.Ordinal), $"docs/versions.md does not list the image {image}");
+        }
+    }
+
+    [Fact]
+    public void Runtime_image_tag_matches_the_runtime_versions_in_versions_md()
+    {
+        var tags = ContainerImages().Where(i => i.StartsWith("mcr.microsoft.com/dotnet/aspnet:", StringComparison.Ordinal))
+            .Select(i => i.Split(':')[1].Split('-')[0]).Distinct().ToList();
+        var runtime = Assert.Single(tags);   // one runtime version across the app and the lookup mock
+
+        foreach (var framework in new[] { "Microsoft.NETCore.App", "Microsoft.AspNetCore.App" })
+        {
+            var row = Regex.Match(VersionsDoc, $@"\(`{Regex.Escape(framework)}`\)\s*\|\s*([^|\s]+)\s*\|");
+            Assert.True(row.Success, $"docs/versions.md has no row for {framework}");
+            Assert.Equal(runtime, row.Groups[1].Value);
         }
     }
 }

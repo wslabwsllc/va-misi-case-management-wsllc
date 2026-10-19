@@ -1,6 +1,8 @@
+using CaseIntake.Contracts.Cases;
 using CaseIntake.Contracts.Common;
 using CaseIntake.Contracts.Security;
 using CaseIntake.Domain.Cases;
+using CaseIntake.TestKit.Fakes;
 using CaseIntake.Web.Components.Pages.Cases;
 using Microsoft.AspNetCore.Components.Forms;
 
@@ -108,6 +110,25 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal("Original title", cut.Find("#edit-title").GetAttribute("value"));
         cut.Find("[data-testid=use-draft]").Click();
         Assert.Equal("My unsaved title", cut.Find("#edit-title").GetAttribute("value"));
+    }
+
+    [Fact]
+    public async Task Saving_after_someone_else_closed_the_case_leaves_edit_mode_and_shows_read_only()
+    {
+        SignInAs(AppRoles.CaseWorker);
+        var created = await SeedCaseAsync("Closed while editing", CaseStatus.Resolved);
+        var cut = RenderCase(created.Id);
+        cut.WaitForElement("[data-testid=edit-case]").Click();
+        cut.Find("#edit-title").Input("Edit that can no longer be saved");
+        await CloseAsAnotherUserAsync(created);
+
+        cut.Find("[data-testid=edit-form]").Submit();
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=edit-form]")));
+        Assert.Contains("Closed cases cannot be edited", cut.Find("[data-testid=detail-error]").TextContent);
+        Assert.NotEmpty(cut.FindAll("[data-testid=closed-note]"));
+        Assert.Empty(cut.FindAll("[data-testid=edit-case]"));
+        Assert.Equal("Closed while editing", cut.Find("[data-testid=case-title]").TextContent);
     }
 
     [Fact]
@@ -278,5 +299,20 @@ public class CaseDetailTests : WebTestContext
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-testid=attachments-section]")));
         Assert.Empty(cut.FindAll("[data-testid=upload-form]"));
         Assert.NotEmpty(cut.FindAll("[data-testid=attachments-empty]"));
+    }
+
+    /// <summary>Another user closes the case through the service, as the Supervisor would from their own session.</summary>
+    private async Task CloseAsAnotherUserAsync(CaseDetailDto resolved)
+    {
+        var actor = CurrentUser.Actor;
+        CurrentUser.Actor = FakeCurrentUser.ForRole(AppRoles.Supervisor, "another-supervisor");
+        try
+        {
+            Assert.True((await CaseService.ChangeStatusAsync(resolved.Id, new ChangeStatusRequest(CaseStatus.Closed, resolved.Version), CancellationToken.None)).IsSuccess);
+        }
+        finally
+        {
+            CurrentUser.Actor = actor;
+        }
     }
 }

@@ -319,6 +319,12 @@ else
                 default:
                     SetPageError("Your changes were not saved", result.Error.Message);
                     await RefreshCaseAsync();
+                    if (_case is { Status: CaseStatus.Closed })
+                    {
+                        // Closed by someone else while editing (CaseClosed): the case is read-only now, so leave edit mode.
+                        _editing = false;
+                        _draft = null;
+                    }
                     break;
             }
         }

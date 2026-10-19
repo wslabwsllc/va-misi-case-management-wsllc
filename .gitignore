@@ -2,9 +2,10 @@ bin/
 obj/
 .vs/
 *.user
-# VSTest output only: an unanchored "TestResults/" also hid the Test Results feature folders in src/.
+# Test output. Local `dotnet test` writes to artifacts/test-results (Directory.Build.props); /TestResults/ is the
+# Visual Studio solution-level folder. Never ignore "TestResults/" by name: source and test folders use that name too.
+/artifacts/
 /TestResults/
-/tests/*/TestResults/
 /results/
 .idea/
 .DS_Store

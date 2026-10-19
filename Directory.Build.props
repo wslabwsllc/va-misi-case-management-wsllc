@@ -10,6 +10,10 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NuGetAudit>true</NuGetAudit>
+    <!-- Local `dotnet test` output goes to one ignored folder instead of a TestResults folder in each test project, so the
+         ignore rules never have to match a folder name that source code also uses. A results directory passed on the
+         dotnet test command line (scripts/run-tests.sh does) still overrides this. -->
+    <VSTestResultsDirectory Condition="'$(VSTestResultsDirectory)' == ''">$(MSBuildThisFileDirectory)artifacts/test-results/$(MSBuildProjectName)/</VSTestResultsDirectory>
   </PropertyGroup>
 
   <ItemGroup>

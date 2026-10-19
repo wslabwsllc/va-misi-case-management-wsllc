@@ -104,9 +104,9 @@ public class TestKitTests
     [Fact]
     public async Task Fake_lookup_returns_scripted_answers_and_NotFound_otherwise()
     {
-        var fake = new FakeVeteranLookupClient().Returns("111223333", new VeteranLookupResult(VeteranLookupOutcome.Found, "Pat Example", "1 Way"));
+        var fake = new FakeVeteranLookupClient().Returns("900223333", new VeteranLookupResult(VeteranLookupOutcome.Found, "Pat Example", "1 Way"));
 
-        Assert.Equal(VeteranLookupOutcome.Found, (await fake.LookupAsync("111223333", default)).Outcome);
+        Assert.Equal(VeteranLookupOutcome.Found, (await fake.LookupAsync("900223333", default)).Outcome);
         Assert.Equal(VeteranLookupOutcome.NotFound, (await fake.LookupAsync("000000000", default)).Outcome);
         Assert.Equal(2, fake.CallCount);
     }
