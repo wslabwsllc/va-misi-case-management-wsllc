@@ -128,6 +128,23 @@ public static class CaseTextRules
         return errors;
     }
 
+    /// <summary>
+    /// Caps an actor identifier or display name at <see cref="CaseFieldLimits.ActorMaxLength"/> UTF-16 units (the
+    /// column limit) without splitting a surrogate pair, which PostgreSQL could not store.
+    /// </summary>
+    public static string TruncateActor(string value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+        if (value.Length <= CaseFieldLimits.ActorMaxLength)
+        {
+            return value;
+        }
+        var length = char.IsHighSurrogate(value[CaseFieldLimits.ActorMaxLength - 1])
+            ? CaseFieldLimits.ActorMaxLength - 1
+            : CaseFieldLimits.ActorMaxLength;
+        return value[..length];
+    }
+
     public static bool IsSsnLast4(string? value) =>
         value is { Length: CaseFieldLimits.SsnLast4Length } && value.All(char.IsAsciiDigit);
 

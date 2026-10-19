@@ -1,3 +1,4 @@
+using CaseIntake.Domain.Attachments;
 using CaseIntake.Domain.Cases;
 using CaseIntake.Persistence.Auditing;
 using CaseIntake.Persistence.Conventions;
@@ -16,6 +17,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<Case> Cases => Set<Case>();
     public DbSet<CaseAuditEntry> CaseAuditEntries => Set<CaseAuditEntry>();
+    public DbSet<Attachment> Attachments => Set<Attachment>();
 
     // Every SaveChanges overload funnels into these two; the audit trail is append-only (E2-S4).
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

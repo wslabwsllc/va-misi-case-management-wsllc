@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Standalone Veteran Lookup mock (E4-S1), its own container. References ServiceDefaults only (JSON logs, SSN
+       scrubbing); never Domain or application persistence (plan 0.2). The OpenAPI document is generated from this
+       code and committed as docs/contracts/veteran-lookup.openapi.yaml (ADR 0008). -->
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.ServiceDefaults\CaseIntake.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Data\veterans.json" LogicalName="CaseIntake.VeteranLookup.Mock.veterans.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaseIntake.VeteranLookup.Tests" />
+  </ItemGroup>
+</Project>

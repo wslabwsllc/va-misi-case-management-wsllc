@@ -6,3 +6,7 @@ TestResults/
 /results/
 .idea/
 .DS_Store
+# Guard against a relative Attachments:RootPath pointing into the tree (the default is outside it, in system temp).
+# Anchored paths only: an unanchored "attachments/" would also hide the Attachments source folders.
+/attachments/
+/src/CaseIntake.Web/attachments/

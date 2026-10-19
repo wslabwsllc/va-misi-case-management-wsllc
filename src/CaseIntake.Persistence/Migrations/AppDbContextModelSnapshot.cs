@@ -22,6 +22,69 @@ namespace CaseIntake.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("CaseIntake.Domain.Attachments.Attachment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<long>("CaseId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StorageKey")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character(32)")
+                        .IsFixedLength();
+
+                    b.Property<DateTimeOffset>("UploadedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UploadedBy")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<string>("UploadedById")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("StorageKey")
+                        .IsUnique();
+
+                    b.HasIndex("CaseId", "UploadedAtUtc", "Id");
+
+                    b.ToTable("Attachments", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_Attachment_Sha256_Hex", "\"Sha256\" ~ '^[0-9a-f]{64}$'");
+
+                            t.HasCheckConstraint("CK_Attachment_SizeBytes_Positive", "\"SizeBytes\" > 0");
+
+                            t.HasCheckConstraint("CK_Attachment_StorageKey_Hex", "\"StorageKey\" ~ '^[0-9a-f]{32}$'");
+                        });
+                });
+
             modelBuilder.Entity("CaseIntake.Domain.Cases.Case", b =>
                 {
                     b.Property<long>("Id")
@@ -352,6 +415,17 @@ namespace CaseIntake.Persistence.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.Attachments.Attachment", b =>
+                {
+                    b.HasOne("CaseIntake.Domain.Cases.Case", "Case")
+                        .WithMany()
+                        .HasForeignKey("CaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Case");
                 });
 
             modelBuilder.Entity("CaseIntake.Domain.Cases.CaseAuditEntry", b =>

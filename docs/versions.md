@@ -26,6 +26,8 @@ is recorded from the built image in [verification.md](verification.md) (output o
 | `Npgsql` | 10.0.3 |
 | `Microsoft.Extensions.Logging.Console` | 10.0.13 |
 | `Microsoft.Extensions.Compliance.Redaction` | 10.11.0 |
+| `Microsoft.AspNetCore.OpenApi` | 10.0.13 |
+| `Microsoft.Extensions.Http.Resilience` | 10.11.0 |
 
 ## Build and test tooling
 

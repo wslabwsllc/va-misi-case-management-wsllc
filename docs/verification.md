@@ -86,3 +86,74 @@ HTTP principal, revalidation after a security-stamp change); E3-S4 `IdentitySeed
 - E4's endpoint is guarded in advance: `EndpointAuthorizationGuardTests` fails if any minimal API endpoint that needs
   authorization lacks `DisableCookieRedirect()`, or if the attachment content route lacks `attachments.download`.
   Until E4 maps that route the attachment check passes with nothing to check.
+
+# Verification record (Epic 4 integrations: veteran lookup and attachments)
+
+**Current totals (latest run, 2026-10-19, final code after review round 4):** host `dotnet test` 649 passed,
+0 warnings. Docker from empty `caseintake-e4v` volumes: `db`, `veteran-lookup`, `web` healthy, `migrator` exit 0,
+`/health/live` 200, `/health/ready` 200; `docker compose run --rm tests` `RESULT: PASS` with **666** tests
+(Attachments 86, Cases 106, Identity 90, Integration 284, VeteranLookup 100 including the Compose-target cases);
+container log SSN/demo-name scan 0; project removed with `down -v`. Rows below are the history of earlier runs.
+
+Base revision: `7a3ba1b` plus Epic 4 changes (uncommitted; branch and commit by the engineer). Host: macOS arm64,
+Docker 29.1.3, containers `linux/amd64` under emulation, .NET SDK 10.0.402. Docker checks used an isolated Compose
+project (`-p caseintake-e4v`), removed afterwards with `down -v`; demo volumes were not touched.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln -c Release` | 0 warnings, 0 errors |
+| `dotnet test CaseIntake.sln -c Release` (host, Testcontainers PostgreSQL 17) | 611 passed, 0 failed (Cases 104, Identity 90, Attachments 67, VeteranLookup 79, Integration 271) |
+| `scripts/update-contract-snapshots.sh` run twice | snapshot output identical (deterministic) |
+| `docker compose -p caseintake-e4v down -v` then `up --build -d --wait` | exit 0; `db`, `veteran-lookup`, `web` healthy; `migrator` exit 0; `/health/live` 200, **`/health/ready` 200** (first full-stack readiness pass), `/` 302 to login |
+| Migrator log (fresh volumes) | 3010 Identity seed 2 roles/2 users → 2010 72 of 72 cases → 4110 attachment storage reconciled (0/0/0/0) → 1005 completed |
+| POST `/veterans/lookup` from the `web` container to `veteran-lookup:8081` | `900-12-3456` → 200 `{"name":"Rowan Calloway",...}`; `999-99-9999` → 404 |
+| `docker compose -p caseintake-e4v run --rm tests` (**no `--no-deps`**) | exit 0, `RESULT: PASS`: Attachments 67, Cases 104, Identity 90, Integration 271, VeteranLookup 96 (79 + 17 cases run against the Compose `veteran-lookup` container) = 628 |
+| `down` (keep volumes) then `up -d --wait` | exit 0; `/health/ready` 200; migrator: no migrations, 0 roles/users, 0 of 72 cases added, reconciled 0 |
+| SSN / demo-name scan of all container logs | 0 matches |
+
+An earlier container run (before the review fixes) failed 2 tests: in Production the framework answered a
+non-string `ssn` with an empty 400 instead of problem+json, which the Development-mode host had hidden. Fixed in
+the mock (`UseStatusCodePages` for 400) and the in-process tests now run in Production mode.
+
+Review evidence: `/code-review xhigh` (15 findings, 14 fixed with regression tests where behavioural, 1 documented:
+SHA-256 not re-verified on download), `/security-review` (no HIGH/MEDIUM findings), `/simplify` (reuse,
+simplification, efficiency and altitude passes applied; skipped items listed in the hand-off).
+
+Second review round on the final code (after the first round's fixes and `/simplify`): `/security-review` no
+HIGH/MEDIUM findings (raw `FOR SHARE` SQL confirmed parameterized). `/code-review xhigh` 15 findings: 10 fixed
+(trailing-separator root broke reconciler deletes; a strategy retry after a committed upload could delete committed
+content on the closed-case path; local web and migrator used different relative roots; version-7 keys all landed in
+one shard; actor truncation could split a surrogate pair; Polly timeout limits not validated at startup; a duplicate
+operation-ID scope in the mock; `.dockerignore` missed local attachment folders; 415 missing from the contract;
+fsync of an over-limit upload), 5 skipped with reasons (directory fsync documented in ADR 0009; a wrong base-URL
+path already fails readiness; the second actor resolution per download would need a shared-contract change; the
+defensive committed-without-entity branch and the separate storage-key column are intentional; small cross-module
+duplications are imposed by the module boundaries). Host after fixes: 0 warnings, 618 passed. Docker after fixes (fresh `caseintake-e4v` volumes): all services healthy, `/health/ready` 200,
+`docker compose run --rm tests` `RESULT: PASS` with 635 tests (Attachments 69, Cases 105, Identity 90, Integration
+271, VeteranLookup 100), container log SSN/demo-name scan 0.
+
+Third review round (`/code-review high` on the round-2 fixes, 2026-10-18): 10 findings, 6 fixed with regression
+tests (a relative root still depended on each process's working directory, now a fixed default outside the tree
+when unset; file type trusted from the client's claim, now a leading-byte signature check for PDF/PNG/JPEG/DOCX;
+`Case.CreatedBy/UpdatedBy` not capped like audit actors; an over-limit temporary-file delete could surface as a
+storage error; truncated stored content was served, now refused on a size mismatch (4112); a dataset test checked
+10 of 50 records), 4 skipped (directory fsync, documented; list gated on `cases.view` per the plan; the UTF-16 cap
+cannot exceed the column; the unused configuration parameter is the module convention). Coverage of Epic 4 code
+(VSTest collector, report in the workspace notes): 96.7% lines, 92.1% branches. Host: 0 warnings, 631 passed. Docker (fresh
+`caseintake-e4v` volumes, removed afterwards): `/health/ready` 200, `docker compose run --rm tests` `RESULT: PASS`
+with 648 tests (Attachments 72, Cases 106, Identity 90, Integration 280, VeteranLookup 100), log SSN scan 0.
+
+Round 4 (2026-10-18, audit follow-up): tests added for the migrator entry point
+(`ReconcileAttachmentStorageAsync`, run twice) and for both outcomes of the closed-case retry-after-commit branch
+(simulated with `RetryAfterCommitSimulator`), plus hardening tests (domain record guards, negative grace period,
+long-name truncation, reconciler delete failure). A flaky PII assertion that matched digits inside logged durations
+was corrected. The Assumptions Log was rebuilt with the six required columns and the E4 story text in the plan was
+brought in line with the delivered design. No production code changed. Host: 649 passed in three consecutive runs.
+
+## Not verified / blocked (E4)
+
+- Upload and download through the UI, and attachment durability across web-container recreation **via the UI**:
+  needs E5-S7. Durability is covered by `Uploads_survive_a_restart_of_the_service_and_store` (new service and store
+  instances over the same root and database) and by the named volume mounted on `migrator` and `web`.
+- Offline (no-egress) runtime check: G3.
+- The intake lookup UI and its five announced outcomes: E5-S4.

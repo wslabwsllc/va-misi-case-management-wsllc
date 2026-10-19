@@ -64,7 +64,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
     }
 
     [Fact]
-    public void The_attachment_download_route_when_mapped_requires_attachments_download()
+    public void The_attachment_download_route_is_mapped_and_requires_attachments_download()
     {
         var sample = AttachmentRoutes.Content(1, Guid.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries);
         var downloads = Endpoints().Where(e =>
@@ -76,6 +76,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
                     : p.First.Parts.Any(part => part.IsParameter));
         });
 
+        Assert.NotEmpty(downloads);   // E4 maps the route; the rules below are no longer vacuous
         Assert.All(downloads, e =>
         {
             Assert.Contains(Permissions.AttachmentsDownload, e.Metadata.GetOrderedMetadata<IAuthorizeData>().Select(a => a.Policy));

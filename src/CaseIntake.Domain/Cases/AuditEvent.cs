@@ -29,6 +29,14 @@ public sealed record AuditEvent(
     public static AuditEvent Edited(DateTimeOffset occurredAtUtc, IReadOnlyCollection<string> changedFields) =>
         new(AuditActions.Edited, occurredAtUtc, Details: $"Changed: {string.Join(", ", changedFields)}");
 
+    /// <summary>
+    /// An attachment was stored (E4-S5). Details hold the attachment ID, size and type, never the file name: a
+    /// user-chosen name could contain an SSN-shaped value (decision D8).
+    /// </summary>
+    public static AuditEvent AttachmentUploaded(DateTimeOffset occurredAtUtc, Guid attachmentId, long sizeBytes, string contentType) =>
+        new(AuditActions.AttachmentUploaded, occurredAtUtc,
+            Details: string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Attachment {attachmentId:D} ({sizeBytes} bytes, {contentType})"));
+
     /// <summary>Resolved→InProgress is recorded as <see cref="AuditActions.Reopened"/>; every other edge as <see cref="AuditActions.StatusChanged"/>.</summary>
     public static AuditEvent StatusChange(DateTimeOffset occurredAtUtc, CaseStatus from, CaseStatus to) =>
         new(CaseWorkflow.IsReopen(from, to) ? AuditActions.Reopened : AuditActions.StatusChanged, occurredAtUtc, from, to);
@@ -82,15 +90,12 @@ public sealed class CaseAuditEntry
             Case = caseEntity,
             CaseId = caseEntity.Id,
             OccurredAtUtc = auditEvent.OccurredAtUtc.ToUniversalTime(),
-            ActorId = Truncate(actorId),
-            Actor = Truncate(actorName),
+            ActorId = CaseTextRules.TruncateActor(actorId),
+            Actor = CaseTextRules.TruncateActor(actorName),
             Action = auditEvent.Action,
             FromStatus = auditEvent.FromStatus,
             ToStatus = auditEvent.ToStatus,
             Details = auditEvent.Details,
         };
     }
-
-    private static string Truncate(string value) =>
-        value.Length <= CaseFieldLimits.ActorMaxLength ? value : value[..CaseFieldLimits.ActorMaxLength];
 }

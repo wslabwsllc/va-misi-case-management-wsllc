@@ -201,7 +201,7 @@ public static class Telemetry { public const string ActivitySourceName = "CaseIn
 - **Entities:** the `Case`, `CaseAuditEntry` and `Attachment` shells land in `CaseIntake.Domain` in the contract PR. Each owning epic writes its own `IEntityTypeConfiguration<T>`. `AppDbContext` (E1) applies them all with `ApplyConfigurationsFromAssembly`.
 - **Migrations:** one migration per PR, named `YYYYMMDDHHmm_<Epic>_<Change>`. When the snapshot conflicts, rebase and regenerate. E1 reviews every migration.
 - **Fakes:** `CaseIntake.TestKit` ships in-memory fakes for every contract, so E5 can build the UI before E2–E4 merge (`AddFakeModules()`, Development and tests only, removed before DoD).
-- **Configuration keys:** `ConnectionStrings:CaseIntake`, `VeteranLookup:BaseUrl`, `Attachments:RootPath`, `Attachments:MaxBytes`, `Attachments:AllowedContentTypes`, `Attachments:AllowedExtensions`, `Seed:DemoPassword`. All of them have working defaults in `docker-compose.yml` so no manual configuration is needed.
+- **Configuration keys:** `ConnectionStrings:CaseIntake`, `VeteranLookup:BaseUrl` (plus optional `VeteranLookup:AttemptTimeout`, `TotalTimeout`, `RetryDelay`), `Attachments:RootPath`, `Attachments:MaxBytes`, `Attachments:AllowedTypes` (MIME-type/extension pairs), `Attachments:OrphanGracePeriod`, `DataProtection:KeysPath`, `Identity:RevalidationInterval`, `Seed:DemoPassword`. `docker-compose.yml` sets the connection string, lookup URL, attachment root, key path and demo password; every other key has a validated code default, so no manual configuration is needed. *(Amended 2026-10-18: `Attachments:AllowedContentTypes` and `Attachments:AllowedExtensions` became the single `Attachments:AllowedTypes` list, D6.)*
 - **PII:** an SSN never appears in a log, trace or exception message (enforced through safe-field logging and captured-log assertions; redaction is an additional safeguard).
 
 ### 0.4 Integration order
@@ -306,7 +306,7 @@ Before marking a story complete, record changed artifacts, acceptance criteria e
 Before implementing package APIs, verify the supported .NET LTS, exact SDK/runtime/shared-framework versions, EF Core/Npgsql compatibility, and test-runner options against official documentation. Pin SDK and packages; record resolved runtime and shared-framework versions from the built image. Package pins alone do not pin Blazor's shared framework. Pin image versions or digests as appropriate and document their update process. The Dockerfile tag, Ubuntu variant, healthcheck utilities and non-root volume permissions must be proven by a build, not assumed.
 
 ### E1-S2 — Container images and Docker Compose topology
-**Status: 🟡 Partial.** Dockerfile, Compose topology, healthchecks and volumes done; `db`, `migrator`, `web` verified individually. Blocked: `veteran-lookup` Dockerfile (E4), so full `docker compose up --build` and the offline check are unverified; Playwright layer deferred to E5-S9.
+**Status: 🟡 Partial.** Dockerfile, Compose topology, healthchecks and volumes done. Full `docker compose up --build` from empty volumes verified with E4's `veteran-lookup` (all services healthy, `/health/ready` 200; see `docs/verification.md`, E4). Remaining: offline (no-egress) check (G3); Playwright layer deferred to E5-S9.
 **Story:** As an evaluator, I want to run `docker compose up --build` from the repo root and get the whole application at http://localhost:8080, so that I can evaluate it without any manual setup.
 **Acceptance criteria:**
 - Given a machine with Docker Compose v2 and no other setup, when I run `docker compose up --build`, then images build, `db` becomes healthy, `migrator` finishes successfully, `veteran-lookup` and `web` become healthy, and http://localhost:8080 serves the login page.
@@ -373,7 +373,7 @@ Prove two startup cases: fresh volumes and existing volumes after user edits/upl
 Do not log SSNs, deterministic hashes of SSNs, passwords, request/response bodies, veteran names/addresses, or attachment content. Redaction packages do not automatically scrub arbitrary log strings and telemetry. Use an allowlist of safe structured fields, disable HTTP body logging, and test captured application and HTTP-client logs on success and failure paths.
 
 ### E1-S7 — Test harness and `tests` compose service
-**Status: 🟡 Partial.** TestKit, `tests` service, wrapper (failing test → non-zero verified) and 56 passing tests in the container done. Remaining: other epics' test projects, E2E/Playwright, run without `--no-deps` (needs E4 service), zero-test check not exercised.
+**Status: 🟡 Partial.** TestKit, `tests` service, wrapper (failing test → non-zero verified) and 56 passing tests in the container done. `docker compose run --rm tests` without `--no-deps` verified at E4 (5 projects, 628 tests, `RESULT: PASS`). Remaining: E5 test projects, E2E/Playwright, zero-test check not exercised.
 **Story:** As an evaluator, I want `docker compose run --rm tests` to run the complete automated suite, so that I can check quality with one command.
 **Acceptance criteria:**
 - Given the repo root, when I run `docker compose run --rm tests`, then every test project (unit, bUnit, integration, OpenAPI conformance, E2E/a11y) runs, a summary prints, and the exit code is non-zero if any test fails.
@@ -618,7 +618,7 @@ Use two explicit `ICurrentUser` adapters selected by composition root: the web c
 **Traces to:** R-4.1-2, R-4.2-11, R-4.5-7
 
 ### E3-S5 — Authorization enforcement across UI, endpoints and services
-**Status: 🟡 Partial — E3 work complete** (policies, 403 access-denied page, `AuthorizationDenied` EventId 3005 everywhere, service matrix, endpoint behavior, interactive access-denied component, and an endpoint guard test that enforces the download rules on E4's endpoint when it lands). Open only through other epics: E4's download endpoint (guarded) and E5's access-denied message for a crafted UI action.
+**Status: 🟡 Partial — E3 work complete** (policies, 403 access-denied page, `AuthorizationDenied` EventId 3005 everywhere, service matrix, endpoint behavior, interactive access-denied component, and an endpoint guard test that enforces the download rules on E4's endpoint when it lands). E4's download endpoint is now mapped and the guard test checks it non-vacuously (401/403/200 verified with real sign-in in `AttachmentDownloadEndpointTests`). Open only through E5: the access-denied message for a crafted UI action.
 **Story:** As a supervisor, I want permissions enforced everywhere, not just hidden in the UI, so that users can't bypass role restrictions.
 **Acceptance criteria:**
 - Given a CaseWorker, when they try New→Triaged through the service or a crafted UI action, then they get `Forbidden` (service) and the UI shows an access-denied message.
@@ -661,82 +661,87 @@ Specify antiforgery expectations for cookie-authenticated HTTP POST forms/endpoi
 - *Consumes:* `AuditAppender` and the `Case` existence check (E2, via `AppDbContext`), `ICurrentUser`/permissions (E3), compose wiring and the `attachments` volume (E1).
 
 ### E4-S1 — Veteran Lookup mock service
-**Story:** As an evaluator, I want a local, deterministic Veteran Lookup service that implements the provided OpenAPI definition, so that the application's lookup integration really works without any external or Government service.
+**Status: ✅ Done** (`CaseIntake.VeteranLookup.Mock`, own container on 8081, 50-record seeded dataset with drift test; `MockServiceTests` in-process and against the Compose container).
+*Amended 2026-10-17 (tech lead): no OpenAPI definition was supplied to the team, so the contract is authored by the team and generated from this code (ADR 0008, D1–D5). Superseded: "the provided definition served verbatim at `/openapi.yaml`", port 8080, a Bogus generator.*
+**Story:** As an evaluator, I want a local, deterministic Veteran Lookup service whose OpenAPI contract is published and verifiable, so that the application's lookup integration really works without any external or Government service.
 **Acceptance criteria:**
-- Given a seeded synthetic SSN, when `POST /veterans/lookup` is called with `{"ssn":"900-12-3456"}`, then it returns 200 with `{"name": "...", "address": "..."}`, the same result every time.
+- Given a seeded synthetic SSN, when `POST /veterans/lookup` is called with `{"ssn":"900-12-3456"}`, then it returns 200 with `{"name": "...", "address": "..."}`, the same result every time (dashed and nine-digit forms alike).
 - Given an SSN not in the dataset, when it's looked up, then it returns 404.
-- Given absent/malformed JSON or a missing, null, non-string or empty `ssn` (empty-string rejection is an adopted local rule), when it is called, then it returns 400 (*not listed in the OpenAPI responses; see OQ-5c*).
-- Given the service, when I GET `/openapi.yaml`, then the provided definition is served verbatim. When I GET `/health`, then 200.
+- Given absent/malformed JSON or a missing, null, non-string, empty or blank `ssn`, when it is called, then it returns 400 with a problem+json body; a non-JSON content type returns 415. Both are documented in the generated contract (OQ-5c, D3).
+- Given the service, when I GET `/openapi/v1.yaml` (or `/openapi/v1.json`), then the contract generated from the endpoint declarations is served; when I GET `/health`, then 200.
 - Given the dataset, when I inspect it, then every SSN is a synthetic fixture with area number 900–999 and every name and address is fictional.
-**Technical notes:** an ASP.NET Core minimal API (`WebApplication.CreateSlimBuilder`). Records with System.Text.Json source generation (camelCase `name`, `address`). Dataset in an embedded `veterans.json`, generated once by a seeded Bogus generator script (committed for determinism), 50 records including `900-12-3456` as a documented positive lookup and `999-99-9999` as a documented absent lookup. Every returned name/address fits the snapshot limits in E2-S2. Document a few demo SSNs in README. No SSN or SSN hash logging. Log only outcome, duration and a random operation ID. Own Dockerfile, port 8080 inside the compose network, **not** published to the host (optional).
-**Testing:** `WebApplicationFactory<MockProgram>` tests for 200/404/400 and determinism.
+**Technical notes:** an ASP.NET Core minimal API (`WebApplication.CreateSlimBuilder`) with an explicit `MockProgram` entry class. Records with System.Text.Json source generation (camelCase `name`, `address`). `Microsoft.AspNetCore.OpenApi` generates the contract; a document transformer fixes the metadata and removes `servers` so the output is host-independent. Dataset in an embedded `veterans.json`, generated by `VeteranDatasetGenerator` (fixed `System.Random` seed 20261016) in the test project and kept identical by a drift test; 50 records including `900-12-3456` (documented hit) and `999-99-9999` (documented miss). Every returned name/address fits the snapshot limits in E2-S2. Demo SSNs in README. Logs only the outcome and duration (EventId 4050), never the SSN or veteran details. Own Dockerfile, port 8081 on the Compose network, **not** published to the host.
+**Testing:** `WebApplicationFactory<MockProgram>` tests (Production mode) for 200/404/400/415, determinism and log hygiene; the same tests run against the Compose container inside `tests`.
 **Traces to:** R-4.1-4, R-4.2-16, R-4.5-9, R-4.6-1, R-4.6-2, R-4.6-3
 
 ### E4-S2 — OpenAPI contract conformance tests
-**Story:** As a reviewer, I want automated proof that the mock and the client conform to the provided OpenAPI definition, so that the integration is spec-accurate, not just "works on my machine".
+**Status: ✅ Done** (`OpenApiContractTests`: the committed `docs/contracts/veteran-lookup.openapi.yaml` equals the generated document and its structure is asserted; `ClientAgainstMockTests` drive the real client against the mock).
+*Amended 2026-10-17: "verbatim from spec 4.6" is replaced by "generated from the mock and kept identical by a drift test" (D1).*
+**Story:** As a reviewer, I want automated proof that the mock and the client conform to the published OpenAPI contract, so that the integration is accurate, not just "works on my machine".
 **Acceptance criteria:**
-- Given `docs/contracts/veteran-lookup.openapi.yaml` (verbatim from spec 4.6), when the conformance tests run, then the mock's 200 response bodies validate against the 200 schema, and 404 is returned for unknown SSNs.
-- Given the client, when it serializes a request, then the body validates against the request schema (`ssn` required, string).
-- Given the YAML in the repo, when it's compared with the mock's `/openapi.yaml` output, then they're identical.
-**Technical notes:** Use direct assertions for this small contract: JSON media type, required string `ssn`, exact route/method, 200 string fields, and 404. Keep the supplied OpenAPI unchanged; do not add a schema-validator dependency.
-**Testing:** part of `CaseIntake.VeteranLookup.Tests`, run in the `tests` service against both the in-process mock and the compose `veteran-lookup` service.
+- Given the committed `docs/contracts/veteran-lookup.openapi.yaml`, when the suite runs, then it is byte-identical to the document generated from the mock (`/openapi/v1.yaml`); `scripts/update-contract-snapshots.sh` regenerates it for review.
+- Given the generated document, when it is inspected, then it has exactly `POST /veterans/lookup` with a JSON body whose `ssn` is a required string, a 200 with required string `name` and `address`, and 400, 404 and 415 responses.
+- Given the client, when it serializes a request, then the body is exactly `{"ssn":"NNN-NN-NNNN"}` with `application/json`.
+**Technical notes:** direct assertions on the generated JSON document (route, method, required properties, types, responses); no schema-validator dependency.
+**Testing:** part of `CaseIntake.VeteranLookup.Tests`, run in the `tests` service against both the in-process mock and the Compose `veteran-lookup` service.
 **Traces to:** R-4.6-1, R-4.2-16, R-4.2-13
 
-Keep the specification's OpenAPI contract unchanged. The SSN format rule and 400 response are local validation decisions, because the supplied schema only requires a string. Document them separately. Test JSON request content type, exact route/method/property names, valid 200 payloads, and unknown-SSN 404. Do not assume an OpenAPI 3.0 schema can be passed directly to an arbitrary JSON Schema validator without dialect handling. A few direct contract assertions are sufficient for this small contract.
-
 ### E4-S3 — Resilient typed Veteran Lookup client
+**Status: ✅ Done** (`VeteranLookupClient` with a custom resilience pipeline and a client-owned 5 s budget; `VeteranLookupClientTests` cover every outcome, retries, timeouts, cancellation, permission, start-up validation and log hygiene).
+*Amended 2026-10-17/18: a small custom pipeline replaces `AddStandardResilienceHandler`; the total budget is owned by the client so it also bounds reading the body.*
 **Story:** As a case worker, I want the app to look up a veteran by SSN and handle every outcome gracefully, so that intake keeps working even if the lookup service misbehaves.
 **Acceptance criteria:**
-- Given the mock returns 200, when `LookupAsync` is called, then the result is `Found` with name and address.
+- Given the mock returns 200 with a usable body, when `LookupAsync` is called, then the result is `Found` with name and address.
 - Given 404, when it's called, then the result is `NotFound`.
-- Given an SSN that doesn't match `^(?:[0-9]{9}|[0-9]{3}-[0-9]{2}-[0-9]{4})$`, when it's called, then the result is `InvalidInput` and no HTTP call is made (*format rule adopted, OQ-5c; normalize nine digits to the dashed form before POST*).
-- Given a timeout, 5xx or connection failure, when it's called, then it performs at most one retry for connection errors, HTTP 408, 429 or 5xx, within a five-second total budget, and returns `Unavailable`. Caller cancellation propagates separately.
-- Given any call, when it's logged or traced, then the SSN isn't present (redacted), but the outcome and duration are.
-- Given a user without `veteran.lookup`, when the lookup is invoked through the UI-facing service, then it's denied.
-**Technical notes:** `services.AddHttpClient<IVeteranLookupClient, VeteranLookupClient>(c => c.BaseAddress = config["VeteranLookup:BaseUrl"])` + `.AddStandardResilienceHandler()` (`Microsoft.Extensions.Http.Resilience`; tune total timeout and retries). `PostAsJsonAsync` with the source-generated context. Health check registration for E1-S6. Optional meter counter `veteran_lookup_requests{outcome}`. Check `ICurrentUser.GetAsync` and shared role permissions in this client before sending HTTP; unauthorized calls return `Forbidden` without a network request.
-**Testing:** unit tests with a stub `HttpMessageHandler` (200/404/500/timeout). An integration test against the mock in compose.
+- Given an SSN that doesn't match `^(?:[0-9]{9}|[0-9]{3}-[0-9]{2}-[0-9]{4})\z`, when it's called, then the result is `InvalidInput` and no HTTP call is made (*OQ-5c; nine digits are normalized to the dashed form before POST*).
+- Given a timeout, connection failure, 408, 429 or 5xx, when it's called, then it retries at most once (2 s per attempt, 5 s in total, including reading the body) and returns `Unavailable`; malformed, oversized or undecodable bodies and other statuses are `Unavailable` too. Caller cancellation propagates.
+- Given any call, when it's logged, then the SSN isn't present, but the outcome and duration are (EventIds 4001–4004; Polly's own telemetry is off for this pipeline because it logs raw exception messages).
+- Given a user without `veteran.lookup`, when the lookup is invoked, then it returns `Forbidden` without a network request and logs `AuthorizationDenied`.
+- Given an invalid base URL or timeout setting, when the app starts, then it fails start-up instead of failing the first lookup.
+**Technical notes:** `AddHttpClient<IVeteranLookupClient, VeteranLookupClient>` with options bound from the `VeteranLookup` section (absolute http/https `BaseUrl`; `AttemptTimeout`, `TotalTimeout`, `RetryDelay` within Polly's limits). `AddResilienceHandler("veteran-lookup")`: one retry around a per-attempt timeout. `PostAsJsonAsync` with the source-generated context. Readiness of the service is checked by ServiceDefaults (E1-S6).
+**Testing:** unit tests with a stub `HttpMessageHandler` for every outcome, retry count and budget (short configured timeouts); the real client against the mock in-process and in Compose.
 **Traces to:** R-4.2-16, R-4.6-1, R-4.2-14
 
-The client must handle malformed JSON, missing or unusable name/address fields, unexpected status codes, timeout and connection errors. Map invalid local input to `InvalidInput`, denied access to `Forbidden`, and unusable responses or transport failures to `Unavailable`. Propagate caller cancellation without displaying a service outage. Retries are permitted only because this lookup POST is read-only; explicitly configure retryable statuses, attempt count, and a total time budget of five seconds. Test the budget without real sleeps where practical.
-
 ### E4-S4 — Attachment model and storage abstraction
+**Status: ✅ Done** (`Attachment` entity, `E4_Attachments` migration, `FileSystemAttachmentStore`; type pairs `Attachments:AllowedTypes` validated at start-up).
+*Amended 2026-10-17/18: storage root `/attachments` in Compose (D4) and `<system temp>/caseintake-attachments` when unset; shards use the key's last two hex digits; types and extensions are configured as pairs (D6); a `FaultyStore` wrapper over the real store replaces the planned `InMemoryAttachmentStore` in tests.*
 **Story:** As a developer, I want attachment metadata in the database and file content in a pluggable store, so that uploads are durable across restarts and storage can be swapped.
 **Acceptance criteria:**
-- Given an attachment is stored, when I inspect the DB, then metadata (Guid Id, CaseId FK, original file name (sanitized), content type, size, SHA-256, storage key, `UploadedAtUtc`, `UploadedBy`) is saved, and the bytes are in the store under a server-generated key (never the user's file name).
+- Given an attachment is stored, when I inspect the DB, then metadata (Guid Id, CaseId FK, sanitized file name, allowlisted content type, size, SHA-256, storage key, `UploadedAtUtc`, uploader ID and name) is saved, every column is write-once, and the bytes are in the store under a server-generated key (never the user's file name).
 - Given the containers restart, when I download a previously uploaded file, then it's still available (named volume `attachments`).
-- Given configuration, when `Attachments:MaxBytes` and `Attachments:AllowedContentTypes` are set, then the service uses them (adopted defaults: 10 MiB (10,485,760 bytes); pdf, png, jpeg, txt, docx; OQ-6).
-**Technical notes:** `IAttachmentStore` (internal to E4) with `FileSystemAttachmentStore` (root `/data/attachments`, sharded by key prefix) and an `InMemoryAttachmentStore` for tests. Storage decision (filesystem vs DB `bytea`) documented in an ADR.
-**Testing:** unit tests for the store (temp directory). An integration test for metadata mapping.
+- Given configuration, when `Attachments:MaxBytes` and `Attachments:AllowedTypes` are set, then the service uses them; inconsistent configuration stops start-up (adopted defaults: 10 MiB (10,485,760 bytes); pdf, png, jpeg/jpg, txt, docx; OQ-6).
+**Technical notes:** internal `IAttachmentStore` with `FileSystemAttachmentStore`: `tmp/{random}.part` while receiving, `blobs/{last two hex digits of key}/{key}` when committed; keys are validated before any path is built. Storage decision (filesystem vs `bytea` vs object storage) in ADR 0009.
+**Testing:** unit tests for the store (temp directory) and options; integration tests for metadata mapping.
 **Traces to:** R-4.2-9, R-4.2-10, R-4.5-10
 
 ### E4-S5 — Attachment upload and list
+**Status: ✅ Done** (`AttachmentService` upload/list with compensation, uncertain-commit handling and a share-locked commit; `AttachmentStorageReconciler` run explicitly by the migrator; `AttachmentUploadTests`, `AttachmentReconcilerTests`, including a simulated retry after a commit that landed). UI is E5-S7.
+*Amended 2026-10-17/18: uploads to Closed cases and empty files are rejected (D7); leading bytes must match the claimed type for PDF, PNG, JPEG and DOCX (D6); audit details and logs never carry the file name (D8).*
 **Story:** As a case worker, I want to upload files to a case and see the attachment list, so that supporting documents are kept with the case.
 **Acceptance criteria:**
-- Given a case, `attachments.upload` and a file within limits, when I upload, then it's streamed to the store, its metadata is saved, an `AttachmentUploaded` audit entry is written using `AuditAppender.Append` in the upload operation’s context, and the new `AttachmentDto` is returned.
-- Given a file over the size limit or of a disallowed type, when I upload, then I get `Validation` with a clear message, no metadata/audit is committed, and temporary content is removed or scheduled for recovery cleanup if removal fails.
-- Given a non-existent case, when I upload, then I get `NotFound`.
-- Given a failure after the bytes are written, when the DB save fails, then rollback removes metadata/audit and attempts blob deletion; deletion failure is logged safely and left for recovery cleanup.
+- Given an open case, `attachments.upload` and a file within limits, when I upload, then it's streamed to the store, and its metadata plus an `AttachmentUploaded` audit entry are committed in one transaction, and the new `AttachmentDto` is returned.
+- Given a file over the size limit, of a disallowed type, or whose leading bytes don't match its type, when I upload, then I get `Validation` with a clear message, nothing is committed, and the temporary file is removed.
+- Given a non-existent case, when I upload, then I get `NotFound`; given a Closed case (including one closed while the file was streaming), then `CaseClosed`.
+- Given a failure after the bytes are written, when the commit fails, then the row is looked up with a fresh context: confirmed absent → the file is deleted (a failed delete is logged and left for the reconciler) and the error propagates; confirmed present → success; undeterminable → the file is kept and the outcome is reported as unknown.
 - Given a case, when I list its attachments with `cases.view`, then I get them newest first.
-- Given a file name with path segments or control characters, when it's saved, then the stored display name is sanitized (remove both slash styles, CR/LF and controls, then cap length at 200 characters; use `attachment` if empty).
-- Given actual content length exceeds the maximum or differs from declaredSize, when streaming ends or limit is reached, then the upload returns Validation and leaves no committed metadata/audit. Temporary files are cleaned immediately when possible or by the recovery cleanup.
-**Technical notes:** the service takes a `Stream` (the UI passes `IBrowserFile.OpenReadStream(maxAllowedSize)`). Count bytes while streaming and abort over the limit. Compute SHA-256 incrementally (`IncrementalHash`). Validate an explicit MIME/extension pair allowlist: application/pdf/.pdf, image/png/.png, image/jpeg/.jpg/.jpeg, text/plain/.txt, and application/vnd.openxmlformats-officedocument.wordprocessingml.document/.docx. Configure MIME types and extensions together and reject inconsistent startup configuration. Browser MIME/extension claims do not prove file safety; content scanning remains out of scope. Malware scanning is out of scope (4.7) and listed as a limitation.
-**Testing:** unit tests (limits, sanitization, compensation with a failing fake DB). Integration tests for audit and list ordering.
+- Given a file name with path segments, control or format characters, when it's saved, then the stored display name is sanitized (both slash styles, CR/LF, NUL, right-to-left override and unpaired surrogates removed; capped at 200 scalar values keeping a short extension; `attachment` if empty).
+- Given the actual content length exceeds or differs from the declared size, or the source stream fails, then the upload returns `Validation` and leaves nothing committed.
+- Given the migrator starts, when it runs, then stale temporary files and unreferenced content older than one hour are removed, and content with metadata is never deleted (D9).
+**Technical notes:** the service takes a `Stream` (the UI passes `IBrowserFile.OpenReadStream(maxAllowedSize)`), counts bytes while streaming, hashes incrementally, captures the first bytes for the signature check and forces the file to disk before the commit. The commit runs inside the execution strategy: `SELECT … FOR SHARE` on the case, re-check Closed, then SaveChanges and COMMIT without the caller's cancellation. Source-stream failures are reported as the client's (`UploadIncomplete`); storage failures are logged as errors (4109). Malware scanning is out of scope (4.7) and listed as a limitation.
+**Testing:** unit tests (limits, sanitization, signatures, store); integration tests with EF interceptors for every fault path (failure before and after commit, failed cleanup, uncertain commit, simulated retry after commit, closed during upload, storage failure, interrupted and timed-out streams), audit, list ordering, restart, and the migrator entry point.
 **Traces to:** R-4.2-9, R-4.2-5, R-4.2-11
 
-For upload, authorize and validate the case first; stream into a temporary file under the server-controlled storage root; enforce the actual byte limit; then promote the completed file to its final key and commit metadata plus audit in one database transaction. Dispose streams and remove temporary/final files on cancellation before commit or a known failed commit. If commit outcome is uncertain, check metadata using the server-generated attachment ID with a fresh context before deleting its final file. A database and filesystem cannot share an atomic transaction. Document the remaining crash window and provide a small startup or maintenance cleanup routine for old temporary files and final files with no committed metadata. Run cleanup in the migrator before web accepts uploads, while no upload operation is active. Never clean committed metadata files. Log cleanup failures and retry on next startup; retain an age grace period for temporary files.
-
-Add fault tests for interrupted streams, declared length differing from actual length, limit overflow, storage failure, database failure, and cleanup failure. Uploads known to have failed before commit must leave no metadata or audit entry. An uncertain commit is reported as uncertain; refresh attachment state before retrying. Successful uploads retain downloadable bytes across container recreation. If commit status cannot be determined, retain the final file for startup reconciliation rather than risking deletion of committed content. A missing stored file returns a controlled 404 and a diagnostic event without exposing its path.
-
 ### E4-S6 — Attachment download endpoint
+**Status: ✅ Done** (`Web/Endpoints/Attachments`, `AttachmentDownloadEndpointTests` with real sign-in: hash round trip, cross-case 404, 401/403/200, headers, range, completion logging; `EndpointAuthorizationGuardTests` checks the real route).
 **Story:** As a case worker, I want to download a case attachment, so that I can review supporting documents.
 **Acceptance criteria:**
-- Given an attachment on case X and `attachments.download`, when I GET `/cases/X/attachments/{id}/content`, then I receive the original bytes (same SHA-256), the stored content type, `Content-Disposition: attachment with a safely encoded original display filename` and `X-Content-Type-Options: nosniff`.
+- Given an attachment on case X and `attachments.download`, when I GET `/cases/X/attachments/{id}/content`, then I receive the original bytes (same SHA-256), the stored content type, `Content-Disposition: attachment` with an RFC 5987-encoded display name, `X-Content-Type-Options: nosniff` and `Cache-Control: no-store`; range requests return 206.
 - Given the attachment ID belongs to a different case, or doesn't exist, when I request it, then I get 404.
-- Given an unauthenticated user or one without the permission, when they request it, then they get 401 or 403.
-- Given an attachment response, when the server finishes writing its body successfully, then an `AttachmentDownloaded` log event (EventId 4xxx) is written.
-- Given stored content is missing, when an authorized download is attempted, then the endpoint returns a controlled 404 and logs a safe storage diagnostic. Failed/cancelled responses must not be logged as completed downloads.
-**Technical notes:** E4 owns the endpoint implementation under `Web/Endpoints/Attachments`, so HTTP composition may reference Identity and Attachments without feature-to-feature references. `MapAttachmentEndpoints()` explicitly constructs the attachment service with the HTTP actor adapter through a registered factory in Web. Keep circuit services registered with the circuit adapter. The endpoint uses `.RequireAuthorization(Permissions.AttachmentsDownload)`, and returns `TypedResults.File(stream, contentType, fileDownloadName, enableRangeProcessing: true)`. A plain anchor link from the UI is keyboard-accessible and works with Interactive Server (no JS interop needed).
-**Testing:** integration tests: round-trip upload→download hash equality, cross-case 404, the 401/403 matrix.
+- Given an unauthenticated user or one without the permission, when they request it, then they get 401 or 403 (no login redirect).
+- Given a response that finishes successfully, then an `AttachmentDownloaded` event (4103) is logged with the attachment, case, user and operation ID; failed or aborted responses are not logged as downloads.
+- Given stored content is missing or its size no longer matches the metadata, when an authorized download is attempted, then the endpoint returns a controlled 404 and logs a safe diagnostic (4105 / 4112) without the path.
+**Technical notes:** E4 owns the endpoint under `Web/Endpoints/Attachments`, so the composition root combines the Identity HTTP actor adapter and the attachment module without feature-to-feature references. `IAttachmentServiceFactory.Create(ICurrentUser)` binds the service to the keyed HTTP adapter. `.RequireAuthorization(Permissions.AttachmentsDownload).DisableCookieRedirect()`; `TypedResults.File(stream, contentType, fileDownloadName, enableRangeProcessing: true)`. A plain anchor link from the UI is keyboard-accessible and works with Interactive Server.
+**Testing:** integration tests with real sign-in: round trip, cross-case 404, the 401/403/200 matrix, headers, range, missing and size-mismatched content, completion logging.
 **Traces to:** R-4.2-10, R-4.2-11, R-4.2-14
 
 </details>

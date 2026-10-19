@@ -1,10 +1,13 @@
+using CaseIntake.Attachments;
 using CaseIntake.Cases;
 using CaseIntake.Identity;
 using CaseIntake.Identity.Account;
 using CaseIntake.Identity.Security;
 using CaseIntake.Persistence;
 using CaseIntake.ServiceDefaults;
+using CaseIntake.VeteranLookup.Client;
 using CaseIntake.Web.Components;
+using CaseIntake.Web.Endpoints.Attachments;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,9 +16,8 @@ builder.AddServiceDefaults();
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddCasesModule(builder.Configuration);           // E2
 builder.Services.AddIdentityModule(builder.Configuration);        // E3
-// Module registrations (one line each, added by the owning epic):
-//   builder.Services.AddAttachmentsModule(builder.Configuration);// E4
-//   builder.Services.AddVeteranLookupClient(builder.Configuration); // E4
+builder.Services.AddAttachmentsModule(builder.Configuration);     // E4
+builder.Services.AddVeteranLookupClient(builder.Configuration);   // E4
 
 // Persist Data Protection keys on the 'dataprotection' volume so auth cookies survive web-container recreation.
 if (builder.Configuration["DataProtection:KeysPath"] is { Length: > 0 } keysPath)
@@ -43,6 +45,7 @@ app.UseAntiforgery();
 
 app.MapDefaultEndpoints();
 app.MapAccountEndpoints();                                        // E3
+app.MapAttachmentEndpoints();                                     // E4
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
 app.Run();

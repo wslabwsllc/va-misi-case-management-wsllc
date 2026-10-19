@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk.Worker">
-  <!-- One-shot composition root: migrate, seed, exit. Seed contributors from E2/E3 are registered in Program.cs. -->
+  <!-- One-shot composition root: migrate, seed, exit. Seed contributors from E2/E3 and the E4 storage reconciler are registered in Program.cs. -->
   <PropertyGroup>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Attachments\CaseIntake.Attachments.csproj" />
     <ProjectReference Include="..\CaseIntake.Cases\CaseIntake.Cases.csproj" />
     <ProjectReference Include="..\CaseIntake.Identity\CaseIntake.Identity.csproj" />
     <ProjectReference Include="..\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
