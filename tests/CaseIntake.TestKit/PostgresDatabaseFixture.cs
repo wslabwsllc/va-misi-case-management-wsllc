@@ -16,6 +16,9 @@ namespace CaseIntake.TestKit;
 public class PostgresDatabaseFixture : IAsyncLifetime
 {
     public const string AdminConnectionEnvironmentVariable = "TESTKIT_POSTGRES_ADMIN";
+
+    /// <summary>Same image, tag and digest as the Compose <c>db</c> service (checked by <c>VersionConsistencyTests</c>).</summary>
+    public const string PostgresImage = "postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336";
     private static readonly Lazy<Task<string>> AdminConnection = new(StartServerAsync);
 
     // CREATE/DROP DATABASE contend for server-wide locks and can each take seconds on a busy server. Running them one at
@@ -107,7 +110,7 @@ public class PostgresDatabaseFixture : IAsyncLifetime
             return configured;
         }
 
-        var container = new PostgreSqlBuilder("postgres:18").Build();
+        var container = new PostgreSqlBuilder(PostgresImage).Build();
         await container.StartAsync();   // reaped by Testcontainers' Ryuk when the process exits
         return container.GetConnectionString();
     }

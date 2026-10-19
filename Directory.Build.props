@@ -10,6 +10,10 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <NuGetAudit>true</NuGetAudit>
+    <!-- Every project commits a packages.lock.json (exact versions and content hashes of the whole graph). The Docker
+         builds restore in locked mode, so a package graph that differs from the lock file fails the build. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <RestoreLockedMode Condition="'$(ContinuousIntegrationBuild)' == 'true'">true</RestoreLockedMode>
   </PropertyGroup>
 
   <ItemGroup>
