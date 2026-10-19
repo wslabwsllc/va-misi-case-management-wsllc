@@ -1,0 +1,115 @@
+@page "/test-results/cases/{Id:long}"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Domain.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject ILogger<TestCaseDetail> Logger
+
+@* One test case and its outcome in every recent run (newest first), with the duration trend. *@
+<PageShell Title="@(_history?.TestCase.Title ?? "Test case")" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Test cases", "test-results/cases")])" />
+
+<ErrorAlert Message="@_error" TestId="testcase-error" />
+
+@if (_history is null)
+{
+    @if (_loading)
+    {
+        <LoadingIndicator Text="Loading test case…" />
+    }
+}
+else
+{
+    var t = _history.TestCase;
+    var oldestFirst = _history.History.Reverse().ToList();
+    <div class="grid grid--main-side">
+        <section class="card card--flush" aria-labelledby="history-heading">
+            <div class="card__header"><h2 id="history-heading">Runs of this test</h2></div>
+            @if (_history.History.Count == 0)
+            {
+                <EmptyState Title="No runs yet" Message="This test has no recorded executions." TestId="history-empty" />
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data-grid" data-testid="history-table">
+                        <caption class="visually-hidden">Outcome of this test in recent runs, newest first</caption>
+                        <thead><tr><th scope="col">Run</th><th scope="col">Started (UTC)</th><th scope="col">Outcome</th><th scope="col" class="num">Duration</th><th scope="col">Commit</th></tr></thead>
+                        <tbody>
+                            @foreach (var h in _history.History)
+                            {
+                                <tr>
+                                    <td><a href="@TestResultsText.ExecutionHref(h.ExecutionId)">@h.RunKey</a></td>
+                                    <td class="nowrap">@UiText.Utc(h.RunStartedAtUtc)</td>
+                                    <td><OutcomePill Outcome="h.Outcome" /></td>
+                                    <td class="num nowrap">@UiText.Duration(h.Duration)</td>
+                                    <td class="mono">@TestResultsText.ShortCommit(h.GitCommit)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+                <div class="card__note mt-4">
+                    <Chart Id="testcase-duration" Title="Duration trend" Description="Seconds per run, oldest to newest." CategoryHeader="Run (UTC)"
+                           Format="ChartFormat.OneDecimal" TestId="testcase-chart-duration"
+                           Categories="@([.. oldestFirst.Select(h => h.RunStartedAtUtc.UtcDateTime.ToString("MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture))])"
+                           Series="@([new ChartSeries("Duration (s)", [.. oldestFirst.Select(h => Math.Round(h.Duration.TotalSeconds, 1))], "--series-4")])" />
+                </div>
+            }
+        </section>
+        <section class="card" aria-labelledby="testcase-heading">
+            <div class="card__header"><h2 id="testcase-heading">Test case</h2></div>
+            <dl class="field-list">
+                <dt>Last status</dt><dd>@if (t.LastOutcome is { } last) { <OutcomePill Outcome="last" /> } else { <span>Unknown</span> }</dd>
+                <dt>Full name</dt><dd class="mono">@t.FullName</dd>
+                <dt>Module</dt><dd>@t.Module</dd>
+                <dt>Test type</dt><dd>@TestResultsText.Type(t.Type)</dd>
+                <dt>Description</dt><dd class="pre-wrap">@(t.Description ?? "Not recorded")</dd>
+                <dt>Story</dt><dd>@(t.Story ?? "Not recorded")</dd>
+                <dt>Requirements</dt><dd>@(t.Requirements ?? "Not recorded")</dd>
+                <dt>Priority</dt><dd>@(t.Priority ?? "Not recorded")</dd>
+                <dt>First seen (UTC)</dt><dd>@UiText.Utc(t.FirstSeenAtUtc)</dd>
+            </dl>
+        </section>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private TestCaseHistoryDto? _history;
+    private bool _loading;
+    private string? _error;
+
+    [Parameter] public long Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Results.GetTestCaseHistoryAsync(Id, 50, _cts.Token);
+            _history = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5215, "TestCaseLoadFailed"), "Test case {TestCaseId} load failed ({ExceptionType})", Id, ex.GetType().Name);
+            _history = null;
+            _error = "The test case could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

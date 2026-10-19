@@ -21,9 +21,9 @@ There are two ways to run it:
 | Requirement | Version / notes |
 |---|---|
 | Docker Engine or Docker Desktop | with **Compose v2** (`docker compose version` must work; the old `docker-compose` v1 is not supported) |
-| CPU architecture | images are `linux/amd64`; Apple Silicon and other ARM hosts run them under emulation (slower) |
+| CPU architecture | images are `linux/amd64`; the .NET compile runs natively (`--platform=$BUILDPLATFORM`), so ARM hosts such as Apple Silicon emulate only the running containers |
 | Free host port | **8080** (the web app). PostgreSQL and the lookup service are not published to the host |
-| Disk space | several GB for the images (the evaluation image contains the .NET SDK and Playwright Chromium) and the volumes |
+| Disk space | several GB for the images and the volumes; the test image (`--profile tests`, .NET SDK + Playwright Chromium) is the large one and is built only for the tests |
 | Network | needed at **build** time only (base images, NuGet packages, Chromium). Nothing is downloaded when containers run |
 | Git | to clone the repository |
 | bash | for the helper scripts in `scripts/`. On Windows use **Git Bash** |
@@ -68,7 +68,7 @@ The services start in this order:
 
 | Service | What it does |
 |---|---|
-| `db` | PostgreSQL 17, database `caseintake`, data on the `pgdata` volume |
+| `db` | PostgreSQL 18, database `caseintake`, data on the `pgdata18` volume |
 | `migrator` | one-shot job: applies EF Core migrations, seeds 72 synthetic cases and the demo accounts, cleans up attachment storage, then exits with code 0 |
 | `veteran-lookup` | synthetic veteran lookup mock, reachable only inside the Compose network (`http://veteran-lookup:8081`) |
 | `web` | the Blazor app on **<http://localhost:8080>** |
@@ -117,7 +117,7 @@ Data is kept in named volumes, so it survives `down` and rebuilds:
 
 | Volume | Contents |
 |---|---|
-| `pgdata` | PostgreSQL databases (`caseintake`, and `caseintake_e2e` for browser tests) |
+| `pgdata18` | PostgreSQL databases (`caseintake`, and `caseintake_e2e` for browser tests) |
 | `attachments` | uploaded case attachments (metadata is in the database) |
 | `dataprotection` | Data Protection keys, so sign-in cookies survive container restarts |
 | `testresults` | test runs (TRX files, evidence) shown in the Test results module |
@@ -172,10 +172,10 @@ Either reuse the Compose database by publishing its port:
 ```bash
 docker run -d --name caseintake-pg -p 5432:5432 \
   -e POSTGRES_USER=caseintake -e POSTGRES_PASSWORD=caseintake_local_only -e POSTGRES_DB=caseintake \
-  postgres:17
+  postgres:18
 ```
 
-or point the app at your own PostgreSQL 17 server by changing `ConnectionStrings:CaseIntake` (see
+or point the app at your own PostgreSQL 18 server by changing `ConnectionStrings:CaseIntake` (see
 [Configuration](#configuration)). The default in `appsettings.json` is
 `Host=localhost;Port=5432;Database=caseintake;Username=caseintake;Password=caseintake_local_only;Timezone=UTC`.
 

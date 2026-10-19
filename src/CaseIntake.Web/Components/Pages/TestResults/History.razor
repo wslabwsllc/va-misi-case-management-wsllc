@@ -1,0 +1,123 @@
+@page "/test-results/history"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject ILogger<History> Logger
+
+@* History and trends over the most recent runs: pass rate, failures and tests that did not run, duration, and the tests
+   that failed repeatedly or flipped between passing and failing. *@
+<PageShell Title="History and trends" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Quality assurance", "test-results")])"
+           Subtitle="@($"The last {RecentRuns} imported runs, oldest to newest.")" />
+<TestResultsTabs Current="history" />
+
+<ErrorAlert Message="@_error" TestId="history-error" />
+
+@if (_runs is null && _loading)
+{
+    <LoadingIndicator Text="Loading history…" />
+}
+else if (_runs is { Count: 0 })
+{
+    <div class="card">
+        <EmptyState Title="No test runs imported yet" Message="@TestResultsText.HowToProduceRuns" IconName="history" TestId="history-empty" />
+    </div>
+}
+else if (_runs is { } runs)
+{
+    var labels = runs.Select(TestResultsText.ChartLabel).ToList();
+    <div class="grid grid--3">
+        <section class="card">
+            <Chart Id="history-passrate" Title="Pass rate" Description="Passed share of executed tests, per run." Kind="ChartKind.Line" CategoryHeader="Run (UTC)"
+                   Format="ChartFormat.Percent" TestId="history-chart-passrate" Categories="labels"
+                   Series="@([new ChartSeries("Pass rate (%)", [.. runs.Select(r => Math.Round((r.Counts.PassRate ?? 0) * 100, 1))], "--series-3")])" />
+        </section>
+        <section class="card">
+            <Chart Id="history-failures" Title="Failed and not executed" Description="Tests per run that failed or did not run." CategoryHeader="Run (UTC)"
+                   TestId="history-chart-failures" Categories="labels" EmptyText="No failed or not-executed tests in these runs."
+                   Series="@([new ChartSeries("Failed", [.. runs.Select(r => (double)r.Counts.Failed)], "--series-2"), new ChartSeries("Not executed", [.. runs.Select(r => (double)r.Counts.NotExecuted)], "--series-4")])" />
+        </section>
+        <section class="card">
+            <Chart Id="history-duration" Title="Run duration" Description="Whole-run duration in seconds." CategoryHeader="Run (UTC)"
+                   TestId="history-chart-duration" Categories="labels"
+                   Series="@([new ChartSeries("Duration (s)", [.. runs.Select(r => Math.Round(r.Duration.TotalSeconds))], "--series-1")])" />
+        </section>
+    </div>
+
+    <section class="card card--flush mt-4" aria-labelledby="flaky-heading">
+        <div class="card__header"><h2 id="flaky-heading">Flaky and recurring failures</h2></div>
+        <p class="page-header__subtitle card__note">Tests that both passed and failed, or failed at least twice, in the last @RecentRuns runs.</p>
+        @if (_flaky is { Count: 0 })
+        {
+            <EmptyState Title="No flaky or recurring failures" Message="Every test that ran recently has a stable outcome." IconName="success" TestId="flaky-empty" />
+        }
+        else if (_flaky is { } flaky)
+        {
+            <div class="table-wrap">
+                <table class="data-grid" data-testid="flaky-table">
+                    <caption class="visually-hidden">Flaky and recurring failures</caption>
+                    <thead><tr><th scope="col">Test</th><th scope="col" class="desktop-only">Module</th><th scope="col" class="num">Runs</th><th scope="col" class="num">Passed</th><th scope="col" class="num">Failed</th><th scope="col">Latest</th></tr></thead>
+                    <tbody>
+                        @foreach (var f in flaky)
+                        {
+                            <tr>
+                                <td><a href="@TestResultsText.TestCaseHref(f.TestCaseId)">@f.Title</a></td>
+                                <td class="desktop-only">@f.Module</td>
+                                <td class="num">@f.Runs</td>
+                                <td class="num">@f.Passed</td>
+                                <td class="num">@f.Failed</td>
+                                <td><OutcomePill Outcome="f.LastOutcome" /></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+@code {
+    private const int RecentRuns = 20;
+
+    private readonly CancellationTokenSource _cts = new();
+    private List<TestRunSummaryDto>? _runs;
+    private IReadOnlyList<FlakyTestDto>? _flaky;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+        try
+        {
+            var runs = await Results.ListRunsAsync(new TestRunQuery(1, RecentRuns), _cts.Token);
+            if (!runs.IsSuccess)
+            {
+                _error = runs.Error!.Message;
+                return;
+            }
+            _runs = [.. runs.Value!.Items.Reverse()];
+            var flaky = await Results.GetFlakyTestsAsync(RecentRuns, _cts.Token);
+            _flaky = flaky.IsSuccess ? flaky.Value : [];
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5217, "TestHistoryLoadFailed"), "Test history load failed ({ExceptionType})", ex.GetType().Name);
+            _error = "The history could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

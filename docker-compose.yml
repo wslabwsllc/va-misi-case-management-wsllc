@@ -1,8 +1,20 @@
 # One-command evaluation:  docker compose up --build     (http://localhost:8080)
 # Full test suite:         docker compose run --rm tests             (or scripts/run-all-tests.sh, which also records git metadata and server logs)
-# All services are linux/amd64. Credentials below are synthetic and local-only. No .env file is needed.
+# All containers run as linux/amd64 (spec 4.5). The .NET compile steps run natively on the build machine (Dockerfile
+# --platform=$BUILDPLATFORM), so Apple Silicon only emulates the running apps, not the SDK build.
+# Credentials below are synthetic and local-only. No .env file is needed.
 name: caseintake
 
+# The demo app (web + migrator, also their e2e copies): published output on the ASP.NET runtime image.
+x-app-image: &app-image
+  image: caseintake-app:local
+  platform: linux/amd64
+  build:
+    context: .
+    dockerfile: Dockerfile
+    target: runtime
+
+# The test runner: SDK, compiled tests and Playwright Chromium. Built only for the tests profile.
 x-eval-image: &eval-image
   image: caseintake-eval:local
   platform: linux/amd64
@@ -18,7 +30,7 @@ x-eval-image: &eval-image
 # The web container serves static assets (blazor.web.js, CSS, JS modules) from its content root, so it must start
 # in its publish folder; both checks below must pass for the container to count as healthy.
 x-web-healthcheck: &web-healthcheck
-  test: ["CMD-SHELL", "/src/scripts/healthcheck.sh 127.0.0.1 8080 /health/ready && /src/scripts/healthcheck.sh 127.0.0.1 8080 /_framework/blazor.web.js"]
+  test: ["CMD-SHELL", "/app/healthcheck.sh 127.0.0.1 8080 /health/ready && /app/healthcheck.sh 127.0.0.1 8080 /_framework/blazor.web.js"]
   interval: 5s
   timeout: 12s
   retries: 30
@@ -26,14 +38,16 @@ x-web-healthcheck: &web-healthcheck
 
 services:
   db:
-    image: postgres:17
+    image: postgres:18
     platform: linux/amd64
     environment:
       POSTGRES_USER: caseintake
       POSTGRES_PASSWORD: caseintake_local_only
       POSTGRES_DB: caseintake
+    # PostgreSQL 18 images keep data in a versioned folder under /var/lib/postgresql, so the volume mounts there. It is a
+    # new volume: PostgreSQL 17 data (the old 'pgdata' volume) cannot be opened by 18 without pg_upgrade.
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      - pgdata18:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U caseintake -d caseintake"]
       interval: 3s
@@ -41,7 +55,7 @@ services:
       retries: 30
 
   migrator:
-    <<: *eval-image
+    <<: *app-image
     command: ["dotnet", "/app/migrator/CaseIntake.MigrationService.dll"]
     working_dir: /app/migrator
     environment:
@@ -74,10 +88,10 @@ services:
       retries: 30
 
   web:
-    <<: *eval-image
+    <<: *app-image
     command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
-    # Content root = publish folder, so wwwroot (and _framework/blazor.web.js) is found. The image's WORKDIR is /src
-    # for the tests service; without this the app answered every asset request with the sign-in redirect.
+    # Content root = publish folder, so wwwroot (and _framework/blazor.web.js) is found (the image's WORKDIR too); started
+    # anywhere else the app answered every asset request with the sign-in redirect.
     working_dir: /app/web
     ports:
       - "8080:8080"
@@ -103,9 +117,9 @@ services:
     healthcheck: *web-healthcheck
 
   # ---- Test profile: an isolated copy of the production app for the browser suite (its own database, attachments and
-  # results folder), so end-to-end runs never change the demo data. Same image as web. ----
+  # results folder), so end-to-end runs never change the demo data. Same image as web; only `tests` uses the eval image. ----
   migrator-e2e:
-    <<: *eval-image
+    <<: *app-image
     profiles: ["tests"]
     command: ["dotnet", "/app/migrator/CaseIntake.MigrationService.dll"]
     working_dir: /app/migrator
@@ -121,7 +135,7 @@ services:
     restart: "no"
 
   web-e2e:
-    <<: *eval-image
+    <<: *app-image
     profiles: ["tests"]
     command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
     working_dir: /app/web
@@ -171,7 +185,7 @@ services:
         condition: service_healthy
 
 volumes:
-  pgdata:
+  pgdata18:
   attachments:
   attachments-e2e:
   dataprotection:

@@ -1,0 +1,9 @@
+@using CaseIntake.Domain.TestResults
+@* A test outcome as text plus colour (never colour alone). Not executed, Blocked and Skipped are distinct. *@
+<span class="status-pill @TestResultsText.OutcomeCss(Outcome) @(Large ? "status-pill--lg" : null)" data-testid="@TestId">@TestResultsText.Outcome(Outcome)</span>
+
+@code {
+    [Parameter, EditorRequired] public TestOutcome Outcome { get; set; }
+    [Parameter] public bool Large { get; set; }
+    [Parameter] public string? TestId { get; set; }
+}

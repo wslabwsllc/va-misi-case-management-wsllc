@@ -1,0 +1,80 @@
+@using System.Globalization
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Web.Services
+@inject UiInterop Interop
+
+@* Screenshot preview (E5 test management): a native modal dialog with the image from the authorized evidence endpoint,
+   fit-to-window by default, zoom steps and a download. Esc or Close returns focus to the thumbnail that opened it. *@
+<ModalDialog @ref="_dialog" Id="evidence-preview" Title="Screenshot" Class="modal--wide" TestId="evidence-preview" OnDismissed="OnDismissed">
+    <ChildContent>
+        @if (_artifact is { } a)
+        {
+            <div class="btn-row mb-0">
+                <button type="button" class="btn" @onclick="FitAsync" aria-pressed="@(_scale == 0 ? "true" : "false")">Fit</button>
+                <button type="button" class="btn" @onclick="ActualSizeAsync" aria-pressed="@(_scale == 1 ? "true" : "false")">100%</button>
+                <button type="button" class="btn btn--icon" @onclick="ZoomInAsync" aria-label="Zoom in" disabled="@(_scale >= Steps[^1])"><Icon Name="zoom-in" /></button>
+                <button type="button" class="btn btn--icon" @onclick="ZoomOutAsync" aria-label="Zoom out" disabled="@(_scale != 0 && _scale <= Steps[0])"><Icon Name="zoom-out" /></button>
+                <span class="page-header__subtitle" role="status" aria-live="polite" data-testid="zoom-level">@ZoomText</span>
+            </div>
+            <div class="evidence-viewer evidence-viewer--fit mt-4">
+                <img @ref="_image" src="@TestResultRoutes.Artifact(a.Id)" alt="@(a.Caption ?? a.FileName)" />
+            </div>
+        }
+    </ChildContent>
+    <Footer>
+        @if (_artifact is { } a)
+        {
+            <a class="btn" href="@TestResultRoutes.ArtifactDownload(a.Id)" download data-enhance-nav="false"><Icon Name="download" Small="true" /> Download</a>
+        }
+    </Footer>
+</ModalDialog>
+
+@code {
+    private static readonly double[] Steps = [0.25, 0.5, 0.75, 1, 1.5, 2, 3];
+
+    private ModalDialog _dialog = null!;
+    private ElementReference _image;
+    private TestArtifactDto? _artifact;
+
+    /// <summary>0 = fit to window; otherwise the scale relative to the image's natural size.</summary>
+    private double _scale;
+    private bool _applyZoom;
+
+    private string ZoomText => _scale == 0 ? "Fit to window" : string.Create(CultureInfo.InvariantCulture, $"{_scale * 100:0}%");
+
+    /// <param name="returnFocus">Focuses the thumbnail again when the dialog closes.</param>
+    public Task OpenAsync(TestArtifactDto artifact, Func<ValueTask>? returnFocus = null)
+    {
+        _artifact = artifact;
+        _scale = 0;
+        StateHasChanged();   // hand the dialog the new content before it opens
+        return _dialog.OpenAsync(returnFocus);
+    }
+
+    private Task FitAsync() => SetScaleAsync(0);
+
+    private Task ActualSizeAsync() => SetScaleAsync(1);
+
+    // From fit, zooming in starts at 75% (fit is usually around half size on a desktop).
+    private Task ZoomInAsync() => SetScaleAsync(_scale == 0 ? 0.75 : Steps.FirstOrDefault(s => s > _scale, Steps[^1]));
+
+    private Task ZoomOutAsync() => SetScaleAsync(_scale == 0 ? 0.5 : Steps.LastOrDefault(s => s < _scale, Steps[0]));
+
+    private Task SetScaleAsync(double scale)
+    {
+        _scale = scale;
+        _applyZoom = true;
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_applyZoom)
+        {
+            _applyZoom = false;
+            await Interop.SetZoomAsync(_image, _scale);
+        }
+    }
+
+    private void OnDismissed() => _artifact = null;
+}

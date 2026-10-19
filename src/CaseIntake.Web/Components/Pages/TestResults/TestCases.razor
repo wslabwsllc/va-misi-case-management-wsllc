@@ -1,0 +1,163 @@
+@page "/test-results/cases"
+@attribute [Authorize(Policy = Permissions.TestResultsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Domain.TestResults
+@using CaseIntake.Web.Services
+@inject ITestResultsService Results
+@inject ILogger<TestCases> Logger
+
+@* Every test known to the results store with its story, requirements and latest outcome (failures first). *@
+<PageShell Title="Test cases" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Quality assurance", "test-results")])" />
+<TestResultsTabs Current="cases" />
+
+<div class="card card--flush">
+    <form class="grid-toolbar" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter test cases" data-testid="case-filters">
+        <div class="field grid-toolbar__search">
+            <label class="field__label" for="testcase-search">Name, story or requirement</label>
+            <input id="testcase-search" type="search" @bind="_search" @bind:event="oninput" maxlength="200" autocomplete="off" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="testcase-module">Module</label>
+            <select id="testcase-module" @bind="_module">
+                <option value="">Any module</option>
+                @foreach (var module in _modules)
+                {
+                    <option value="@module">@module</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="testcase-type">Type</label>
+            <select id="testcase-type" @bind="_type">
+                <option value="">Any type</option>
+                @foreach (var type in Enum.GetValues<TestType>())
+                {
+                    <option value="@type">@TestResultsText.Type(type)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="testcase-outcome">Last status</label>
+            <select id="testcase-outcome" @bind="_outcome">
+                <option value="">Any status</option>
+                @foreach (var outcome in Enum.GetValues<TestOutcome>())
+                {
+                    <option value="@outcome">@TestResultsText.Outcome(outcome)</option>
+                }
+            </select>
+        </div>
+        <button type="submit" class="btn btn--primary"><Icon Name="filter" Small="true" /> Apply filters</button>
+    </form>
+
+    <ErrorAlert Message="@_error" TestId="cases-error" />
+
+    @if (_page is null && _loading)
+    {
+        <LoadingIndicator Text="Loading test cases…" />
+    }
+    else if (_page is { TotalCount: 0 })
+    {
+        <EmptyState Title="No test cases match" Message="Test cases appear here after the first run is imported." IconName="document" TestId="cases-empty" />
+    }
+    else if (_page is { } page)
+    {
+        <div class="table-wrap">
+            <table class="data-grid" data-testid="cases-table">
+                <caption>Test cases</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Test</th>
+                        <th scope="col">Last status</th>
+                        <th scope="col" class="desktop-only">Module</th>
+                        <th scope="col" class="desktop-only">Type</th>
+                        <th scope="col" class="desktop-only">Story</th>
+                        <th scope="col" class="desktop-only">Requirements</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var c in page.Items)
+                    {
+                        <tr>
+                            <td><a href="@TestResultsText.TestCaseHref(c.Id)">@c.Title</a></td>
+                            <td>
+                                @if (c.LastOutcome is { } last)
+                                {
+                                    <OutcomePill Outcome="last" />
+                                }
+                            </td>
+                            <td class="desktop-only">@c.Module</td>
+                            <td class="desktop-only">@TestResultsText.Type(c.Type)</td>
+                            <td class="desktop-only">@c.Story</td>
+                            <td class="desktop-only">@c.Requirements</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <PagerControl Page="_query.Page" PageSize="_query.PageSize" TotalCount="page.TotalCount" Noun="test cases" Label="Test case pages" OnPageChanged="PageAsync" />
+    }
+</div>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private TestCaseQuery _query = new();
+    private PagedList<TestCaseDto>? _page;
+    private IReadOnlyList<string> _modules = [];
+    private string? _search;
+    private string? _module;
+    private TestType? _type;
+    private TestOutcome? _outcome;
+    private bool _loading;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var modules = await Results.ListModulesAsync(_cts.Token);
+        _modules = modules.IsSuccess ? modules.Value! : [];
+        await LoadAsync();
+    }
+
+    private Task ApplyAsync()
+    {
+        _query = new TestCaseQuery(string.IsNullOrEmpty(_module) ? null : _module, _type, _outcome,
+            string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(), 1, _query.PageSize);
+        return LoadAsync();
+    }
+
+    private Task PageAsync(int page)
+    {
+        _query = _query with { Page = page };
+        return LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Results.ListTestCasesAsync(_query, _cts.Token);
+            _page = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5214, "TestCasesLoadFailed"), "Test case list load failed ({ExceptionType})", ex.GetType().Name);
+            _page = null;
+            _error = "The test cases could not be loaded. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}
