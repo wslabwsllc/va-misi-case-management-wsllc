@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Test results and evidence feature module (E5 test management): references Persistence, Domain and Contracts only;
+       never another feature module (plan 0.2). -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
+    <ProjectReference Include="..\CaseIntake.Domain\CaseIntake.Domain.csproj" />
+    <ProjectReference Include="..\CaseIntake.Contracts\CaseIntake.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaseIntake.IntegrationTests" />
+    <InternalsVisibleTo Include="CaseIntake.Web.Tests" />
+  </ItemGroup>
+</Project>

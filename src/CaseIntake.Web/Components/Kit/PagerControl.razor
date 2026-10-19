@@ -1,0 +1,53 @@
+@using CaseIntake.Web.Services
+@* Labelled Previous/Next paging with the range and page announced politely. Keeps focus on the pager when the
+   activated button becomes disabled (first or last page). *@
+<nav class="pager" aria-label="@Label">
+    <button type="button" class="btn" @ref="_previous" disabled="@(Page <= 1)" @onclick="PreviousAsync" aria-label="Go to previous page" data-testid="pager-previous">
+        <Icon Name="chevron-left" Small="true" /> Previous
+    </button>
+    <span class="pager__info" role="status" aria-live="polite">@UiText.ShowingRange(Page, PageSize, TotalCount, Noun) · Page @Page of @PageCount</span>
+    <button type="button" class="btn" @ref="_next" disabled="@(Page >= PageCount)" @onclick="NextAsync" aria-label="Go to next page" data-testid="pager-next">
+        Next <Icon Name="chevron-right" Small="true" />
+    </button>
+</nav>
+
+@code {
+    private ElementReference _previous;
+    private ElementReference _next;
+    private string? _moved;
+
+    [Parameter, EditorRequired] public int Page { get; set; }
+    [Parameter, EditorRequired] public int PageSize { get; set; }
+    [Parameter, EditorRequired] public int TotalCount { get; set; }
+    [Parameter] public string Noun { get; set; } = "items";
+    [Parameter] public string Label { get; set; } = "Pagination";
+    [Parameter, EditorRequired] public EventCallback<int> OnPageChanged { get; set; }
+
+    private int PageCount => TotalCount <= 0 ? 1 : (int)Math.Ceiling(TotalCount / (double)PageSize);
+
+    private Task PreviousAsync()
+    {
+        _moved = "previous";
+        return OnPageChanged.InvokeAsync(Math.Max(1, Page - 1));
+    }
+
+    private Task NextAsync()
+    {
+        _moved = "next";
+        return OnPageChanged.InvokeAsync(Math.Min(PageCount, Page + 1));
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var moved = _moved;
+        _moved = null;
+        if (moved == "next" && Page >= PageCount)
+        {
+            await _previous.FocusSafeAsync();
+        }
+        else if (moved == "previous" && Page <= 1)
+        {
+            await _next.FocusSafeAsync();
+        }
+    }
+}

@@ -1,0 +1,14 @@
+@inherits NavigationAwareBase
+
+@* "More" on phones: the full permitted site map in a bottom sheet (native dialog), plus sign-out. *@
+<ModalDialog @ref="_dialog" Id="more-sheet" Title="More" TestId="more-sheet">
+    <SiteMapList Groups="VisibleGroups" OnNavigate="CloseAsync" />
+</ModalDialog>
+
+@code {
+    private ModalDialog? _dialog;
+
+    public Task OpenAsync(Func<ValueTask> returnFocus) => _dialog?.OpenAsync(returnFocus) ?? Task.CompletedTask;
+
+    private Task CloseAsync() => _dialog?.CloseAsync() ?? Task.CompletedTask;
+}

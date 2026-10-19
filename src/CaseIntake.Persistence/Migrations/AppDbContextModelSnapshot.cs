@@ -221,6 +221,501 @@ namespace CaseIntake.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestArtifact", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("ContentType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("ExecutionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("Kind")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("Purged")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTimeOffset?>("PurgedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<long>("RunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Sha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<long>("SizeBytes")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId");
+
+                    b.HasIndex("RunId", "Kind");
+
+                    b.ToTable("TestArtifacts", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TestArtifact_Size", "\"SizeBytes\" >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestCase", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("AcceptanceCriteria")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("ExpectedResult")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateTimeOffset>("FirstSeenAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character(64)")
+                        .IsFixedLength();
+
+                    b.Property<int?>("LastOutcome")
+                        .HasColumnType("integer");
+
+                    b.Property<long?>("LastRunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Preconditions")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Priority")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Requirements")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<string>("Story")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.HasIndex("Module", "Type");
+
+                    b.ToTable("TestCases", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TestCase_Key_Hex", "\"Key\" ~ '^[0-9a-f]{64}$'");
+                        });
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestEnvironment", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("BaseUrl")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("OperatingSystem")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("Runtime")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("TestEnvironments", (string)null);
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestExecution", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("ActualResult")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Browser")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ConsoleLog")
+                        .HasMaxLength(64000)
+                        .HasColumnType("character varying(64000)");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("ErrorMessage")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("NetworkLog")
+                        .HasMaxLength(64000)
+                        .HasColumnType("character varying(64000)");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("RunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StackTrace")
+                        .HasMaxLength(64000)
+                        .HasColumnType("character varying(64000)");
+
+                    b.Property<string>("StandardOutput")
+                        .HasMaxLength(64000)
+                        .HasColumnType("character varying(64000)");
+
+                    b.Property<DateTimeOffset?>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("TestCaseId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Viewport")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RunId", "Outcome");
+
+                    b.HasIndex("RunId", "TestCaseId")
+                        .IsUnique();
+
+                    b.HasIndex("TestCaseId", "RunId");
+
+                    b.ToTable("TestExecutions", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TestExecution_Outcome", "\"Outcome\" BETWEEN 0 AND 4");
+                        });
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestExecutionHistoryRow", b =>
+                {
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ExecutionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("GitBranch")
+                        .HasColumnType("text");
+
+                    b.Property<string>("GitCommit")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Module")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("RunId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RunKey")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset>("RunStartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long>("TestCaseId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("TestTitle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.ToTable((string)null);
+
+                    b.ToView("TestExecutionHistory", (string)null);
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestResultAuditEntry", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("Actor")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("ActorId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<Guid?>("ArtifactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Details")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<DateTimeOffset>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<long?>("RunId")
+                        .HasColumnType("bigint");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OccurredAtUtc");
+
+                    b.ToTable("TestResultAuditEntries", (string)null);
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestRun", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<int>("Blocked")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("BuildId")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("EnvironmentId")
+                        .HasColumnType("bigint");
+
+                    b.Property<int>("Failed")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTimeOffset?>("FinishedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("GitBranch")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("GitCommit")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ImageVersion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<DateTimeOffset>("ImportedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ImportedBy")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("NotExecuted")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<int>("Passed")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("RunKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("Runner")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<int>("Skipped")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SourcePath")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.Property<DateTimeOffset>("StartedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("SuitesJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Total")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EnvironmentId");
+
+                    b.HasIndex("RunKey")
+                        .IsUnique();
+
+                    b.HasIndex("StartedAtUtc");
+
+                    b.ToTable("TestRuns", null, t =>
+                        {
+                            t.HasCheckConstraint("CK_TestRun_Counts_NonNegative", "\"Total\" >= 0 AND \"Passed\" >= 0 AND \"Failed\" >= 0 AND \"Skipped\" >= 0 AND \"Blocked\" >= 0 AND \"NotExecuted\" >= 0");
+
+                            t.HasCheckConstraint("CK_TestRun_Status", "\"Status\" BETWEEN 0 AND 2");
+                        });
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestStepResult", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bigint");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<long>("Id"));
+
+                    b.Property<string>("Actual")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("bigint");
+
+                    b.Property<long>("ExecutionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("Expected")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Message")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)");
+
+                    b.Property<int>("Order")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Outcome")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ExecutionId", "Order")
+                        .IsUnique();
+
+                    b.ToTable("TestStepResults", (string)null);
+                });
+
             modelBuilder.Entity("CaseIntake.Persistence.AppRole", b =>
                 {
                     b.Property<string>("Id")
@@ -439,6 +934,59 @@ namespace CaseIntake.Persistence.Migrations
                     b.Navigation("Case");
                 });
 
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestArtifact", b =>
+                {
+                    b.HasOne("CaseIntake.Domain.TestResults.TestExecution", null)
+                        .WithMany("Artifacts")
+                        .HasForeignKey("ExecutionId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.HasOne("CaseIntake.Domain.TestResults.TestRun", null)
+                        .WithMany()
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestExecution", b =>
+                {
+                    b.HasOne("CaseIntake.Domain.TestResults.TestRun", "Run")
+                        .WithMany("Executions")
+                        .HasForeignKey("RunId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("CaseIntake.Domain.TestResults.TestCase", "TestCase")
+                        .WithMany()
+                        .HasForeignKey("TestCaseId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Run");
+
+                    b.Navigation("TestCase");
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestRun", b =>
+                {
+                    b.HasOne("CaseIntake.Domain.TestResults.TestEnvironment", "Environment")
+                        .WithMany()
+                        .HasForeignKey("EnvironmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Environment");
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestStepResult", b =>
+                {
+                    b.HasOne("CaseIntake.Domain.TestResults.TestExecution", null)
+                        .WithMany("Steps")
+                        .HasForeignKey("ExecutionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<string>", b =>
                 {
                     b.HasOne("CaseIntake.Persistence.AppRole", null)
@@ -488,6 +1036,18 @@ namespace CaseIntake.Persistence.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestExecution", b =>
+                {
+                    b.Navigation("Artifacts");
+
+                    b.Navigation("Steps");
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.TestResults.TestRun", b =>
+                {
+                    b.Navigation("Executions");
                 });
 #pragma warning restore 612, 618
         }

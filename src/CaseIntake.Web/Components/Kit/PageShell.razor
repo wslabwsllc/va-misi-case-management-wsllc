@@ -1,0 +1,37 @@
+@using CaseIntake.Web.Services
+@inject ShellState Shell
+
+@* Every page starts with this: a unique document title, the page h1 (the focus target after navigation), the
+   breadcrumb and mobile back target shown by the layout, and optional actions next to the heading. *@
+<PageTitle>@UiText.DocumentTitle(DocumentTitle ?? Title)</PageTitle>
+<div class="page-header">
+    <div class="page-header__titles">
+        <h1 tabindex="-1" id="page-title">@Title</h1>
+        @if (!string.IsNullOrEmpty(Subtitle))
+        {
+            <p class="page-header__subtitle">@Subtitle</p>
+        }
+    </div>
+    @Actions
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+
+    /// <summary>Overrides the document title when it should differ from the h1 (for example while loading).</summary>
+    [Parameter] public string? DocumentTitle { get; set; }
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Ancestors of this page (the current page is appended automatically).</summary>
+    [Parameter] public IReadOnlyList<Crumb> Breadcrumbs { get; set; } = [];
+
+    /// <summary>The mobile back button target; defaults to the nearest ancestor breadcrumb with a link.</summary>
+    [Parameter] public string? BackHref { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        IReadOnlyList<Crumb> crumbs = [.. Breadcrumbs, new Crumb(Title)];
+        Shell.Set(Title, crumbs, BackHref ?? Breadcrumbs.LastOrDefault(c => c.Href is not null)?.Href);
+    }
+}

@@ -1,5 +1,6 @@
 using CaseIntake.Domain.Attachments;
 using CaseIntake.Domain.Cases;
+using CaseIntake.Domain.TestResults;
 using CaseIntake.Persistence.Auditing;
 using CaseIntake.Persistence.Conventions;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
@@ -18,6 +19,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     public DbSet<Case> Cases => Set<Case>();
     public DbSet<CaseAuditEntry> CaseAuditEntries => Set<CaseAuditEntry>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+
+    // Test results and evidence (E5 test management).
+    public DbSet<TestEnvironment> TestEnvironments => Set<TestEnvironment>();
+    public DbSet<TestRun> TestRuns => Set<TestRun>();
+    public DbSet<TestCase> TestCases => Set<TestCase>();
+    public DbSet<TestExecution> TestExecutions => Set<TestExecution>();
+    public DbSet<TestStepResult> TestStepResults => Set<TestStepResult>();
+    public DbSet<TestArtifact> TestArtifacts => Set<TestArtifact>();
+    public DbSet<TestResultAuditEntry> TestResultAuditEntries => Set<TestResultAuditEntry>();
+    public DbSet<TestExecutionHistoryRow> TestExecutionHistory => Set<TestExecutionHistoryRow>();
 
     // Every SaveChanges overload funnels into these two; the audit trail is append-only (E2-S4).
     public override int SaveChanges(bool acceptAllChangesOnSuccess)

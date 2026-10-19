@@ -1,0 +1,63 @@
+@page "/notifications"
+@attribute [Authorize(Policy = Permissions.CasesView)]
+@implements IDisposable
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Web.Services
+@using Microsoft.Extensions.Options
+@inject CaseDashboardService Dashboard
+@inject IOptions<DashboardOptions> Options
+
+@* Notifications: recent activity on the cases the user can see (updates in the last N days, newest first). The app has
+   no push or per-user notification store, so this is a live view of case activity, not a message inbox. *@
+<PageShell Title="Notifications" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="@($"Cases updated in the last {Options.Value.RecentActivityDays} days, newest first.")" />
+
+<ErrorAlert Message="@_error" TestId="notifications-error" />
+
+@if (_items is null && _error is null)
+{
+    <LoadingIndicator Text="Loading recent activity…" />
+}
+else if (_items is { Count: 0 })
+{
+    <div class="card"><EmptyState Title="No recent activity" Message="No case was updated recently." IconName="bell" TestId="notifications-empty" /></div>
+}
+else if (_items is { } items)
+{
+    <div class="card card--flush">
+        <ul class="record-list" aria-label="Recent case activity" data-testid="notifications-list">
+            @foreach (var c in items)
+            {
+                <li class="record-card">
+                    <div class="record-card__top">
+                        <div class="record-card__title"><a href="@($"cases/{c.Id}")">@c.Title</a></div>
+                        <StatusPill Status="c.Status" />
+                    </div>
+                    <div class="record-card__meta">
+                        <span>Case @c.Id</span>
+                        <span>Updated @UiText.Utc(c.UpdatedAtUtc)</span>
+                    </div>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<CaseSummaryDto>? _items;
+    private string? _error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var result = await Dashboard.RecentActivityAsync(50, _cts.Token);
+        _items = result.IsSuccess ? result.Value : null;
+        _error = result.IsSuccess ? null : result.Error!.Message;
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

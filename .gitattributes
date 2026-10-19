@@ -1,0 +1,5 @@
+# Shell scripts run inside Linux containers: always check them out with LF line endings, whatever core.autocrlf says.
+# (With CRLF the container health check and the tests service failed with "/usr/bin/env: 'bash\r'".)
+*.sh text eol=lf
+Dockerfile text eol=lf
+*.yml text eol=lf

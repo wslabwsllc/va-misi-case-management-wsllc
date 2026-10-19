@@ -1,0 +1,49 @@
+@inherits LabeledTextInputBase
+
+<div class="field">
+    <label class="field__label" for="@Id">
+        @Label
+        @if (Required)
+        {
+            <span class="field__required"> (required)</span>
+        }
+    </label>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <span class="field__hint" id="@HintId">@Hint</span>
+    }
+    <input @attributes="AdditionalAttributes"
+           @ref="InputElement"
+           id="@Id"
+           name="@NameAttributeValue"
+           type="@Type"
+           class="@CssClass"
+           @bind="CurrentValueAsString"
+           @bind:event="oninput"
+           @bind:after="AfterInput"
+           inputmode="@InputMode"
+           autocomplete="@AutoComplete"
+           spellcheck="@(Spellcheck ? "true" : "false")"
+           aria-required="@(Required ? "true" : null)"
+           aria-invalid="@(IsInvalid ? "true" : null)"
+           aria-describedby="@DescribedBy" />
+    @if (IsInvalid)
+    {
+        <div class="field__error" id="@ErrorId">
+            <Icon Name="error" Small="true" />
+            <span>@string.Join(" ", Errors)</span>
+        </div>
+    }
+    @if (MaxCharacters is not null)
+    {
+        <span class="field__counter @(IsOverLimit ? "field__counter--over" : null)" id="@CounterId">@CounterText</span>
+        <span class="visually-hidden" role="status" aria-live="polite">@AnnouncedCount</span>
+    }
+</div>
+
+@code {
+    [Parameter] public string Type { get; set; } = "text";
+    [Parameter] public string? InputMode { get; set; }
+    [Parameter] public string? AutoComplete { get; set; }
+    [Parameter] public bool Spellcheck { get; set; } = true;
+}

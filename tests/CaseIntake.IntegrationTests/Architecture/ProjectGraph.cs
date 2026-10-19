@@ -5,7 +5,7 @@ namespace CaseIntake.IntegrationTests.Architecture;
 /// <summary>Project reference graph read from the csproj files, plus the dependency rules from plan section 0.2.</summary>
 public sealed class ProjectGraph(IReadOnlyDictionary<string, ProjectNode> projects)
 {
-    private static readonly string[] FeatureModules = ["Cases", "Identity", "Attachments", "VeteranLookup.Client"];
+    private static readonly string[] FeatureModules = ["Cases", "Identity", "Attachments", "VeteranLookup.Client", "TestResults"];
     private static readonly string[] ForbiddenInCore = ["Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore.Identity", "Npgsql"];
 
     public IReadOnlyDictionary<string, ProjectNode> Projects => projects;

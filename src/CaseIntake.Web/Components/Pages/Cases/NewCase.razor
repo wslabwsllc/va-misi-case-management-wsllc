@@ -1,0 +1,355 @@
+@page "/cases/new"
+@attribute [Authorize(Policy = Permissions.CasesCreate)]
+@implements IDisposable
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Contracts.VeteranLookup
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@inject ICaseService Cases
+@inject IVeteranLookupClient VeteranLookup
+@inject StatusAnnouncer Announcer
+@inject NavigationManager Navigation
+@inject ILogger<NewCase> Logger
+
+@* Case intake (E5-S4). Validation uses the shared CaseRequestValidator, so the messages are exactly the server's. The
+   optional veteran lookup is a separate form (Enter in the SSN box looks up instead of creating the case). The SSN is
+   cleared after every completed lookup; only the last four digits of a found veteran are kept, and only if the user
+   chooses "Use this veteran". A new or failed lookup clears any previously selected veteran. *@
+<PageShell Title="New case" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])"
+           Subtitle="Fields marked (required) must be completed." />
+
+<ErrorAlert @ref="_submitAlert" Title="@(_submitError is null ? null : "The case was not created")" Message="@_submitError" TestId="intake-error" />
+
+<div class="grid grid--main-side">
+    <div class="card">
+        <EditForm EditContext="_editContext" OnSubmit="SubmitAsync" id="intake-form" novalidate class="form" data-testid="intake-form">
+            <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" />
+            <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title"
+                              Hint="@($"A short summary, {CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
+                              MaxCharacters="CaseFieldLimits.TitleMaxLength" />
+            <LabeledTextArea Id="intake-description" Label="Description" @bind-Value="_model.Description" Rows="8"
+                             Hint="@($"Details of the request, up to {CaseFieldLimits.DescriptionMaxLength:N0} characters.")"
+                             MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
+        </EditForm>
+    </div>
+
+    <AuthorizeView Policy="@Permissions.VeteranLookup">
+        <Authorized>
+            <section class="card" aria-labelledby="lookup-heading" data-testid="lookup-section">
+                <div class="card__header"><h2 id="lookup-heading">Veteran lookup (optional)</h2></div>
+                <p class="page-header__subtitle">Look up a veteran to attach their name and address to the case. You can create the case without a lookup.</p>
+                <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
+                    <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
+                                      Hint="Nine digits, with or without dashes (NNN-NN-NNNN). It is used for this lookup only and is not saved."
+                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" />
+                    <button type="submit" class="btn" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
+                        @if (_lookingUp)
+                        {
+                            <span class="spinner" aria-hidden="true"></span>
+                        }
+                        Look up veteran
+                    </button>
+                </EditForm>
+
+                @* Found and Not found are announced politely; problems use the alert region below. *@
+                <div role="status" aria-live="polite" class="mt-4" data-testid="lookup-status">
+                    @if (_lookupMessage is not null)
+                    {
+                        <p class="message message--info"><Icon Name="info" /><span class="message__body">@_lookupMessage</span></p>
+                    }
+                </div>
+                <ErrorAlert Message="@_lookupProblem" Severity="@_lookupProblemSeverity" TestId="lookup-alert" />
+
+                @if (_found is { } found)
+                {
+                    <div class="message message--success" data-testid="lookup-result">
+                        <Icon Name="person" />
+                        <div class="message__body">
+                            <p class="message__title">@found.Name</p>
+                            <p class="pre-wrap">@found.Address</p>
+                            <p>SSN ending @found.SsnLast4</p>
+                            <button type="button" class="btn btn--primary" @onclick="UseVeteranAsync" data-testid="use-veteran">Use this veteran</button>
+                        </div>
+                    </div>
+                }
+                @if (_selected is { } selected)
+                {
+                    <div class="message message--success" data-testid="selected-veteran">
+                        <Icon Name="success" />
+                        <div class="message__body">
+                            <p class="message__title">Veteran attached to this case</p>
+                            <p>@selected.Name, SSN ending @selected.SsnLast4</p>
+                            <button type="button" class="btn" @onclick="RemoveVeteran" @ref="_removeButton">Remove veteran</button>
+                        </div>
+                    </div>
+                }
+            </section>
+        </Authorized>
+    </AuthorizeView>
+</div>
+
+<div class="form-actions">
+    <button type="submit" form="intake-form" class="btn btn--primary" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="create-case">
+        @if (_submitting)
+        {
+            <span class="spinner" aria-hidden="true"></span>
+            <span>Creating case…</span>
+        }
+        else
+        {
+            <span>Create case</span>
+        }
+    </button>
+    <a class="btn" href="cases">Cancel</a>
+</div>
+
+@code {
+    private sealed class IntakeModel
+    {
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+    }
+
+    private sealed class LookupModel
+    {
+        public string? Ssn { get; set; }
+    }
+
+    private static readonly IReadOnlyList<KeyValuePair<string, string>> SummaryFields =
+    [
+        new(CaseFieldNames.Title, "intake-title"),
+        new(CaseFieldNames.Description, "intake-description"),
+    ];
+
+    private readonly CancellationTokenSource _cts = new();
+    private readonly IntakeModel _model = new();
+    private readonly LookupModel _lookupModel = new();
+    private EditContext _editContext = default!;
+    private EditContext _lookupContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private ValidationMessageStore _lookupMessages = default!;
+    private FormErrorSummary? _summary;
+    private ErrorAlert? _submitAlert;
+    private LabeledInputText? _ssnInput;
+    private ElementReference _removeButton;
+    private bool _showSummary;
+    private bool _focusSummary;
+    private bool _focusSubmitAlert;
+    private bool _focusSelected;
+    private bool _submitting;
+    private bool _lookingUp;
+    private string? _submitError;
+    private List<string> _formMessages = [];
+    private string? _lookupMessage;
+    private string? _lookupProblem;
+    private string _lookupProblemSeverity = "warning";
+    private VeteranSnapshot? _found;
+    private VeteranSnapshot? _selected;
+
+    protected override void OnInitialized()
+    {
+        _editContext = new EditContext(_model);
+        _messages = new ValidationMessageStore(_editContext);
+        _lookupContext = new EditContext(_lookupModel);
+        _lookupMessages = new ValidationMessageStore(_lookupContext);
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_submitting)
+        {
+            return;   // no double submit
+        }
+        _submitError = null;
+        var request = new CreateCaseRequest(_model.Title ?? string.Empty, _model.Description, _selected);
+        if (CaseRequestValidator.Validate(request) is { } invalid)
+        {
+            ShowValidation(invalid);
+            return;
+        }
+
+        _submitting = true;
+        try
+        {
+            var result = await Cases.CreateAsync(request, _cts.Token);
+            if (result.IsSuccess)
+            {
+                ClearValidation();
+                Announcer.Announce($"Case {result.Value!.Id} created");
+                Navigation.NavigateTo($"cases/{result.Value.Id}");
+                return;
+            }
+
+            if (result.Error!.Kind == ErrorKind.Validation && result.Error.FieldErrors is { Count: > 0 })
+            {
+                ShowValidation(result.Error);
+            }
+            else
+            {
+                ShowSubmitError(result.Error.Message);
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5003, "CaseIntakeFailed"), "Case intake failed ({ExceptionType})", ex.GetType().Name);
+            ShowSubmitError("Something went wrong and the case was not saved. Your entries are kept; try again.");
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    /// <summary>Maps <see cref="Error.FieldErrors"/> into the ValidationMessageStore (E5-S2) and focuses the summary.</summary>
+    private void ShowValidation(Error error)
+    {
+        _messages.Clear();
+        _formMessages = [];
+        foreach (var (field, fieldMessages) in error.FieldErrors ?? new Dictionary<string, string[]>())
+        {
+            if (field is CaseFieldNames.Title or CaseFieldNames.Description)
+            {
+                _messages.Add(new FieldIdentifier(_model, field), fieldMessages);
+            }
+            else
+            {
+                // Veteran snapshot problems (from lookup data) are not tied to an input on this form.
+                _formMessages.AddRange(fieldMessages.Select(m => $"Veteran: {m}"));
+            }
+        }
+        _showSummary = true;
+        _focusSummary = true;
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void ClearValidation()
+    {
+        _messages.Clear();
+        _formMessages = [];
+        _showSummary = false;
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    private void ShowSubmitError(string message)
+    {
+        _submitError = message;
+        _focusSubmitAlert = true;
+    }
+
+    private async Task LookUpAsync()
+    {
+        if (_lookingUp)
+        {
+            return;
+        }
+        // A new lookup clears the previous result and any selected veteran, so a stale result cannot be attached.
+        _found = null;
+        _selected = null;
+        _lookupMessage = null;
+        _lookupProblem = null;
+        _lookupMessages.Clear();
+        _lookupContext.NotifyValidationStateChanged();
+
+        var ssn = _lookupModel.Ssn ?? string.Empty;
+        var digits = new string(ssn.Where(char.IsAsciiDigit).ToArray());
+        _lookingUp = true;
+        try
+        {
+            var result = await VeteranLookup.LookupAsync(ssn, _cts.Token);
+            switch (result.Outcome)
+            {
+                case VeteranLookupOutcome.Found when result.Name is not null && result.Address is not null && digits.Length == 9:
+                    _found = new VeteranSnapshot(result.Name, result.Address, digits[^4..]);
+                    _lookupMessage = $"Veteran found: {result.Name}. Review the details and choose Use this veteran to attach them.";
+                    break;
+                case VeteranLookupOutcome.NotFound:
+                    _lookupMessage = "Not found: no veteran matches that SSN. Check the number or continue without a lookup.";
+                    break;
+                case VeteranLookupOutcome.InvalidInput:
+                    _lookupMessages.Add(new FieldIdentifier(_lookupModel, nameof(LookupModel.Ssn)), "Enter a valid SSN: nine digits, or NNN-NN-NNNN.");
+                    ShowLookupProblem("Invalid SSN format. Enter nine digits, or NNN-NN-NNNN, and look up again.", "error");
+                    break;
+                case VeteranLookupOutcome.Forbidden:
+                    ShowLookupProblem("Access denied: your role is not allowed to look up veterans.", "error");
+                    break;
+                default:
+                    ShowLookupProblem("The veteran lookup service is unavailable right now. You can continue the intake without it and try again later.", "warning");
+                    break;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5004, "VeteranLookupUiFailed"), "Veteran lookup from intake failed ({ExceptionType})", ex.GetType().Name);
+            ShowLookupProblem("The veteran lookup service is unavailable right now. You can continue the intake without it and try again later.", "warning");
+        }
+        finally
+        {
+            // The SSN is never kept after a completed attempt (only the found veteran's last four digits).
+            _lookupModel.Ssn = null;
+            _lookingUp = false;
+            _lookupContext.NotifyValidationStateChanged();
+        }
+    }
+
+    private void ShowLookupProblem(string message, string severity)
+    {
+        _lookupProblem = message;
+        _lookupProblemSeverity = severity;
+    }
+
+    private void UseVeteranAsync()
+    {
+        if (_found is null)
+        {
+            return;
+        }
+        _selected = _found;
+        _found = null;
+        _lookupMessage = null;
+        _focusSelected = true;
+        Announcer.Announce($"{_selected.Name} will be attached to the case.");
+    }
+
+    private async Task RemoveVeteran()
+    {
+        _selected = null;
+        Announcer.Announce("Veteran removed from the case.");
+        if (_ssnInput is not null)
+        {
+            await _ssnInput.FocusAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusSummary && _summary is not null)
+        {
+            _focusSummary = false;
+            await _summary.FocusAsync();
+        }
+        if (_focusSelected)
+        {
+            _focusSelected = false;
+            await _removeButton.FocusAsync();
+        }
+        if (_focusSubmitAlert && _submitAlert is not null)
+        {
+            _focusSubmitAlert = false;
+            await _submitAlert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

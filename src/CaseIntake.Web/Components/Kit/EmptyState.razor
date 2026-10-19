@@ -1,0 +1,18 @@
+@* A meaningful empty state: what is missing and what to do next. *@
+<div class="empty-state" data-testid="@TestId">
+    <Icon Name="@IconName" />
+    <h3>@Title</h3>
+    @if (!string.IsNullOrEmpty(Message))
+    {
+        <p>@Message</p>
+    }
+    @ChildContent
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Message { get; set; }
+    [Parameter] public string IconName { get; set; } = "empty";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string TestId { get; set; } = "empty-state";
+}

@@ -7,6 +7,9 @@ public static class AppRoles
 {
     public const string CaseWorker = "CaseWorker";
     public const string Supervisor = "Supervisor";
+
+    /// <summary>Quality assurance: reads cases and owns the test results and evidence module (E5 test results).</summary>
+    public const string QualityAnalyst = "QualityAnalyst";
 }
 
 public static class Permissions
@@ -14,6 +17,13 @@ public static class Permissions
     public const string CasesView = "cases.view", CasesCreate = "cases.create", CasesEdit = "cases.edit";
     public const string AttachmentsUpload = "attachments.upload", AttachmentsDownload = "attachments.download";
     public const string VeteranLookup = "veteran.lookup";
+
+    /// <summary>View test results, evidence (screenshots, traces, logs) and exports.</summary>
+    public const string TestResultsView = "testresults.view";
+
+    /// <summary>Import executed test runs into the results store (runs are executed by the documented test command).</summary>
+    public const string TestResultsManage = "testresults.manage";
+
     public static string Transition(CaseStatus from, CaseStatus to) => $"cases.transition.{from}.{to}";
 }
 

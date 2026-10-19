@@ -1,0 +1,36 @@
+# Accessibility review record (E5-S9)
+
+Target: WCAG 2.2 AA as the engineering yardstick for the primary workflow (A10). axe-core checks a subset of WCAG and
+cannot establish conformance; this record combines automated evidence with manual review. A check is marked done only
+when it was actually performed; open items are listed, not waived.
+
+## Automated evidence
+
+| Check | How | Result |
+|---|---|---|
+| axe-core, tags `wcag2a wcag2aa wcag21a wcag21aa wcag22aa` | `CaseIntake.E2E` scans sign-in, dashboard, case list, new case (with errors), case detail (also with a conflict), status dialog, access denied, Not Found, test run and execution detail, phone dashboard and new case, tablet and desktop list | see the latest run in Test results and [verification.md](verification.md) |
+| Keyboard workflow | `PrimaryWorkflowTests` drives the whole primary workflow with Tab/Enter/Space/Esc and asserts focus after each step (skip link, h1 after navigation, error summary, Title on edit, Edit after cancel/save, status heading after a change, trigger after a cancelled dialog, file input after a rejected upload) | as above |
+| Labels, `aria-invalid`, `aria-describedby`, live regions, focus calls | `CaseIntake.Web.Tests` (bUnit) | as above |
+| Reflow and touch targets | responsive tests at 375x812, 390x844, 768x1024, 1440x900: no horizontal overflow, bottom-bar targets >= 44x44 px | as above |
+| Contrast | design tokens chosen at >= 4.5:1 for text and >= 3:1 for UI and focus (app.css comments); axe `color-contrast` | as above |
+
+## Manual review (to be performed and signed off by a reviewer)
+
+| Check | Status | Notes |
+|---|---|---|
+| Native file picker opened and operated by keyboard (Space/Enter on the file input, choose a file, Upload) | Not yet performed | automated tests use programmatic file selection (`SetInputFiles`), which bypasses the native picker |
+| Download prompt/behaviour with the keyboard (Enter on Download) | Not yet performed | automated test verifies the downloaded bytes, not the browser prompt |
+| Screen-reader spot check (NVDA + Chrome or VoiceOver + Safari): field labels and hints, error summary, "Showing ... cases", "Case N created", "Status changed to ...", lookup outcomes, upload errors, reconnect dialog | Not yet performed | |
+| Zoom 200% and 400% (reflow at 320 CSS px) on dashboard, list, intake, detail | Not yet performed | 375 px automated only |
+| Visible focus on every control in light conditions and Windows high-contrast mode | Not yet performed | focus style: 2 px black outline with white ring; forced-colors rules in app.css |
+| Empty, loading and error states read sensibly | Not yet performed | automated: bUnit for dashboard and list states |
+| Reconnect: stop `web` while a page is open (`docker compose stop web`), observe and hear the reconnect dialog, start it again | Not yet performed | |
+| iOS Safari and Android Chrome on real devices (safe areas, keyboard types, bottom bar) | Not yet performed | Chromium device emulation only in automation |
+
+## Known limitations
+
+- On phones the signed-in name and role are in the profile sheet; the app bar shows initials whose accessible name
+  includes the user (ADR 0011).
+- Charts are SVG images with a text summary and a data table; the bars themselves are not individually focusable.
+- A direct page load leaves focus at the start of the document (so the skip link is first); focus moves to the h1
+  after in-app navigation (ADR 0011).

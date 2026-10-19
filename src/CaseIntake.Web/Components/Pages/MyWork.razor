@@ -1,0 +1,111 @@
+@page "/my-work"
+@attribute [Authorize(Policy = Permissions.CasesView)]
+@implements IDisposable
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Contracts.Security
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@inject ICaseService Cases
+@inject CaseDashboardService Dashboard
+@inject ICaseWorkflow Workflow
+@inject ICurrentUser CurrentUser
+@inject NavigationManager Navigation
+
+@* My tasks: cases waiting for a status change the signed-in user's role may make, longest waiting first. Cases have no
+   assignee, so "my work" is defined by the user's transition permissions (ADR 0011). Server-side paging. *@
+<PageShell Title="My tasks" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="Cases waiting for a status change your role can make, longest waiting first." />
+
+<ErrorAlert Message="@_error" TestId="mywork-error" />
+<p class="visually-hidden" role="status" aria-live="polite">@_announcement</p>
+
+@if (_loading && _page is null)
+{
+    <LoadingIndicator Text="Loading your tasks…" />
+}
+else if (_actionable.Count == 0)
+{
+    <div class="card">
+        <EmptyState Title="No tasks for your role" Message="Your role does not change case statuses, so no case waits on you." IconName="tasks" TestId="mywork-none" />
+    </div>
+}
+else if (_page is { } page)
+{
+    <div class="card card--flush">
+        @if (page.TotalCount == 0)
+        {
+            <EmptyState Title="You're all caught up" Message="No case is waiting for an action you can take." IconName="success" TestId="mywork-empty" />
+        }
+        else
+        {
+            <ul class="record-list" aria-label="Cases waiting for you" data-testid="mywork-list">
+                @foreach (var c in page.Items)
+                {
+                    <li class="record-card">
+                        <div class="record-card__top">
+                            <div class="record-card__title"><a href="@($"cases/{c.Id}")">@c.Title</a></div>
+                            <StatusPill Status="c.Status" Large="true" />
+                        </div>
+                        <div class="record-card__meta">
+                            <span>Case @c.Id</span>
+                            <span>Next step: @NextStep(c.Status)</span>
+                            <span>Waiting since @UiText.Utc(c.UpdatedAtUtc)</span>
+                        </div>
+                    </li>
+                }
+            </ul>
+            <nav class="pager" aria-label="Pagination">
+                <a class="btn" href="@PageHref(_pageNumber - 1)" aria-disabled="@(_pageNumber <= 1 ? "true" : null)"
+                   aria-label="Go to previous page" @onclick:preventDefault="@(_pageNumber <= 1)">Previous</a>
+                <span class="pager__info">@UiText.ShowingRange(_pageNumber, PageSize, page.TotalCount, "cases") · Page @_pageNumber of @PageCount</span>
+                <a class="btn" href="@PageHref(_pageNumber + 1)" aria-disabled="@(_pageNumber >= PageCount ? "true" : null)"
+                   aria-label="Go to next page" @onclick:preventDefault="@(_pageNumber >= PageCount)">Next</a>
+            </nav>
+        }
+    </div>
+}
+
+@code {
+    private const int PageSize = 25;
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlySet<CaseStatus> _actionable = new HashSet<CaseStatus>();
+    private OperationActor? _actor;
+    private PagedResult<CaseSummaryDto>? _page;
+    private bool _loading = true;
+    private string? _error;
+    private string? _announcement;
+    private int _pageNumber = 1;
+
+    [SupplyParameterFromQuery(Name = "page")] private int? QueryPage { get; set; }
+
+    private int PageCount => _page is { TotalCount: > 0 } p ? (int)Math.Ceiling(p.TotalCount / (double)PageSize) : 1;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _pageNumber = QueryPage is >= 1 ? QueryPage.Value : 1;
+        _loading = true;
+        _error = null;
+        _actor = await CurrentUser.GetAsync(_cts.Token);
+        _actionable = await Dashboard.ActionableStatusesAsync(_cts.Token);
+        if (_actionable.Count > 0)
+        {
+            var result = await Cases.ListAsync(new CaseListQuery(_pageNumber, PageSize, [.. _actionable], null, CaseSortField.UpdatedAt, SortDirection.Ascending), _cts.Token);
+            _page = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+            _announcement = _page is null ? null : $"{_page.TotalCount} cases are waiting for you. Page {_pageNumber} of {PageCount}.";
+        }
+        _loading = false;
+    }
+
+    private string NextStep(CaseStatus status) => string.Join(" or ", Workflow.NextStatuses(status)
+        .Where(to => _actor?.HasPermission(Permissions.Transition(status, to)) == true)
+        .Select(to => UiText.TransitionLabel(status, to)));
+
+    private string PageHref(int page) => Navigation.GetUriWithQueryParameter("page", page <= 1 ? null : page);
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

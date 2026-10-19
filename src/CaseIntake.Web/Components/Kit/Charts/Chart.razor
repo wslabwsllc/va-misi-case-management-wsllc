@@ -1,0 +1,242 @@
+@using System.Globalization
+@* Server-rendered SVG chart (no JavaScript, nothing to dispose). Accessible by construction: the figure has a caption,
+   the SVG is role="img" with a generated text summary of every value, bars carry value labels so colour is never the
+   only cue, multi-series charts have a legend, and an expandable data table holds the same numbers. The viewBox
+   scales to the container width, so the same chart works on desktop and phone widths. *@
+<figure class="chart" aria-labelledby="@CaptionId" data-testid="@TestId">
+    <figcaption id="@CaptionId">@Title</figcaption>
+    @if (!string.IsNullOrEmpty(Description))
+    {
+        <p class="chart__desc">@Description</p>
+    }
+    @if (Categories.Count == 0 || Series.Count == 0 || Series.All(s => s.Values.All(v => v == 0)))
+    {
+        <p class="chart-unavailable" data-testid="chart-empty"><Icon Name="info" /> <span>@EmptyText</span></p>
+    }
+    else
+    {
+        <svg viewBox="0 0 @Width.ToString(CultureInfo.InvariantCulture) @Height.ToString(CultureInfo.InvariantCulture)" role="img" aria-labelledby="@SvgTitleId @SvgDescId" preserveAspectRatio="xMidYMid meet">
+            <title id="@SvgTitleId">@Title</title>
+            <desc id="@SvgDescId">@Summary</desc>
+            @if (Kind == ChartKind.Bar)
+            {
+                @RenderBars()
+            }
+            else
+            {
+                @RenderColumnsOrLines()
+            }
+        </svg>
+        @if (Series.Count > 1)
+        {
+            <ul class="chart-legend" aria-label="Legend">
+                @foreach (var series in Series)
+                {
+                    <li><span class="chart-legend__swatch" style="background: var(@series.ColorVar)"></span>@series.Name</li>
+                }
+            </ul>
+        }
+        <details class="chart-data">
+            <summary>Show data table<span class="visually-hidden">@(" for " + Title)</span></summary>
+            <div class="table-wrap">
+                <table class="data-grid">
+                    <caption class="visually-hidden">@Title</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">@CategoryHeader</th>
+                            @foreach (var series in Series)
+                            {
+                                <th scope="col" class="num">@series.Name</th>
+                            }
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @for (var i = 0; i < Categories.Count; i++)
+                        {
+                            var index = i;
+                            <tr>
+                                <th scope="row">@Categories[index]</th>
+                                @foreach (var series in Series)
+                                {
+                                    <td class="num">@Format(series.Values[index])</td>
+                                }
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </details>
+    }
+</figure>
+
+@code {
+    private const double Left = 44, Right = 12, Top = 16, Bottom = 40;
+
+    [Parameter, EditorRequired] public string Id { get; set; } = "chart";
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<string> Categories { get; set; } = [];
+    [Parameter, EditorRequired] public IReadOnlyList<ChartSeries> Series { get; set; } = [];
+    [Parameter] public ChartKind Kind { get; set; } = ChartKind.Column;
+    [Parameter] public bool Stacked { get; set; }
+    [Parameter] public Func<double, string> Format { get; set; } = ChartFormat.Integer;
+    [Parameter] public string CategoryHeader { get; set; } = "Category";
+    [Parameter] public string EmptyText { get; set; } = "No data to chart yet.";
+    [Parameter] public double Width { get; set; } = 420;
+    [Parameter] public string? TestId { get; set; }
+
+    private string CaptionId => $"{Id}-caption";
+    private string SvgTitleId => $"{Id}-svg-title";
+    private string SvgDescId => $"{Id}-svg-desc";
+
+    private double Height => Kind == ChartKind.Bar ? Top + Bottom / 2 + (Categories.Count * 30) : 240;
+
+    private string Summary => string.Join("; ", Enumerable.Range(0, Categories.Count).Select(i =>
+        Series.Count == 1
+            ? $"{Categories[i]}: {Format(Series[0].Values[i])}"
+            : $"{Categories[i]}: " + string.Join(", ", Series.Select(s => $"{s.Name} {Format(s.Values[i])}")))) + ".";
+
+    private double MaxValue => Stacked
+        ? Enumerable.Range(0, Categories.Count).Select(i => Series.Sum(s => s.Values[i])).DefaultIfEmpty(0).Max()
+        : Series.SelectMany(s => s.Values).DefaultIfEmpty(0).Max();
+
+    private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private RenderFragment RenderColumnsOrLines() => builder =>
+    {
+        var max = ChartFormat.NiceMax(MaxValue);
+        var plotW = Width - Left - Right;
+        var plotH = Height - Top - Bottom;
+        var seq = 0;
+        // Grid lines and y-axis labels (0, 25, 50, 75, 100 % of the nice maximum).
+        for (var g = 0; g <= 4; g++)
+        {
+            var value = max * g / 4;
+            var y = Top + plotH - (plotH * g / 4);
+            builder.OpenElement(seq++, "line");
+            builder.AddAttribute(seq++, "class", g == 0 ? "chart__axis" : "chart__gridline");
+            builder.AddAttribute(seq++, "x1", N(Left)); builder.AddAttribute(seq++, "x2", N(Width - Right));
+            builder.AddAttribute(seq++, "y1", N(y)); builder.AddAttribute(seq++, "y2", N(y));
+            builder.CloseElement();
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", N(Left - 6)); builder.AddAttribute(seq++, "y", N(y + 4));
+            builder.AddAttribute(seq++, "text-anchor", "end");
+            builder.AddContent(seq++, Format(value));
+            builder.CloseElement();
+        }
+
+        var band = plotW / Categories.Count;
+        var labelEvery = Math.Max(1, (int)Math.Ceiling(Categories.Count / 12d));
+        for (var i = 0; i < Categories.Count; i++)
+        {
+            var x0 = Left + (band * i);
+            if (i % labelEvery == 0)
+            {
+                builder.OpenElement(seq++, "text");
+                builder.AddAttribute(seq++, "x", N(x0 + band / 2)); builder.AddAttribute(seq++, "y", N(Height - Bottom + 16));
+                builder.AddAttribute(seq++, "text-anchor", "middle");
+                builder.AddContent(seq++, Categories[i]);
+                builder.CloseElement();
+            }
+
+            if (Kind == ChartKind.Column)
+            {
+                var groupW = band * 0.7;
+                var barW = Stacked ? groupW : groupW / Series.Count;
+                double stackBase = 0;
+                for (var s = 0; s < Series.Count; s++)
+                {
+                    var value = Series[s].Values[i];
+                    var h = plotH * value / max;
+                    var x = Stacked ? x0 + (band - groupW) / 2 : x0 + (band - groupW) / 2 + (barW * s);
+                    var y = Top + plotH - h - (Stacked ? plotH * stackBase / max : 0);
+                    builder.OpenElement(seq++, "rect");
+                    builder.AddAttribute(seq++, "x", N(x)); builder.AddAttribute(seq++, "y", N(y));
+                    builder.AddAttribute(seq++, "width", N(Math.Max(barW - 2, 1))); builder.AddAttribute(seq++, "height", N(Math.Max(h, 0)));
+                    builder.AddAttribute(seq++, "rx", "2");
+                    builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                    builder.CloseElement();
+                    if (value > 0 && !Stacked && Series.Count <= 2 && Categories.Count <= 14)
+                    {
+                        builder.OpenElement(seq++, "text");
+                        builder.AddAttribute(seq++, "class", "chart__value");
+                        builder.AddAttribute(seq++, "x", N(x + (barW - 2) / 2)); builder.AddAttribute(seq++, "y", N(y - 4));
+                        builder.AddAttribute(seq++, "text-anchor", "middle");
+                        builder.AddContent(seq++, Format(value));
+                        builder.CloseElement();
+                    }
+                    stackBase += value;
+                }
+            }
+        }
+
+        if (Kind == ChartKind.Line)
+        {
+            for (var s = 0; s < Series.Count; s++)
+            {
+                var points = string.Join(' ', Enumerable.Range(0, Categories.Count).Select(i =>
+                    $"{N(Left + (band * i) + band / 2)},{N(Top + plotH - (plotH * Series[s].Values[i] / max))}"));
+                builder.OpenElement(seq++, "polyline");
+                builder.AddAttribute(seq++, "points", points);
+                builder.AddAttribute(seq++, "fill", "none");
+                builder.AddAttribute(seq++, "stroke-width", "2.5");
+                builder.AddAttribute(seq++, "style", $"stroke: var({Series[s].ColorVar})");
+                builder.CloseElement();
+                for (var i = 0; i < Categories.Count; i++)
+                {
+                    builder.OpenElement(seq++, s % 2 == 0 ? "circle" : "rect");
+                    var cx = Left + (band * i) + band / 2;
+                    var cy = Top + plotH - (plotH * Series[s].Values[i] / max);
+                    if (s % 2 == 0)
+                    {
+                        builder.AddAttribute(seq++, "cx", N(cx)); builder.AddAttribute(seq++, "cy", N(cy)); builder.AddAttribute(seq++, "r", "4");
+                    }
+                    else
+                    {
+                        // A second marker shape, so series differ by more than colour.
+                        builder.AddAttribute(seq++, "x", N(cx - 4)); builder.AddAttribute(seq++, "y", N(cy - 4));
+                        builder.AddAttribute(seq++, "width", "8"); builder.AddAttribute(seq++, "height", "8");
+                    }
+                    builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                    builder.CloseElement();
+                }
+            }
+        }
+    };
+
+    private RenderFragment RenderBars() => builder =>
+    {
+        var max = ChartFormat.NiceMax(MaxValue);
+        const double labelW = 150;
+        var plotW = Width - labelW - 56;
+        var seq = 0;
+        for (var i = 0; i < Categories.Count; i++)
+        {
+            var y = Top + (i * 30);
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", N(labelW - 8)); builder.AddAttribute(seq++, "y", N(y + 15));
+            builder.AddAttribute(seq++, "text-anchor", "end");
+            builder.AddContent(seq++, Categories[i].Length > 22 ? Categories[i][..21] + "…" : Categories[i]);
+            builder.CloseElement();
+            double offset = 0;
+            for (var s = 0; s < Series.Count; s++)
+            {
+                var value = Series[s].Values[i];
+                var w = plotW * value / max;
+                builder.OpenElement(seq++, "rect");
+                builder.AddAttribute(seq++, "x", N(labelW + offset)); builder.AddAttribute(seq++, "y", N(y + 3));
+                builder.AddAttribute(seq++, "width", N(Math.Max(w, 0))); builder.AddAttribute(seq++, "height", "18");
+                builder.AddAttribute(seq++, "rx", "2");
+                builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                builder.CloseElement();
+                offset += Stacked ? w : 0;
+            }
+            var total = Stacked ? Series.Sum(s => s.Values[i]) : Series[0].Values[i];
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "class", "chart__value");
+            builder.AddAttribute(seq++, "x", N(labelW + (plotW * total / max) + 6)); builder.AddAttribute(seq++, "y", N(y + 16));
+            builder.AddContent(seq++, Format(total));
+            builder.CloseElement();
+        }
+    };
+}

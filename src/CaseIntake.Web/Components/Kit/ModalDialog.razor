@@ -1,0 +1,132 @@
+@using CaseIntake.Web.Services
+@implements IAsyncDisposable
+@inject UiInterop Interop
+
+@* A native <dialog> opened with showModal() through interop.js (E5-S6): the browser traps focus, makes the page inert
+   and closes on Esc. Dismissing (Esc or the Close button) raises OnDismissed and returns focus to the element that
+   opened the dialog. On phones the same dialog is styled as a bottom sheet. *@
+<dialog @ref="_dialog" class="modal @Class" aria-labelledby="@TitleId" aria-describedby="@(Description is null ? null : DescriptionId)" data-testid="@TestId">
+    <span class="sheet-handle" aria-hidden="true"></span>
+    @if (_open)
+    {
+        <div class="modal__header">
+            <h2 id="@TitleId">@Title</h2>
+            <button type="button" class="btn btn--subtle btn--icon" aria-label="Close" @onclick="DismissAsync"><Icon Name="close" /></button>
+        </div>
+        <div class="modal__body">
+            @if (Description is not null)
+            {
+                <p id="@DescriptionId">@Description</p>
+            }
+            @ChildContent
+        </div>
+        @if (Footer is not null)
+        {
+            <div class="modal__footer">@Footer</div>
+        }
+    }
+</dialog>
+
+@code {
+    private ElementReference _dialog;
+    private DotNetObjectReference<ModalDialog>? _callbacks;
+    private bool _open;
+    private bool _showAfterRender;
+    private Func<ValueTask>? _returnFocus;
+
+    [Parameter, EditorRequired] public string Id { get; set; } = "dialog";
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public RenderFragment? Footer { get; set; }
+    [Parameter] public string? Class { get; set; }
+    [Parameter] public string? TestId { get; set; }
+
+    /// <summary>Raised when the user dismisses the dialog (Esc or Close), after focus returned to the trigger.</summary>
+    [Parameter] public EventCallback OnDismissed { get; set; }
+
+    public bool IsOpen => _open;
+
+    private string TitleId => $"{Id}-title";
+    private string DescriptionId => $"{Id}-description";
+
+    /// <param name="returnFocus">Focuses the trigger again when the dialog closes (usually <c>button.FocusAsync</c>).</param>
+    public Task OpenAsync(Func<ValueTask>? returnFocus = null)
+    {
+        _returnFocus = returnFocus;
+        _open = true;
+        _showAfterRender = true;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Closes after the dialog's action completed; focus goes wherever the caller moves it next.</summary>
+    public async Task CloseAsync(bool restoreFocus = false)
+    {
+        if (!_open)
+        {
+            return;
+        }
+        _open = false;
+        await Interop.CloseDialogAsync(_dialog);
+        StateHasChanged();
+        if (restoreFocus)
+        {
+            await RestoreFocusAsync();
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_showAfterRender)
+        {
+            _showAfterRender = false;
+            _callbacks ??= DotNetObjectReference.Create(this);
+            await Interop.ShowDialogAsync(_dialog, _callbacks);
+        }
+    }
+
+    private async Task DismissAsync()
+    {
+        await Interop.CloseDialogAsync(_dialog);
+        await OnDialogDismissed();
+    }
+
+    /// <summary>Called by interop.js when the browser closed the dialog (Esc).</summary>
+    [JSInvokable]
+    public async Task OnDialogDismissed()
+    {
+        if (!_open)
+        {
+            return;
+        }
+        _open = false;
+        StateHasChanged();
+        await RestoreFocusAsync();
+        await OnDismissed.InvokeAsync();
+    }
+
+    private async Task RestoreFocusAsync()
+    {
+        if (_returnFocus is { } focus)
+        {
+            try
+            {
+                await focus();
+            }
+            catch (JSException)
+            {
+                // The trigger is no longer on the page.
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_open)
+        {
+            await Interop.CloseDialogAsync(_dialog);
+        }
+        _callbacks?.Dispose();
+    }
+}

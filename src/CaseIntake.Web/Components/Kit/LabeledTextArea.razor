@@ -1,0 +1,47 @@
+@inherits LabeledTextInputBase
+
+<div class="field">
+    <label class="field__label" for="@Id">
+        @Label
+        @if (Required)
+        {
+            <span class="field__required"> (required)</span>
+        }
+        else
+        {
+            <span class="field__required"> (optional)</span>
+        }
+    </label>
+    @if (!string.IsNullOrEmpty(Hint))
+    {
+        <span class="field__hint" id="@HintId">@Hint</span>
+    }
+    <textarea @attributes="AdditionalAttributes"
+              @ref="InputElement"
+              id="@Id"
+              name="@NameAttributeValue"
+              rows="@Rows"
+              class="@CssClass"
+              @bind="CurrentValueAsString"
+              @bind:event="oninput"
+           @bind:after="AfterInput"
+              aria-required="@(Required ? "true" : null)"
+              aria-invalid="@(IsInvalid ? "true" : null)"
+              aria-describedby="@DescribedBy"></textarea>
+    @if (IsInvalid)
+    {
+        <div class="field__error" id="@ErrorId">
+            <Icon Name="error" Small="true" />
+            <span>@string.Join(" ", Errors)</span>
+        </div>
+    }
+    @if (MaxCharacters is not null)
+    {
+        <span class="field__counter @(IsOverLimit ? "field__counter--over" : null)" id="@CounterId">@CounterText</span>
+        <span class="visually-hidden" role="status" aria-live="polite">@AnnouncedCount</span>
+    }
+</div>
+
+@code {
+    [Parameter] public int Rows { get; set; } = 6;
+}

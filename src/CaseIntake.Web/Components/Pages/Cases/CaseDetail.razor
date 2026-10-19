@@ -1,0 +1,442 @@
+@page "/cases/{Id:long}"
+@attribute [Authorize(Policy = Permissions.CasesView)]
+@implements IDisposable
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@inject ICaseService Cases
+@inject StatusAnnouncer Announcer
+@inject NavigationManager Navigation
+@inject ILogger<CaseDetail> Logger
+
+@* Case detail and in-place edit (E5-S5), status controls (E5-S6) and attachments (E5-S7). The record's version is
+   kept with the edit form, so a save against a stale version is reported as a conflict and the user's unsaved text
+   is kept visible next to the latest version. *@
+<PageShell Title="@PageTitle" DocumentTitle="@PageTitle" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])" />
+
+<ErrorAlert @ref="_pageAlert" Title="@_pageErrorTitle" Message="@_pageError" TestId="detail-error">
+    @if (_conflict)
+    {
+        <div class="btn-row">
+            <button type="button" class="btn btn--primary" @onclick="ReloadLatestAsync" data-testid="reload-latest">Reload latest</button>
+        </div>
+    }
+</ErrorAlert>
+
+@if (_case is null)
+{
+    @if (_loading)
+    {
+        <LoadingIndicator Text="Loading case…" />
+    }
+}
+else
+{
+    var c = _case;
+    <div class="record-header" data-testid="record-header">
+        <div class="record-header__top">
+            <div class="record-header__title">
+                <span class="page-header__subtitle">Case @c.Id</span>
+            </div>
+            <StatusPill Status="c.Status" Large="true" />
+        </div>
+        <ul class="record-header__facts">
+            <li><span class="label">Case ID</span><span data-testid="case-id">@c.Id</span></li>
+            <li><span class="label">Created (UTC)</span><span>@UiText.Utc(c.CreatedAtUtc) by @c.CreatedBy</span></li>
+            <li><span class="label">Updated (UTC)</span><span>@UiText.Utc(c.UpdatedAtUtc) by @c.UpdatedBy</span></li>
+        </ul>
+    </div>
+
+    <div class="grid grid--main-side">
+        <div class="stack">
+            <section class="card" aria-labelledby="details-heading" data-testid="details-section">
+                <div class="card__header">
+                    <h2 id="details-heading">Details</h2>
+                    @if (!_editing && c.Status != CaseStatus.Closed)
+                    {
+                        <AuthorizeView Policy="@Permissions.CasesEdit">
+                            <button type="button" class="btn" @ref="_editButton" @onclick="StartEditAsync" data-testid="edit-case">
+                                <Icon Name="edit" Small="true" /> Edit<span class="visually-hidden"> case details</span>
+                            </button>
+                        </AuthorizeView>
+                    }
+                </div>
+                @if (c.Status == CaseStatus.Closed)
+                {
+                    <p class="page-header__subtitle" data-testid="closed-note">Closed cases are read-only.</p>
+                }
+
+                @if (_editing)
+                {
+                    <EditForm EditContext="_editContext" OnSubmit="SaveAsync" novalidate class="form" data-testid="edit-form">
+                        <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
+                        <LabeledInputText Id="edit-title" Label="Title" Required="true" @bind-Value="_edit.Title" @ref="_titleInput"
+                                          Hint="@($"{CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
+                                          MaxCharacters="CaseFieldLimits.TitleMaxLength" />
+                        <LabeledTextArea Id="edit-description" Label="Description" @bind-Value="_edit.Description" Rows="8"
+                                         MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
+                        @if (_draft is { } draft)
+                        {
+                            <div class="message message--warning" data-testid="unsaved-draft">
+                                <Icon Name="warning" />
+                                <div class="message__body">
+                                    <p class="message__title">Your unsaved text</p>
+                                    <p>The form now shows the latest saved version. Your earlier changes are below; nothing was lost.</p>
+                                    <p><strong>Title:</strong> <span class="pre-wrap">@draft.Title</span></p>
+                                    <p><strong>Description:</strong> <span class="pre-wrap">@(string.IsNullOrEmpty(draft.Description) ? "(empty)" : draft.Description)</span></p>
+                                    <button type="button" class="btn" @onclick="UseDraftAsync" data-testid="use-draft">Use my text again</button>
+                                </div>
+                            </div>
+                        }
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn--primary" disabled="@_saving" aria-busy="@(_saving ? "true" : "false")" data-testid="save-case">
+                                <Icon Name="save" Small="true" /> @(_saving ? "Saving…" : "Save")
+                            </button>
+                            <button type="button" class="btn" @onclick="CancelEditAsync" disabled="@_saving" data-testid="cancel-edit">Cancel</button>
+                        </div>
+                    </EditForm>
+                }
+                else
+                {
+                    <dl class="field-list">
+                        <dt>Case ID</dt>
+                        <dd>@c.Id <span class="page-header__subtitle">(read-only)</span></dd>
+                        <dt>Title</dt>
+                        <dd data-testid="case-title">@c.Title</dd>
+                        <dt>Description</dt>
+                        <dd class="pre-wrap" data-testid="case-description">@(string.IsNullOrEmpty(c.Description) ? "No description" : c.Description)</dd>
+                        <dt>Status</dt>
+                        <dd>@UiText.Status(c.Status)</dd>
+                        <dt>Created (UTC)</dt>
+                        <dd>@UiText.Utc(c.CreatedAtUtc) by @c.CreatedBy</dd>
+                        <dt>Updated (UTC)</dt>
+                        <dd>@UiText.Utc(c.UpdatedAtUtc) by @c.UpdatedBy</dd>
+                    </dl>
+                }
+            </section>
+
+            <AttachmentsPanel CaseId="c.Id" Closed="@(c.Status == CaseStatus.Closed)" OnChanged="ReloadAuditAsync" />
+
+            <AuditTrail Entries="_audit" Error="@_auditError" />
+        </div>
+
+        <div class="stack">
+            <StatusTransitions Case="c" OnChanged="OnStatusChangedAsync" OnFailed="ReloadAfterStatusErrorAsync" />
+
+            <section class="card" aria-labelledby="veteran-heading" data-testid="veteran-section">
+                <div class="card__header"><h2 id="veteran-heading">Veteran</h2></div>
+                @if (c.Veteran is { } v)
+                {
+                    <dl class="field-list">
+                        <dt>Name</dt>
+                        <dd>@v.Name</dd>
+                        <dt>Address</dt>
+                        <dd class="pre-wrap">@v.Address</dd>
+                        <dt>SSN</dt>
+                        <dd data-testid="ssn-last4">Ending @v.SsnLast4</dd>
+                    </dl>
+                }
+                else
+                {
+                    <p class="page-header__subtitle">No veteran was attached at intake.</p>
+                }
+            </section>
+        </div>
+    </div>
+}
+
+@code {
+    private sealed class EditModel
+    {
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+    }
+
+    private sealed record Draft(string? Title, string? Description);
+
+    private static readonly IReadOnlyList<KeyValuePair<string, string>> SummaryFields =
+    [
+        new(CaseFieldNames.Title, "edit-title"),
+        new(CaseFieldNames.Description, "edit-description"),
+    ];
+
+    private readonly CancellationTokenSource _cts = new();
+    private CaseDetailDto? _case;
+    private IReadOnlyList<AuditEntryDto>? _audit;
+    private string? _auditError;
+    private bool _loading = true;
+    private bool _editing;
+    private bool _saving;
+    private bool _conflict;
+    private bool _showSummary;
+    private uint _editVersion;
+    private EditModel _edit = new();
+    private EditContext _editContext = new(new EditModel());
+    private ValidationMessageStore? _messages;
+    private Draft? _draft;
+    private string? _pageError;
+    private string? _pageErrorTitle;
+    private ElementReference _editButton;
+    private LabeledInputText? _titleInput;
+    private FormErrorSummary? _summary;
+    private ErrorAlert? _pageAlert;
+    private string? _focusAfterRender;
+
+    [Parameter] public long Id { get; set; }
+
+    private string PageTitle => _case is { } c ? $"Case {c.Id}: {c.Title}" : $"Case {Id}";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _editing = false;
+        _draft = null;
+        _conflict = false;
+        _pageError = null;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Cases.GetAsync(Id, _cts.Token);
+            if (!result.IsSuccess)
+            {
+                if (result.Error!.Kind == ErrorKind.NotFound)
+                {
+                    Navigation.NotFound();   // .NET 10: renders the Router's NotFoundPage (HTTP 404 when prerendered)
+                    return;
+                }
+                _case = null;
+                SetPageError("The case could not be opened", result.Error.Message);
+                return;
+            }
+            _case = result.Value;
+            await ReloadAuditAsync();
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5005, "CaseDetailLoadFailed"), "Case detail load failed for {CaseId} ({ExceptionType})", Id, ex.GetType().Name);
+            SetPageError("The case could not be opened", "Something went wrong while loading the case. Try again.");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ReloadAuditAsync()
+    {
+        var audit = await Cases.GetAuditTrailAsync(Id, _cts.Token);
+        _audit = audit.IsSuccess ? audit.Value : null;
+        _auditError = audit.IsSuccess ? null : audit.Error!.Message;
+    }
+
+    private void SetPageError(string title, string message, bool conflict = false)
+    {
+        _pageErrorTitle = title;
+        _pageError = message;
+        _conflict = conflict;
+        _focusAfterRender = "alert";
+    }
+
+    private void ClearPageError()
+    {
+        _pageErrorTitle = null;
+        _pageError = null;
+        _conflict = false;
+    }
+
+    private void StartEditAsync()
+    {
+        if (_case is null)
+        {
+            return;
+        }
+        ClearPageError();
+        _edit = new EditModel { Title = _case.Title, Description = _case.Description };
+        _editVersion = _case.Version;
+        _editContext = new EditContext(_edit);
+        _messages = new ValidationMessageStore(_editContext);
+        _showSummary = false;
+        _draft = null;
+        _editing = true;
+        _focusAfterRender = "title";
+    }
+
+    private void CancelEditAsync()
+    {
+        // The view shows the saved values again; nothing from the form is kept.
+        _editing = false;
+        _draft = null;
+        _showSummary = false;
+        ClearPageError();
+        _focusAfterRender = "edit";
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_saving || _case is null || _messages is null)
+        {
+            return;
+        }
+        var request = new UpdateCaseRequest(_edit.Title ?? string.Empty, _edit.Description, _editVersion);
+        if (CaseRequestValidator.Validate(request) is { } invalid)
+        {
+            ShowValidation(invalid);
+            return;
+        }
+
+        _saving = true;
+        ClearPageError();
+        try
+        {
+            var result = await Cases.UpdateAsync(_case.Id, request, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _case = result.Value;
+                _editing = false;
+                _draft = null;
+                await ReloadAuditAsync();
+                Announcer.Announce("Changes saved");
+                _focusAfterRender = "edit";
+                return;
+            }
+
+            switch (result.Error!.Kind)
+            {
+                case ErrorKind.Validation when result.Error.FieldErrors is { Count: > 0 }:
+                    ShowValidation(result.Error);
+                    break;
+                case ErrorKind.Conflict:
+                    SetPageError("Someone else changed this case", result.Error.Message + " Your unsaved text is still in the form.", conflict: true);
+                    break;
+                default:
+                    SetPageError("Your changes were not saved", result.Error.Message);
+                    await RefreshCaseAsync();
+                    break;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5006, "CaseEditFailed"), "Case edit failed for {CaseId} ({ExceptionType})", Id, ex.GetType().Name);
+            SetPageError("Your changes were not saved", "Something went wrong. Your text is still in the form; try again.");
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private void ShowValidation(Error error)
+    {
+        _messages!.Clear();
+        foreach (var (field, fieldMessages) in error.FieldErrors ?? new Dictionary<string, string[]>())
+        {
+            _messages.Add(new FieldIdentifier(_edit, field is CaseFieldNames.Title or CaseFieldNames.Description ? field : CaseFieldNames.Title), fieldMessages);
+        }
+        _showSummary = true;
+        _focusAfterRender = "summary";
+        _editContext.NotifyValidationStateChanged();
+    }
+
+    /// <summary>Conflict recovery: load the latest version into the form and keep the user's text alongside it.</summary>
+    private async Task ReloadLatestAsync()
+    {
+        var draft = new Draft(_edit.Title, _edit.Description);
+        var result = await Cases.GetAsync(Id, _cts.Token);
+        if (!result.IsSuccess)
+        {
+            SetPageError("The latest version could not be loaded", result.Error!.Message, conflict: true);
+            return;
+        }
+        _case = result.Value;
+        await ReloadAuditAsync();
+        ClearPageError();
+        if (_case!.Status == CaseStatus.Closed)
+        {
+            // The case was closed meanwhile and can no longer be edited; keep the text visible as a read-only draft.
+            _editing = false;
+            SetPageError("This case was closed", $"Closed cases cannot be edited. Your unsaved title was: \"{draft.Title}\".");
+            return;
+        }
+        _edit = new EditModel { Title = _case.Title, Description = _case.Description };
+        _editVersion = _case.Version;
+        _editContext = new EditContext(_edit);
+        _messages = new ValidationMessageStore(_editContext);
+        _showSummary = false;
+        _draft = draft;
+        Announcer.Announce("Latest version loaded. Your unsaved text is shown below the form.");
+        _focusAfterRender = "title";
+    }
+
+    private void UseDraftAsync()
+    {
+        if (_draft is null)
+        {
+            return;
+        }
+        _edit.Title = _draft.Title;
+        _edit.Description = _draft.Description;
+        _draft = null;
+        _focusAfterRender = "title";
+    }
+
+    private async Task RefreshCaseAsync()
+    {
+        var latest = await Cases.GetAsync(Id, _cts.Token);
+        if (latest.IsSuccess)
+        {
+            _case = latest.Value;
+            await ReloadAuditAsync();
+        }
+    }
+
+    private async Task OnStatusChangedAsync(CaseDetailDto updated)
+    {
+        _case = updated;
+        _editing = false;
+        _draft = null;
+        ClearPageError();
+        await ReloadAuditAsync();
+    }
+
+    /// <summary>After InvalidTransition, Forbidden or Conflict the displayed status is refreshed (E5-S6).</summary>
+    private Task ReloadAfterStatusErrorAsync() => RefreshCaseAsync();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        var target = _focusAfterRender;
+        _focusAfterRender = null;
+        switch (target)
+        {
+            case "title" when _titleInput is not null:
+                await _titleInput.FocusAsync();
+                break;
+            case "edit":
+                // No-op when there is no Edit button (the case is closed now or the user lacks cases.edit).
+                await _editButton.FocusSafeAsync();
+                break;
+            case "summary" when _summary is not null:
+                await _summary.FocusAsync();
+                break;
+            case "alert" when _pageAlert is not null:
+                await _pageAlert.FocusAsync();
+                break;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

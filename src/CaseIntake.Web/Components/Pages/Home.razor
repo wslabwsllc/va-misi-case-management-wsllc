@@ -1,5 +1,183 @@
 @page "/"
 @attribute [Authorize(Policy = Permissions.CasesView)]
+@implements IDisposable
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@inject CaseDashboardService Dashboard
+@inject ILogger<Home> Logger
 
-<h1>Case Intake and Triage</h1>
-<p>Platform host is running. Feature pages are added by the case, identity, attachment and UI epics.</p>
+@* Dashboard (Power Apps style): KPI cards, charts and work lists built from the authorized case service only.
+   Desktop shows everything; phones show the four headline KPIs, the case trend, the user's tasks, recent activity and
+   quick actions (no desktop-width charts or grids). *@
+<PageShell Title="Dashboard" Subtitle="@Subtitle">
+    <Actions>
+        <div class="btn-row">
+            <button type="button" class="btn" @onclick="LoadAsync" disabled="@_loading" aria-busy="@(_loading ? "true" : "false")" data-testid="dashboard-refresh">
+                <Icon Name="refresh" Small="true" /> Refresh
+            </button>
+            <AuthorizeView Policy="@Permissions.CasesCreate">
+                <a class="btn btn--primary desktop-only" href="cases/new"><Icon Name="add" Small="true" /> New case</a>
+            </AuthorizeView>
+        </div>
+    </Actions>
+</PageShell>
+
+<ErrorAlert Title="@(_error is null ? null : "The dashboard could not be loaded")" Message="@_error" TestId="dashboard-error">
+    @if (_error is not null)
+    {
+        <div class="btn-row"><button type="button" class="btn" @onclick="LoadAsync" data-testid="dashboard-retry">Try again</button></div>
+    }
+</ErrorAlert>
+
+@if (_loading && _data is null)
+{
+    <LoadingIndicator Text="Loading dashboard…" />
+    <ul class="kpi-grid" aria-hidden="true">
+        @for (var i = 0; i < 6; i++)
+        {
+            <li class="skeleton skeleton--kpi"></li>
+        }
+    </ul>
+}
+else if (_data is { } d)
+{
+    @if (d.Total == 0)
+    {
+        <div class="card">
+            <EmptyState Title="No cases yet" Message="When cases are created they appear here with their status and trends." TestId="dashboard-empty">
+                <AuthorizeView Policy="@Permissions.CasesCreate">
+                    <a class="btn btn--primary" href="cases/new">Create the first case</a>
+                </AuthorizeView>
+            </EmptyState>
+        </div>
+    }
+    else
+    {
+        <h2 class="visually-hidden">Key figures</h2>
+        <ul class="kpi-grid" data-testid="kpis">
+            <KpiTile Label="Total cases" Value="@UiText.Number(d.Total)" Hint="All statuses" Href="cases" TestId="kpi-total" />
+            <KpiTile Label="Open cases" Value="@UiText.Number(d.Open)" Hint="New, Triaged or In Progress" Href="cases?status=New&status=Triaged&status=InProgress" TestId="kpi-open" />
+            <KpiTile Label="Pending review" Value="@UiText.Number(d.PendingReview)" Hint="Resolved, waiting to be closed" Href="cases?status=Resolved" Variant="warning" TestId="kpi-pending" />
+            <KpiTile Label="Overdue cases" Value="@UiText.Number(d.Overdue)" Hint="@($"Open, no update in {d.OverdueAfterDays}+ days")" Href="cases?status=New&status=Triaged&status=InProgress&sort=UpdatedAt&dir=asc" Variant="danger" TestId="kpi-overdue" />
+            <KpiTile Label="Resolved cases" Value="@UiText.Number(d.Completed)" Hint="Resolved or Closed" Href="cases?status=Resolved&status=Closed" Variant="success" Class="desktop-only" TestId="kpi-resolved" />
+            <KpiTile Label="Assigned to me" Value="@UiText.Number(d.AwaitingMyAction)" Hint="Awaiting an action your role can take" Href="my-work" Variant="neutral" Class="desktop-only" TestId="kpi-mine" />
+        </ul>
+        @if (d.Partial)
+        {
+            <p class="message message--info" role="note">Figures are based on the first @UiText.Number(d.Scanned) of @UiText.Number(d.Total) cases; the case list shows the full set.</p>
+        }
+
+        <div class="grid grid--3">
+            <section class="card" aria-labelledby="trend-heading">
+                <h2 id="trend-heading" class="visually-hidden">Case volume trend</h2>
+                <Chart Id="chart-volume" Title="Case volume trend" Description="Cases created per month (UTC), last 12 months."
+                       Categories="@d.CreatedByMonth.Select(m => m.Month.ToString("MMM yy", System.Globalization.CultureInfo.InvariantCulture)).ToList()"
+                       Series="@([new ChartSeries("Cases created", d.CreatedByMonth.Select(m => (double)m.Count).ToList())])"
+                       CategoryHeader="Month" TestId="chart-volume" />
+            </section>
+            <section class="card desktop-only" aria-labelledby="status-heading">
+                <h2 id="status-heading" class="visually-hidden">Cases by status</h2>
+                <Chart Id="chart-status" Title="Cases by status" Kind="ChartKind.Bar"
+                       Categories="@d.ByStatus.Keys.Select(UiText.Status).ToList()"
+                       Series="@([new ChartSeries("Cases", d.ByStatus.Values.Select(v => (double)v).ToList())])"
+                       CategoryHeader="Status" TestId="chart-status" />
+            </section>
+            <section class="card desktop-only" aria-labelledby="resolution-heading">
+                <h2 id="resolution-heading" class="visually-hidden">Monthly resolution trend</h2>
+                <Chart Id="chart-resolution" Title="Monthly resolution trend"
+                       Description="Resolved or closed cases by the month of their last update (UTC)."
+                       Categories="@d.CompletedByMonth.Select(m => m.Month.ToString("MMM yy", System.Globalization.CultureInfo.InvariantCulture)).ToList()"
+                       Series="@([new ChartSeries("Resolved or closed", d.CompletedByMonth.Select(m => (double)m.Count).ToList(), "--series-3")])"
+                       CategoryHeader="Month" TestId="chart-resolution" />
+            </section>
+            <section class="card desktop-only" aria-labelledby="priority-heading" data-testid="chart-priority">
+                <h2 id="priority-heading" class="chart__title">Cases by priority</h2>
+                <p class="chart-unavailable"><Icon Name="info" /><span>Not available: cases have no priority field, so this chart cannot be drawn from real data. Adding priority is a case-model change.</span></p>
+            </section>
+            <section class="card desktop-only" aria-labelledby="category-heading" data-testid="chart-category">
+                <h2 id="category-heading" class="chart__title">Cases by category</h2>
+                <p class="chart-unavailable"><Icon Name="info" /><span>Not available: cases have no category field, so this chart cannot be drawn from real data. Adding categories is a case-model change.</span></p>
+            </section>
+            <section class="card" aria-labelledby="quick-heading">
+                <div class="card__header"><h2 id="quick-heading">Quick actions</h2></div>
+                <ul class="quick-actions" data-testid="quick-actions">
+                    <AuthorizeView Policy="@Permissions.CasesCreate">
+                        <li><a class="quick-action" href="cases/new"><Icon Name="add" /> New case</a></li>
+                    </AuthorizeView>
+                    <li><a class="quick-action" href="cases"><Icon Name="cases" /> All cases</a></li>
+                    <li><a class="quick-action" href="my-work"><Icon Name="tasks" /> My tasks</a></li>
+                    <li><a class="quick-action" href="reports"><Icon Name="reports" /> Reports</a></li>
+                    <AuthorizeView Policy="@Permissions.TestResultsView">
+                        <li><a class="quick-action" href="test-results"><Icon Name="beaker" /> Test results</a></li>
+                    </AuthorizeView>
+                </ul>
+            </section>
+        </div>
+
+        <div class="grid grid--3 mt-4">
+            <CaseListCard Id="my-tasks" Title="My pending tasks" Cases="d.MyTasks" ShowUpdated="true" MoreHref="my-work"
+                          Empty="@(d.ActionableStatuses.Count == 0 ? "Your role has no status changes to make, so no case waits on you." : "Nothing is waiting for you.")" />
+            <CaseListCard Id="recent-activity" Title="Recent activity" Cases="d.RecentActivity" ShowUpdated="true" MoreHref="notifications"
+                          Empty="No recent activity." />
+            <CaseListCard Id="attention" Title="Cases requiring attention" Subtitle="@($"Open and not updated for {d.OverdueAfterDays}+ days, oldest first")"
+                          Cases="d.RequiringAttention" ShowUpdated="true" Class="desktop-only"
+                          MoreHref="cases?status=New&status=Triaged&status=InProgress&sort=UpdatedAt&dir=asc" Empty="No overdue cases." />
+            <CaseListCard Id="recent-cases" Title="Recent cases" Cases="d.RecentCases" Class="desktop-only"
+                          MoreHref="cases?sort=CreatedAt&dir=desc" Empty="No cases yet." />
+        </div>
+    }
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private CaseDashboard? _data;
+    private bool _loading = true;
+    private string? _error;
+
+    private string Subtitle => _data is { } d
+        ? $"Cases you are allowed to see. Updated {UiText.Utc(d.GeneratedAtUtc)}."
+        : "Cases you are allowed to see.";
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var result = await Dashboard.LoadAsync(_cts.Token);
+            if (result.IsSuccess)
+            {
+                _data = result.Value;
+            }
+            else
+            {
+                _data = null;
+                _error = result.Error!.Message;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            return;
+        }
+        catch (Exception ex)
+        {
+            // Unexpected failure: log the type only and show a recoverable message, never the exception text.
+            Logger.LogError(new EventId(5001, "DashboardLoadFailed"), "Dashboard load failed ({ExceptionType})", ex.GetType().Name);
+            _data = null;
+            _error = "Something went wrong while loading the dashboard. Try again.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

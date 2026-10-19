@@ -1,0 +1,49 @@
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Web.Services
+
+@* A dashboard card listing a few cases (title link, status, time) with a "View all" link. *@
+<section class="card @Class" aria-labelledby="@($"{Id}-heading")" data-testid="@Id">
+    <div class="card__header">
+        <h2 id="@($"{Id}-heading")">@Title</h2>
+        @if (MoreHref is not null)
+        {
+            <a href="@MoreHref">View all<span class="visually-hidden">@(" " + Title.ToLowerInvariant())</span></a>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(Subtitle))
+    {
+        <p class="page-header__subtitle">@Subtitle</p>
+    }
+    @if (Cases.Count == 0)
+    {
+        <p class="page-header__subtitle" data-testid="@($"{Id}-empty")">@Empty</p>
+    }
+    else
+    {
+        <ul class="compact-list">
+            @foreach (var c in Cases)
+            {
+                <li>
+                    <div class="compact-list__main">
+                        <a href="@($"cases/{c.Id}")">@c.Title</a>
+                        <div class="compact-list__meta">
+                            Case @c.Id · @(ShowUpdated ? "Updated " + UiText.Utc(c.UpdatedAtUtc) : "Created " + UiText.Utc(c.CreatedAtUtc))
+                        </div>
+                    </div>
+                    <StatusPill Status="c.Status" />
+                </li>
+            }
+        </ul>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string? Subtitle { get; set; }
+    [Parameter, EditorRequired] public IReadOnlyList<CaseSummaryDto> Cases { get; set; } = [];
+    [Parameter] public string? MoreHref { get; set; }
+    [Parameter] public string Empty { get; set; } = "Nothing to show.";
+    [Parameter] public bool ShowUpdated { get; set; }
+    [Parameter] public string? Class { get; set; }
+}

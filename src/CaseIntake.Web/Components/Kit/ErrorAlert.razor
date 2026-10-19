@@ -1,0 +1,38 @@
+@* An operation failed (service error, conflict, forbidden, lookup unavailable): the message is placed in a
+   role="alert" region next to the action, so screen readers announce it immediately (E5-S2). The region element is
+   always present and only its content changes, which assistive technology announces most reliably. *@
+<div role="alert" class="@(HasContent ? "message message--" + Severity : null)" id="@Id" tabindex="-1" @ref="_element" data-testid="@TestId">
+    @if (HasContent)
+    {
+        <Icon Name="@(Severity == "warning" ? "warning" : "error")" />
+        <div class="message__body">
+            @if (!string.IsNullOrEmpty(Title))
+            {
+                <p class="message__title">@Title</p>
+            }
+            @if (!string.IsNullOrEmpty(Message))
+            {
+                <p>@Message</p>
+            }
+            @ChildContent
+        </div>
+    }
+</div>
+
+@code {
+    private ElementReference _element;
+
+    [Parameter] public string? Id { get; set; }
+    [Parameter] public string? Title { get; set; }
+    [Parameter] public string? Message { get; set; }
+
+    /// <summary>"error" (default) or "warning" (an operation that can continue, such as an unavailable lookup).</summary>
+    [Parameter] public string Severity { get; set; } = "error";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public string TestId { get; set; } = "error-alert";
+
+    // Child content (such as a Retry button) is shown only alongside a message; on its own it is not an alert.
+    private bool HasContent => !string.IsNullOrEmpty(Message) || !string.IsNullOrEmpty(Title);
+
+    public ValueTask FocusAsync() => HasContent ? _element.FocusAsync() : ValueTask.CompletedTask;
+}

@@ -1,0 +1,36 @@
+@using CaseIntake.Web.Services
+@inject UiInterop Interop
+@inject ShellState Shell
+
+@* Focus management after navigation (E5-S1, ADR 0011). Like the framework's FocusOnNavigate, but:
+   - the first page of a circuit (a full page load) leaves focus at the start of the document, so the first Tab
+     reaches the "Skip to main content" link;
+   - every later navigation to a different page or record (page type or route values change) focuses the new h1;
+   - a query-string-only change (sorting, filtering, paging a list) keeps focus on the control the user activated. *@
+@code {
+    private bool _focusAfterRender;
+
+    [Parameter, EditorRequired] public RouteData RouteData { get; set; } = default!;
+    [Parameter] public string Selector { get; set; } = "h1";
+
+    public static string KeyFor(Type pageType, IReadOnlyDictionary<string, object?> routeValues) =>
+        pageType.FullName + "|" + string.Join("&",
+            routeValues.OrderBy(v => v.Key, StringComparer.Ordinal).Select(v => $"{v.Key}={v.Value}"));
+
+    protected override void OnParametersSet()
+    {
+        if (Shell.ShouldFocusAfterNavigation(KeyFor(RouteData.PageType, RouteData.RouteValues)))
+        {
+            _focusAfterRender = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAfterRender)
+        {
+            _focusAfterRender = false;
+            await Interop.FocusSelectorAsync(Selector);
+        }
+    }
+}
