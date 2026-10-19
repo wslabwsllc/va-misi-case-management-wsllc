@@ -73,9 +73,9 @@ public sealed class Case
             Description = normalizedDescription,
             Status = CaseWorkflow.InitialStatus,
             CreatedAtUtc = now,
-            CreatedBy = actor,
+            CreatedBy = CaseTextRules.TruncateActor(actor),
             UpdatedAtUtc = now,
-            UpdatedBy = actor,
+            UpdatedBy = CaseTextRules.TruncateActor(actor),
             VeteranName = veteran?.Name,
             VeteranAddress = veteran?.Address,
             VeteranSsnLast4 = veteran?.SsnLast4,
@@ -152,7 +152,7 @@ public sealed class Case
     private void Touch(string actor, DateTimeOffset nowUtc)
     {
         UpdatedAtUtc = nowUtc.ToUniversalTime();
-        UpdatedBy = actor;
+        UpdatedBy = CaseTextRules.TruncateActor(actor);
     }
 
     private static void ThrowIfInvalid(IReadOnlyList<FieldError> errors)

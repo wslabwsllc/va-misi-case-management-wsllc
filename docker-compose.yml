@@ -33,12 +33,17 @@ services:
     environment:
       ConnectionStrings__CaseIntake: &conn "Host=db;Port=5432;Database=caseintake;Username=caseintake;Password=caseintake_local_only;Timezone=UTC"
       Seed__DemoPassword: &demo-password "Demo-Passw0rd!"
+      Attachments__RootPath: /attachments
+    # The migrator reconciles attachment storage (removes stale temporary/unreferenced files) before web starts.
+    volumes:
+      - attachments:/attachments
     depends_on:
       db:
         condition: service_healthy
     restart: "no"
 
-  # Owned by E4: src/CaseIntake.VeteranLookup.Mock/Dockerfile must produce an image serving /health and the lookup endpoint.
+  # Owned by E4: src/CaseIntake.VeteranLookup.Mock/Dockerfile builds the synthetic lookup mock (POST /veterans/lookup,
+  # /health, /openapi/v1.yaml). Not published to the host; web and tests reach it on the Compose network.
   # The probe is inline (same logic as scripts/healthcheck.sh) so it needs only bash, which the Debian/Ubuntu
   # mcr.microsoft.com/dotnet/aspnet images ship; it does not depend on files from the eval image.
   veteran-lookup:

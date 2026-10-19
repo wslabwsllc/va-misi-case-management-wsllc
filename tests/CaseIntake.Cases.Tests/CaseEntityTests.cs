@@ -157,4 +157,17 @@ public class CaseEntityTests
         Assert.Equal("user-1", entry.ActorId);
         Assert.Equal("worker@example.test", entry.Actor);
     }
+
+    [Fact]
+    public void Actor_names_longer_than_the_column_are_capped_on_create_and_on_update()
+    {
+        var longActor = new string('a', 300);
+        var entity = Case.Create("Valid title", null, null, longActor, new DateTimeOffset(2026, 10, 18, 12, 0, 0, TimeSpan.Zero));
+
+        Assert.Equal(CaseFieldLimits.ActorMaxLength, entity.CreatedBy.Length);
+        Assert.Equal(CaseFieldLimits.ActorMaxLength, entity.UpdatedBy.Length);
+
+        entity.Edit("Another valid title", null, new string('b', 400), new DateTimeOffset(2026, 10, 18, 13, 0, 0, TimeSpan.Zero));
+        Assert.Equal(new string('b', CaseFieldLimits.ActorMaxLength), entity.UpdatedBy);
+    }
 }

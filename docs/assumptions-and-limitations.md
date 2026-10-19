@@ -1,72 +1,65 @@
 # Assumptions and limitations
 
-Status: **E1 foundation, E2 case domain and E3 identity.** The assumptions below are the adopted decisions from the implementation plan
-(sections 0.1 and 8). Each feature epic appends the limitations it discovers. Items marked *(not yet implemented)* are
-decisions that take effect when the owning epic lands.
+Status: **E1 foundation, E2 case domain, E3 identity and E4 integrations.** The Assumptions Log below records every
+adopted decision from the implementation plan (sections 0.1 and 8) and the epics' ADRs, in the columns the Government
+requires. Rows marked *(E5)* take effect when that epic lands. Rows owned by E1, E2, E3 and E5 were transcribed from
+their ADRs and plan sections by E4 on 2026-10-18; their owners should review them.
 
-## Assumptions
+"Government: confirm" in the last column marks an assumption that only the Government can settle. Every other row is
+an offeror decision owned by the named epic.
 
-| # | Assumption |
-|---|---|
-| A1 | .NET 10 LTS, exact versions in [versions.md](versions.md) |
-| A2 | Interactive Server render mode *(E5)*; Identity account pages static SSR ([ADR 0007](adr/0007-roles-and-permissions.md)) |
-| A3 | PostgreSQL 17 via EF Core 10 / Npgsql ([ADR 0002](adr/0002-data-access-and-database.md)) |
-| A4 | Local ASP.NET Core Identity with seeded synthetic users; no external IdP ([ADR 0007](adr/0007-roles-and-permissions.md)) |
-| A5 | Roles `CaseWorker` and `Supervisor` with the permission matrix in [ADR 0007](adr/0007-roles-and-permissions.md) |
-| A6 | "Audit information" = audit fields plus append-only trail ([ADR 0006](adr/0006-audit-trail.md)) |
-| A7 | Initial status `New`; unlisted transitions rejected ([ADR 0005](adr/0005-case-workflow.md)) |
-| A8 | Optional veteran lookup at intake; snapshot (name, address, SSN last 4) saved on the case *(storage: E2; lookup/UI: E4/E5)* |
-| A9 | Attachments on a Docker volume, 10 MiB default limit, configurable *(E4)* |
-| A10 | WCAG 2.2 AA as engineering yardstick *(E5)* |
-| A11 | Primary workflow: sign in, list, intake, detail, edit, transition, attachments |
-| A12 | Modular monolith; only the veteran-lookup mock is a separate service |
+## Assumptions Log
 
-## Specification ambiguities and adopted decisions
-
-See plan section 8 (OQ-1 to OQ-20). E1-relevant ones: OQ-13 structured logs only, traces/metrics optional (excluded);
-OQ-14 PostgreSQL; OQ-15 ADRs plus this file plus README; OQ-16 all suites run in `tests`; OQ-19 UTC stored and
-displayed with a "UTC" label; OQ-20 `platform: linux/amd64` is pinned, so Apple Silicon hosts run it under emulation
-(slower startup and test runs).
-
-E2 (case domain) decisions:
-
-- **OQ-4 list:** filter by status (multi-select) and text search (case-insensitive substring of Title or Description,
-  `%`, `_` and `\` match literally, at most 200 characters); sort by Id, Title, Status (New → Closed order), Created
-  or Updated, either direction, always with `Id` as the tiebreaker; default page size 25 sorted by Updated
-  descending. The service accepts page sizes 1–100 (the UI offers 10/25/50); a page past the end is an empty page.
-- **OQ-9 edit:** Title and Description are editable by both roles in every status except Closed (`Validation` error
-  with code `CaseClosed`). ID and status are never part of an edit. A no-op edit changes nothing (no timestamp,
-  version or audit change). Stale versions return `Conflict` for both edits and status changes.
-- **OQ-12 text:** Title is trimmed, then 5–200 Unicode scalar values; Description is not trimmed, up to 4,000 scalar
-  values, and an empty description is stored as null. Text with NUL or unpaired surrogates is rejected. Veteran name
-  ≤ 200, address ≤ 500, SSN last four = four ASCII digits.
-- **Audit actor:** `CreatedBy`/`UpdatedBy` and the audit `Actor` hold the user (display) name; audit entries also
-  keep the Identity user ID.
-- **OQ-17:** no delete operation for cases; the audit foreign key also refuses deleting a case that has history.
-- **Seed (E2-S9):** 72 fixed cases (12 New, 12 Triaged, 24 In Progress including 12 reopened, 12 Resolved, 12 Closed)
-  generated from a fixed `System.Random` seed and fixed UTC base time rather than Bogus, to avoid a new runtime
-  dependency; fixtures are keyed by `SeedKey` so re-seeding never duplicates or overwrites user edits. Audit entries
-  reference the Identity user IDs of `caseworker@example.test` / `supervisor@example.test` when the E3 seed has
-  created them, otherwise stable `seed:<user name>` IDs.
-
-E3 (identity) decisions ([ADR 0007](adr/0007-roles-and-permissions.md)):
-
-- **OQ-3 roles:** `CaseWorker` and `Supervisor`. Both may view, create and edit cases, look up veterans and upload or
-  download attachments. Only a Supervisor may triage (New→Triaged), close (Resolved→Closed) or reopen
-  (Resolved→InProgress); both may start (Triaged→InProgress) and resolve (InProgress→Resolved). Several roles give the
-  union; unknown roles give nothing.
-- **OQ-18 sign-in:** email and password on `/account/login` against seeded synthetic accounts only
-  (`caseworker@example.test`, `supervisor@example.test`, password from `Seed:DemoPassword`); no self-registration,
-  password reset, external login or 2FA. All sign-in failures, including lockout, show the same message.
-- **Lockout:** five consecutive failed attempts lock the account for five minutes; the lockout is logged.
-- **Session:** 8-hour sliding cookie; circuits and cookie-authenticated requests re-check the user's security stamp
-  every minute (`Identity:RevalidationInterval`).
-- **Access denied:** pages answer 403 with an accessible access-denied page; API-style endpoints answer 401/403.
+| ID | Assumption | Reason | Effect if incorrect | Validation or mitigation | Decision owner or Government dependency |
+|---|---|---|---|---|---|
+| G1 | The Government-provided requirement change (OQ-1) is unknown until supplied and is absorbed after the initial demonstration. | Spec 4.1 announces a change without content or timing. | Scope, schedule and the G4 gate move; unknown components need rework. | Module boundaries and additive contracts limit the blast radius; E1-S9 defines the intake process (impact note, new stories, full regression). | Government dependency (content and timing); E1 coordinates |
+| A1 | The app targets .NET 10 LTS (C# 14, ASP.NET Core / Blazor / EF Core 10) with exact versions pinned. | Spec 4.5 asks for a supported LTS and the exact versions. | A different required runtime means retargeting and re-pinning every project and image. | `global.json`, `Directory.Packages.props` and [versions.md](versions.md), kept identical by `VersionConsistencyTests`; [ADR 0001](adr/0001-dotnet-blazor-efcore-versions.md). | E1 |
+| A2 | Pages use Interactive Server render mode; the Identity account pages stay static SSR. | No public API is needed, services are called directly, and it is the simplest way to handle auth and file streaming. | A required render mode (e.g. WebAssembly) needs an HTTP API layer and client-side auth. | Render-mode ADR *(E5)*; account pages per [ADR 0007](adr/0007-roles-and-permissions.md). | E5 (render mode), E3 (account pages) |
+| A3 | PostgreSQL 17 through EF Core 10 and Npgsql is acceptable as the database (OQ-14). | EF Core is the spec's preferred baseline; PostgreSQL runs on Linux x86-64 and is lightweight. | Another engine means a new provider, migrations and the PostgreSQL-specific pieces (`xmin` concurrency, `FOR SHARE`, check constraints). | Data access isolated in Persistence with per-operation contexts; [ADR 0002](adr/0002-data-access-and-database.md) names SQL Server as the alternative. | E1 |
+| A4 | Local ASP.NET Core Identity with seeded synthetic users is acceptable (OQ-18): email and password, no self-registration, reset, external login or 2FA. | Production identity is out of scope (4.7) and Government identity services must not be used (4.1). | An evaluator expecting SSO or PIV would see a non-production sign-in. | Recorded as a limitation; `ICurrentUser` and policies are independent of how the user signed in; [ADR 0007](adr/0007-roles-and-permissions.md). | E3 |
+| A5 | Two roles, `CaseWorker` and `Supervisor`, with the adopted permission matrix (OQ-3): both view, create, edit, look up and attach; only Supervisors triage, close and reopen. | The spec requires at least two roles with different permissions but names none. | Different roles or rules mean changing the matrix and its tests. | One `RolePermissionMap` drives policies, actors and the UI; golden matrix test; [ADR 0007](adr/0007-roles-and-permissions.md). | E3; Government: confirm |
+| A6 | "Audit information" means audit fields on each case (created/updated at and by, UTC) plus an append-only audit trail (OQ-2). | The spec term is ambiguous, so both readings are covered. | If only the fields were expected, the trail is extra; if more was expected (e.g. field values), the trail needs more detail. | SaveChanges guard rejects audit updates and deletes; `AuditTrailTests`; [ADR 0006](adr/0006-audit-trail.md). | E2 |
+| A7 | A new case starts in `New`, and every transition not listed in 4.3 is rejected, including Closed to anything (OQ-10, OQ-11). | The spec lists the allowed transitions under "controlled status-workflow transitions". | A missing allowed edge (e.g. reopen from Closed) would block a legitimate action. | One domain edge table; the 25-pair workflow test; [ADR 0005](adr/0005-case-workflow.md). | E2 |
+| A8 | The veteran lookup is optional at intake; the case keeps a snapshot of name, address and SSN last four only, and the SSN is never logged (OQ-5a, OQ-5b). | The spec does not say what the lookup is for or whether the SSN may be stored. | A required lookup, or a need to store the full SSN, changes intake validation and the data model. | Snapshot validated by `CaseTextRules`; SSN-free log tests; [ADR 0008](adr/0008-veteran-lookup-mock-and-client.md). | E2 (storage), E4 (lookup), E5 (UI); Government: confirm |
+| A9 | Attachments are stored on a Docker volume with metadata in PostgreSQL; size and type limits are configurable (OQ-6). | No attachment constraints are given; malware scanning is out of scope (4.7). | Different limits are configuration only; a required storage service or scanning needs a new store or an added step. | `IAttachmentStore` keeps storage swappable; startup-validated options; [ADR 0009](adr/0009-attachment-storage.md). | E4; Government: confirm |
+| A10 | WCAG 2.2 AA is the accessibility yardstick for the primary workflow (OQ-7). | The spec names behaviours, not a standard. | A stricter target (e.g. a formal Section 508 conformance claim) needs more evidence and fixes. | axe checks, browser tests and manual keyboard/screen-reader review *(E5)*. | E5; Government: confirm |
+| A11 | The primary workflow is sign in, case list, intake (with lookup), detail, edit, status transition and attachment upload/download (OQ-8). | Not defined in the spec. | A different workflow changes what the end-to-end and accessibility tests must cover. | E5-S9 end-to-end suite *(E5)*. | E5 |
+| A12 | The app is a modular monolith inside the Blazor host; the only separate service is the veteran-lookup mock. | Minimal coupling and operations; the spec asks for no public REST API. | A required API or separately deployable services means new hosts and network auth. | Architecture tests forbid feature-to-feature references, so modules can be split later. | E1 |
+| E1-1 | Structured JSON logs on stdout are the required telemetry; traces, metrics and a dashboard are optional and left out (OQ-13). | Spec 4.2 says "operational telemetry, such as logs". | More telemetry would need exporters and a collector. | Logs carry EventIds and operation IDs; [ADR 0003](adr/0003-telemetry-and-logging.md). | E1 |
+| E1-2 | Technical decisions are documented as ADRs in `docs/adr`, this file and the README (OQ-15). | The spec does not prescribe a format. | A required format means restructuring the documents. | ADR template and index; README links every document. | E1 |
+| E1-3 | Every automated suite, including browser end-to-end tests, runs in the `tests` Compose service (OQ-16). | Spec 4.5 requires one command to run the complete suite. | A runtime limit or a separate browser run would need the suite split. | `scripts/run-tests.sh` rejects missing or zero-test projects; [ADR 0004](adr/0004-test-strategy.md). | E1, E5 |
+| E1-4 | Times are stored in UTC and shown with an explicit "UTC" label (OQ-19). | Spec 4.5 requires UTC storage; display time zone is unspecified. | Local-time display would need per-user time zones. | UTC value converters and model test; display label *(E5)*. | E1, E5 |
+| E1-5 | Services are pinned to `platform: linux/amd64`; ARM hosts run them under emulation (OQ-20). | Spec 4.5 requires Linux x86-64 containers. | Slower start-up and tests on Apple Silicon; no functional change. | Documented in the README. | E1 |
+| E2-1 | The case list filters by status (multi-select) and text search on Title or Description, sorts by Id, Title, Status, Created or Updated, defaults to 25 per page sorted by Updated descending, and accepts page sizes 1–100 (OQ-4). | The spec asks for paging, filtering and sorting without fields or sizes. | Different fields or sizes change the query and UI controls. | Allowlisted sort switch and escaped search; `CaseListTests` over every sort and filter. | E2 |
+| E2-2 | Title and Description are editable by both roles in every status except Closed; ID and status never change through edit; stale versions return Conflict (OQ-9). | Edit rules are not specified. | Different edit rules change the domain method and UI. | Domain `Edit` plus optimistic concurrency tests. | E2 |
+| E2-3 | Title is trimmed and then 5–200 Unicode scalar values; Description is not trimmed, at most 4,000; NUL and unpaired surrogates are rejected (OQ-12). | The spec gives lengths without saying how to count them. | Counting UTF-16 units or text elements instead would shift the boundaries. | One shared `CaseTextRules`; boundary tests including supplementary characters. | E2 |
+| E2-4 | `CreatedBy`/`UpdatedBy` and the audit actor hold the user's display name; audit entries also keep the Identity user ID. | Readable audit plus a stable identifier. | If names must not be stored, these columns change. | `AuditAppender.ActorName`; actor values capped at the column length. | E2 |
+| E2-5 | There is no delete operation for cases or attachments (OQ-17). | Not required by the spec, and deletion would weaken the audit trail. | A required delete needs new operations, permissions and audit actions. | Restrict foreign keys refuse deleting a case with history or attachments. | E2, E4 |
+| E2-6 | 72 synthetic cases across all statuses are seeded from a fixed `System.Random` seed, keyed so re-seeding never duplicates or overwrites edits. | Deterministic demo data without a new runtime dependency (Bogus). | None functionally; different data only changes the demo set. | Seed idempotence and two-database determinism tests. | E2 |
+| E3-1 | Five failed sign-ins lock an account for five minutes; all sign-in failures show the same message. | Baseline brute-force protection without account enumeration. | Different lockout rules are configuration only. | `AuthenticationTests` lockout cases. | E3 |
+| E3-2 | Sessions use an 8-hour sliding cookie; circuits and requests re-check the security stamp every minute. | Revocation reaches open sessions without a token store. | Instant revocation would need server-side sessions. | `CurrentUserIntegrationTests` revalidation; limitation recorded below. | E3 |
+| E3-3 | Pages answer 403 with an accessible access-denied page; API-style endpoints answer 401/403 and never redirect. | Clear feedback for people; correct semantics for programmatic callers. | None functionally. | `EndpointAuthorizationGuardTests` over the real endpoint table. | E3 |
+| D1 | The veteran-lookup OpenAPI contract is authored by the team and generated from the mock's code; `docs/contracts/veteran-lookup.openapi.yaml` is a committed snapshot. | No definition was supplied to the team (tech lead decision, 2026-10-17). | If the Government supplies a fixed definition, the mock must change to match it. | Drift test fails when code and file differ; `scripts/update-contract-snapshots.sh` regenerates for review; [ADR 0008](adr/0008-veteran-lookup-mock-and-client.md). | Tech lead (E4); Government: confirm |
+| D2 | The generated contract has fixed metadata and no `servers` entry. | The output must be identical on every machine. | None. | `The_generated_document_is_host_independent`. | E4 |
+| D3 | The mock answers 400 (problem+json) for an absent or malformed body or a missing, null, non-string or blank `ssn`, and 415 for a non-JSON body. The client accepts nine digits or `NNN-NN-NNNN`, allows one retry (2 s per attempt, 5 s total) and maps every failure to Unavailable (OQ-5c). | The spec defines only 200 and 404. | A real service could behave differently on errors; intake would still continue, as Unavailable. | Contract and client tests for every outcome, run in-process and against the container. | E4 |
+| D4 | The mock listens on port 8081; attachments live under `/attachments` in Compose and, when no path is configured, in `<system temp>/caseintake-attachments`. | Matches the Compose wiring; one fixed local folder keeps the web app and migrator in agreement. | None functionally. | Compose healthcheck; options tests. | E4 |
+| D5 | The 50-record lookup dataset comes from a fixed `System.Random` seed and is committed. | Determinism without a new dependency, like the case seed. | None. | Dataset drift test; area numbers 900–999 are never issued. | E4 |
+| D6 | Allowed attachment types are MIME-type/extension pairs (default PDF, PNG, JPEG, plain text, DOCX), 10 MiB, no count limit; leading bytes are checked for PDF, PNG, JPEG and DOCX. | Types and extensions must be configured together; a cheap check catches renamed files. | Different limits are configuration only; content checks are not proof of safety. | Startup validation; signature tests; [ADR 0009](adr/0009-attachment-storage.md). | E4; Government: confirm limits |
+| D7 | Empty files and uploads to Closed cases are rejected. | Consistent with Closed being read-only (OQ-9). | If attachments must be allowed on Closed cases, one check changes. | Locked commit re-checks the status; closed-during-upload test. | E4 |
+| D8 | Audit details and logs carry the attachment ID, size and type, never the file name. | A file name could contain an SSN-shaped value. | None functionally. | Log and audit tests with an SSN-shaped file name. | E4 |
+| D9 | The migrator reconciles attachment storage before web starts: stale temporary and unreferenced files older than one hour are removed, and content with metadata is never deleted. | A database and a filesystem cannot share a transaction. | Without it, leftover files would accumulate after crashes. | Reconciler tests, including the migrator entry point. | E4 |
+| D10 | No Swagger or Scalar UI is provided for the mock. | The mock is not published to the host; the committed YAML is the reviewable artifact. | None. | The contract file in `docs/contracts`. | E4 |
 
 ## Limitations (out of scope per specification 4.7 and plan 0.7)
 
 - No production identity provider, password reset or self-registration.
-- No malware scanning of attachments.
+- No malware scanning of attachments. MIME type and extension are browser claims; the leading bytes are checked for
+  PDF, PNG, JPEG and DOCX, which catches renamed files but is not proof of safety. Files are always served as
+  downloads with `nosniff` to limit exposure.
+- A crash between storing an upload's bytes and committing its metadata can leave an unreferenced file until the next
+  start, when the migrator removes it; such a file is never served.
+- Attachments cannot be deleted (OQ-17), and there is no per-case count limit.
+- The lookup contract is the team's own; a real sample data service could differ in error behaviour.
 - No production monitoring, alerting, tracing backend or metrics dashboard; logs go to stdout only.
 - No Government systems or data; all data is synthetic.
 - Backup, disaster recovery and high availability are not addressed.
@@ -81,8 +74,8 @@ E3 (identity) decisions ([ADR 0007](adr/0007-roles-and-permissions.md)):
   are limited to the app's own origin.
 - Demo passwords are a documented shared secret in `docker-compose.yml`; they protect nothing beyond the local demo.
 
-## Known foundation gaps (tracked, not hidden)
+## Known gaps (tracked, not hidden)
 
-- Case and audit tables are in the `E2_Cases` migration; attachment tables are added by E4.
+- Lookup and attachments have no pages yet (E5-S4, E5-S7); E4 provides the services and the download endpoint.
 - The Playwright browser layer is added to the evaluation image with the first E2E test (E5-S9).
-- The `veteran-lookup` Compose service builds from E4's Dockerfile, which does not exist yet.
+- `docs/traceability.md` (requirement → evidence) is still owed by E1-S8.

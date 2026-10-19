@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Typed Veteran Lookup client (E4-S3): references Contracts only (plan 0.2). Talks to the local mock over HTTP. -->
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Contracts\CaseIntake.Contracts.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaseIntake.VeteranLookup.Tests" />
+    <InternalsVisibleTo Include="CaseIntake.IntegrationTests" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+  </PropertyGroup>
+  <!-- E4 lookup tests: the mock service, the generated OpenAPI contract and its committed snapshot, the dataset, and the
+       resilient client. Runs against the in-process mock always and also against the Compose veteran-lookup service
+       when VeteranLookup__BaseUrl is set (the tests service sets it). No TestKit: that would pull in the web app. -->
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Mock\CaseIntake.VeteranLookup.Mock.csproj" />
+    <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Client\CaseIntake.VeteranLookup.Client.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+  </ItemGroup>
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+</Project>

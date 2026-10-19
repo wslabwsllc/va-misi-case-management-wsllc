@@ -5,3 +5,5 @@
 .idea/
 TestResults/
 results/
+/attachments/
+src/CaseIntake.Web/attachments/

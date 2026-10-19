@@ -91,6 +91,8 @@ public class ArchitectureTests
             typeof(CaseIntake.Contracts.Common.Error).Assembly,
             typeof(CaseIntake.Persistence.AppDbContext).Assembly,
             typeof(CaseIntake.ServiceDefaults.OperationScope).Assembly,
+            typeof(CaseIntake.Attachments.AttachmentsModule).Assembly,
+            typeof(CaseIntake.VeteranLookup.Client.VeteranLookupModule).Assembly,
         };
         var duplicates = assemblies.SelectMany(a => a.GetExportedTypes()).GroupBy(t => t.FullName).Where(g => g.Count() > 1).Select(g => g.Key);
 

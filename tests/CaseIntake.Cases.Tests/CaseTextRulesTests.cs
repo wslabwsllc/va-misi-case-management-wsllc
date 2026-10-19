@@ -160,4 +160,16 @@ public class CaseTextRulesTests
         var message = Assert.Single(error.FieldErrors![CaseFieldNames.Title]);
         Assert.True(message == CaseTextRules.TitleLengthMessage || message == CaseTextRules.TitleRequiredMessage, message);
     }
+
+    [Fact]
+    public void Actor_truncation_never_splits_a_surrogate_pair()
+    {
+        var name = new string('a', CaseFieldLimits.ActorMaxLength - 1) + "\ud83d\ude00" + "tail";
+
+        var truncated = CaseTextRules.TruncateActor(name);
+
+        Assert.Equal(CaseFieldLimits.ActorMaxLength - 1, truncated.Length);
+        Assert.NotNull(CaseTextRules.CountScalarValues(truncated));          // no lone surrogate left
+        Assert.Equal(new string('b', CaseFieldLimits.ActorMaxLength), CaseTextRules.TruncateActor(new string('b', 300)));
+    }
 }

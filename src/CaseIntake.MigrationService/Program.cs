@@ -1,3 +1,4 @@
+using CaseIntake.Attachments;
 using CaseIntake.Cases;
 using CaseIntake.Identity;
 using CaseIntake.Persistence;
@@ -13,6 +14,7 @@ builder.AddServiceDefaults(includeHealthChecks: false);
 builder.Services.AddPersistence(builder.Configuration);
 builder.Services.AddIdentitySeed(); // E3, order 10
 builder.Services.AddCasesSeed();   // E2, order 20
+builder.Services.AddAttachmentsMaintenance(); // E4: storage reconciliation, run below after seeding
 
 using var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILoggerFactory>().CreateLogger("CaseIntake.MigrationService");
@@ -28,6 +30,7 @@ try
     var initializer = host.Services.GetRequiredService<DatabaseInitializer>();
     await initializer.MigrateAsync(options: null, lifetime.ApplicationStopping);
     await initializer.SeedAsync(lifetime.ApplicationStopping);
+    await host.Services.ReconcileAttachmentStorageAsync(lifetime.ApplicationStopping);   // E4, before web accepts uploads
     logger.LogInformation(new EventId(1005, "MigrationServiceCompleted"), "Migration and seeding completed");
     exitCode = 0;
 }

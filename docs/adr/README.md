@@ -11,6 +11,7 @@ MADR-style records (context, decision, alternatives, tradeoffs, consequences). C
 | [0005](0005-case-workflow.md) | Case status workflow as a domain-owned edge table | E2 | accepted |
 | [0006](0006-audit-trail.md) | Audit information: audit fields plus an append-only trail | E2 | accepted |
 | [0007](0007-roles-and-permissions.md) | Local Identity authentication, roles and the permission matrix | E3 | accepted |
+| [0008](0008-veteran-lookup-mock-and-client.md) | Veteran Lookup: code-first mock, generated OpenAPI contract, resilient client | E4 | accepted |
+| [0009](0009-attachment-storage.md) | Attachment storage and protection | E4 | accepted |
 
-Still to be written by their owners (E1-S8 requires them before G3): render mode and accessibility approach (E5),
-attachment storage and veteran lookup mock/client (E4).
+Still to be written by their owners (E1-S8 requires them before G3): render mode and accessibility approach (E5).
