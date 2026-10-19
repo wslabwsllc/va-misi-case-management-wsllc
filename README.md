@@ -112,7 +112,7 @@ pages, case data, downloads or sign-in responses ([ADR 0011](docs/adr/0011-ui-ac
 
 ## Documents
 
-[Epic plan](docs/Epic_Plan.md) · [Implementation prompt](docs/implementation-prompt.md) · [ADRs](docs/adr/README.md) ·
+[Installation guide](docs/installation.md) · [Epic plan](docs/Epic_Plan.md) · [Implementation prompt](docs/implementation-prompt.md) · [ADRs](docs/adr/README.md) ·
 [Versions](docs/versions.md) · [Assumptions and limitations](docs/assumptions-and-limitations.md) ·
 [Verification](docs/verification.md) · [Demo walkthrough](docs/demo.md) · [Testing](docs/testing.md) ·
 [Docker troubleshooting](docs/docker-troubleshooting.md) · [Accessibility review](docs/accessibility-review.md).
