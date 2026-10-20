@@ -24,6 +24,10 @@ public static class E2ESettings
     /// <summary>Records a video of every test when set to 1.</summary>
     public static bool RecordVideo { get; } = Environment.GetEnvironmentVariable("E2E_VIDEO") == "1";
 
+    /// <summary>
+    /// Limit for every Playwright action and every <c>Expect(...)</c> assertion (Playwright's own assertion default is 5 s).
+    /// Under linux/amd64 emulation on Apple Silicon a sign-in redirect and first render can take longer than 5 s.
+    /// </summary>
     public static readonly TimeSpan ActionTimeout = TimeSpan.FromSeconds(15);
 }
 

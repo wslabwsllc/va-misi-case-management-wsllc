@@ -90,19 +90,33 @@ public class VersionConsistencyTests
         Assert.All(restores, restore => Assert.Contains("--locked-mode", restore));
     }
 
+    /// <summary>
+    /// The dated apt snapshot is opt-in (#26: snapshot.ubuntu.com returned 502/503 for hours and broke every uncached
+    /// build). By default apt uses the live mirror with retries; passing APT_SNAPSHOT pins every OS package install, and
+    /// the timestamp documented for that is the same in the Dockerfile and versions.md.
+    /// </summary>
     [Fact]
-    public void Apt_reads_the_dated_snapshot_listed_in_versions_md()
+    public void Apt_snapshot_is_opt_in_and_applied_to_every_OS_package_install_when_set()
     {
         var dockerfile = File.ReadAllText(RepositoryRoot.File("Dockerfile"));
-        var snapshot = Regex.Match(dockerfile, @"^ARG APT_SNAPSHOT=(\d{8}T\d{6}Z)$", RegexOptions.Multiline);
-        Assert.True(snapshot.Success, "Dockerfile has no ARG APT_SNAPSHOT=<yyyyMMddTHHmmssZ>");
-        Assert.Contains($"| {snapshot.Groups[1].Value} |", VersionsDoc);
+        Assert.Matches(new Regex(@"^ARG APT_SNAPSHOT=$", RegexOptions.Multiline), dockerfile);   // empty default: live mirror
 
-        // Every step that installs OS packages (apt directly, or Playwright's --with-deps) sets the snapshot first.
+        var documented = Regex.Matches(dockerfile + "\n" + VersionsDoc, @"APT_SNAPSHOT=(\d{8}T\d{6}Z)")
+            .Select(m => m.Groups[1].Value).Distinct().ToList();
+        Assert.Single(documented);   // the opt-in timestamp shown in the Dockerfile matches versions.md
+        Assert.Contains("APT_SNAPSHOT", VersionsDoc);
+
+        // Every step that installs OS packages (apt directly, or Playwright's --with-deps) retries the mirror and applies
+        // the snapshot when one is passed.
         var installs = Dockerfiles.SelectMany(Instructions)
             .Where(i => i.Contains("apt-get", StringComparison.Ordinal) || i.Contains("--with-deps", StringComparison.Ordinal)).ToList();
         Assert.NotEmpty(installs);
-        Assert.All(installs, install => Assert.Contains("APT::Snapshot", install));
+        Assert.All(installs, install =>
+        {
+            Assert.Contains("Acquire::Retries", install);
+            Assert.Contains("if [ -n \"${APT_SNAPSHOT}\" ]", install);
+            Assert.Contains("APT::Snapshot", install);
+        });
     }
 
     private static IEnumerable<string> Dockerfiles =>

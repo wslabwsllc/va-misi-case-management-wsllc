@@ -12,6 +12,8 @@ public sealed class PlaywrightFixture : IAsyncLifetime
         Playwright = await Microsoft.Playwright.Playwright.CreateAsync();
         Browser = await Playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
         Playwright.Selectors.SetTestIdAttribute("data-testid");
+        // Assertions wait as long as actions (E2ESession sets the action timeout on each browser context).
+        Assertions.SetDefaultExpectTimeout((float)E2ESettings.ActionTimeout.TotalMilliseconds);
     }
 
     public async Task DisposeAsync()

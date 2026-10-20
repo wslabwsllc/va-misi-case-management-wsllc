@@ -9,21 +9,49 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// <summary>
 /// E4-S2/S3 end to end: the production client and pipeline against the real mock, over HTTP. In the <c>tests</c>
 /// service this also runs against the <c>veteran-lookup</c> container (a real socket on the Compose network).
+/// The tests keep the production timeouts (2 s per attempt, 5 s total); <see cref="InitializeAsync"/> first sends one
+/// lookup with a relaxed budget, so first-request start-up cost (JIT, dataset load) is never charged to that budget.
 /// </summary>
-public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<MockServiceFactory>
+public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<MockServiceFactory>, IAsyncLifetime
 {
+    // Cold start under linux/amd64 emulation on Apple Silicon measured 1.5-1.9 s for the first request, against the
+    // production 2 s attempt limit; 30 s leaves room for a slow or busy machine.
+    private static readonly TimeSpan WarmUpBudget = TimeSpan.FromSeconds(30);
+
+    /// <summary>
+    /// Warms the client pipeline and each mock with one lookup with a generous budget, through the same code path the tests
+    /// use. The result is not asserted; the tests below check behavior with the production budget.
+    /// </summary>
+    public async Task InitializeAsync()
+    {
+        foreach (var target in LookupTarget.Names())
+        {
+            await using var provider = BuildProvider(target, WarmUpBudget);
+            await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(VeteranDatasetGenerator.KnownFoundSsn, CancellationToken.None);
+        }
+    }
+
+    public Task DisposeAsync() => Task.CompletedTask;
+
     private async Task<VeteranLookupResult> LookupAsync(string target, string ssn)
     {
         await using var provider = BuildProvider(target);
         return await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(ssn, CancellationToken.None);
     }
 
-    private ServiceProvider BuildProvider(string target)
+    /// <param name="budget">Attempt and total timeout; null keeps the production defaults.</param>
+    private ServiceProvider BuildProvider(string target, TimeSpan? budget = null)
     {
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+        var settings = new Dictionary<string, string?>
         {
             ["VeteranLookup:BaseUrl"] = target == LookupTarget.Compose ? LookupTarget.ComposeBaseUrl : "http://localhost/",
-        }).Build();
+        };
+        if (budget is { } timeout)
+        {
+            settings["VeteranLookup:AttemptTimeout"] = timeout.ToString("c", System.Globalization.CultureInfo.InvariantCulture);
+            settings["VeteranLookup:TotalTimeout"] = timeout.ToString("c", System.Globalization.CultureInfo.InvariantCulture);
+        }
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(settings).Build();
         var services = new ServiceCollection()
             .AddLogging()
             .AddSingleton<IConfiguration>(configuration)
