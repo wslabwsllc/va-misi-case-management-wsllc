@@ -108,7 +108,7 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
             await page.GetByTestId("mobile-profile").TapAsync();
             var sheet = page.GetByTestId("profile-sheet");
             await Expect(sheet).ToContainTextAsync(DemoAccounts.CaseWorker);
-            await Expect(sheet).ToContainTextAsync("Role: CaseWorker");
+            await Expect(sheet).ToContainTextAsync("Role: Case worker");
             await sheet.GetByRole(AriaRole.Button, new() { Name = "Sign out" }).TapAsync();
             await Expect(page.GetByTestId("signed-out")).ToBeVisibleAsync();
         });

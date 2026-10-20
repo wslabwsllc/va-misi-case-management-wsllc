@@ -65,7 +65,7 @@ public class OperationActorFactoryTests
     public void Several_roles_give_the_union_and_unknown_roles_give_nothing()
     {
         var both = OperationActorFactory.FromPrincipal(Principals.User("1", "x", AppRoles.CaseWorker, AppRoles.Supervisor));
-        var unknown = OperationActorFactory.FromPrincipal(Principals.User("2", "y", "Auditor"));
+        var unknown = OperationActorFactory.FromPrincipal(Principals.User("2", "y", "Administrator"));
 
         Assert.Equal(RolePermissionMap.PermissionsFor([AppRoles.Supervisor]), both.Permissions);
         Assert.True(unknown.IsAuthenticated);

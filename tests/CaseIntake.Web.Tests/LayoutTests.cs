@@ -48,6 +48,8 @@ public class LayoutTests : WebTestContext
     }
 
     [Theory]
+    [InlineData(AppRoles.Auditor)]
+    [InlineData(AppRoles.IntakeClerk)]
     [InlineData(AppRoles.CaseWorker)]
     [InlineData(AppRoles.Supervisor)]
     [InlineData(AppRoles.QualityAnalyst)]
@@ -57,7 +59,7 @@ public class LayoutTests : WebTestContext
         var cut = RenderLayout();
 
         Assert.Equal($"{role.ToLowerInvariant()}@example.test", cut.Find("[data-testid=user-name]").TextContent);
-        Assert.Equal(role, cut.Find("[data-testid=user-roles]").TextContent);
+        Assert.Equal(AppRoles.DisplayName(role), cut.Find("[data-testid=user-roles]").TextContent);
         var signOut = cut.Find("[data-testid=sign-out]");
         Assert.Equal("submit", signOut.GetAttribute("type"));
         Assert.Contains("Sign out", signOut.TextContent);

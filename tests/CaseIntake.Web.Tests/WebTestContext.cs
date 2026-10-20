@@ -20,6 +20,9 @@ namespace CaseIntake.Web.Tests;
 /// </summary>
 public abstract class WebTestContext : BunitContext
 {
+    /// <summary>Configuration seen by components; the sign-in page lists demo accounts only when Seed:DemoPassword is set.</summary>
+    protected Microsoft.Extensions.Configuration.ConfigurationManager Configuration { get; } = new();
+
     protected FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 10, 19, 12, 0, 0, TimeSpan.Zero));
     protected FakeCurrentUser CurrentUser { get; } = new();
     protected FakeVeteranLookupClient Lookup { get; } = new();
@@ -42,6 +45,7 @@ public abstract class WebTestContext : BunitContext
         Services.AddSingleton<Contracts.TestResults.ITestResultsService>(sp => sp.GetRequiredService<FakeTestResultsService>());
         // The sign-in page injects AccountSignIn; presentation tests never submit, so an uninitialized instance suffices.
         Services.AddScoped(_ => (Identity.Account.AccountSignIn)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Identity.Account.AccountSignIn)));
+        Services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(Configuration);
         Services.AddSingleton<IAttachmentService, InMemoryAttachmentService>();
         Services.AddSingleton<IVeteranLookupClient>(Lookup);
         Services.AddSingleton<ICaseWorkflow>(CaseWorkflow.Instance);

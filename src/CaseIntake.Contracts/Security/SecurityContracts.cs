@@ -5,11 +5,33 @@ namespace CaseIntake.Contracts.Security;
 
 public static class AppRoles
 {
+    /// <summary>Read-only oversight: views cases, audit trails and documents, changes nothing.</summary>
+    public const string Auditor = "Auditor";
+
+    /// <summary>Front-door intake: opens cases, looks up the veteran and attaches documents; no editing or status changes.</summary>
+    public const string IntakeClerk = "IntakeClerk";
+
     public const string CaseWorker = "CaseWorker";
     public const string Supervisor = "Supervisor";
 
     /// <summary>Quality assurance: reads cases and owns the test results and evidence module (E5 test results).</summary>
     public const string QualityAnalyst = "QualityAnalyst";
+
+    /// <summary>The name shown to users; unknown roles are shown as stored.</summary>
+    public static string DisplayName(string role) => role switch
+    {
+        IntakeClerk => "Intake clerk",
+        CaseWorker => "Case worker",
+        QualityAnalyst => "Quality analyst",
+        _ => role,
+    };
+
+    /// <summary>The user's roles as display names in a stable order, or "no role".</summary>
+    public static string Describe(IEnumerable<string> roles)
+    {
+        var names = roles.Order(StringComparer.Ordinal).Select(DisplayName).ToList();
+        return names.Count == 0 ? "no role" : string.Join(", ", names);
+    }
 }
 
 public static class Permissions

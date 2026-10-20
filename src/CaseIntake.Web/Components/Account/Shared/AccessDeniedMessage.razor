@@ -41,7 +41,7 @@
         var actor = OperationActorFactory.FromPrincipal((await AuthenticationState).User);
         if (actor.IsAuthenticated)
         {
-            _roleText = actor.Roles.Count == 0 ? "no role" : string.Join(", ", actor.Roles.Order(StringComparer.Ordinal));
+            _roleText = AppRoles.Describe(actor.Roles);
         }
         if (PageType is null)
         {

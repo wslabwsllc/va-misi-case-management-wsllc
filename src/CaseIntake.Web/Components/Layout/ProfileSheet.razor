@@ -27,7 +27,6 @@
 
     private static string RoleText(System.Security.Claims.ClaimsPrincipal user)
     {
-        var roles = OperationActorFactory.FromPrincipal(user).Roles.Order(StringComparer.Ordinal).ToList();
-        return roles.Count == 0 ? "no role" : string.Join(", ", roles);
+        return AppRoles.Describe(OperationActorFactory.FromPrincipal(user).Roles);
     }
 }

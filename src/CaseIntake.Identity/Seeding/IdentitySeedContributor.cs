@@ -12,17 +12,22 @@ public sealed record DemoUser(string Id, string UserName, string Role);
 
 public static class DemoUsers
 {
+    /// <summary>The demo password setting; demo users exist only while it is configured.</summary>
+    public const string PasswordKey = "Seed:DemoPassword";
+
     public static DemoUser CaseWorker { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000001", "caseworker@example.test", AppRoles.CaseWorker);
     public static DemoUser Supervisor { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000002", "supervisor@example.test", AppRoles.Supervisor);
     public static DemoUser QualityAnalyst { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000003", "qa@example.test", AppRoles.QualityAnalyst);
-    public static IReadOnlyList<DemoUser> All { get; } = [CaseWorker, Supervisor, QualityAnalyst];
+    public static DemoUser IntakeClerk { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000004", "intake@example.test", AppRoles.IntakeClerk);
+    public static DemoUser Auditor { get; } = new("6f1d1c52-0e3a-4c1b-9a51-000000000005", "auditor@example.test", AppRoles.Auditor);
+    public static IReadOnlyList<DemoUser> All { get; } = [Auditor, IntakeClerk, CaseWorker, Supervisor, QualityAnalyst];
 
     /// <summary>Stable role IDs, so two fresh databases seed identically.</summary>
     internal static string RoleId(string role) => $"role-{role.ToLowerInvariant()}";
 }
 
 /// <summary>
-/// Seeds the two roles and one demo user per role (E3-S4) through <see cref="RoleManager{TRole}"/> and
+/// Seeds every role and one demo user per role (E3-S4) through <see cref="RoleManager{TRole}"/> and
 /// <see cref="UserManager{TUser}"/>, which save through their own store context. Idempotent: existing roles and users
 /// are kept as they are (passwords are never reset), and only missing roles, users or memberships are added, so a
 /// partially completed run is completed. Any failed Identity result throws, failing the migrator.
@@ -33,7 +38,7 @@ internal sealed class IdentitySeedContributor(
     IConfiguration configuration,
     ILogger<IdentitySeedContributor> logger) : ISeedContributor
 {
-    public const string DemoPasswordKey = "Seed:DemoPassword";
+    public const string DemoPasswordKey = DemoUsers.PasswordKey;
 
     public static int Order => 10;
 
