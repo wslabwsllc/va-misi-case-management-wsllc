@@ -100,7 +100,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         var data = new TheoryData<string, string>();
         foreach (var target in LookupTarget.Names())
         {
-            foreach (var body in new[] { "", "{", "not json", "{}", "{\"ssn\":null}", "{\"ssn\":123456789}", "{\"ssn\":\"\"}", "{\"ssn\":\"   \"}", "{\"other\":\"x\"}" })
+            foreach (var body in new[] { "", "{", "not json", "{}", "{\"ssn\":null}", "{\"ssn\":900456789}", "{\"ssn\":\"\"}", "{\"ssn\":\"   \"}", "{\"other\":\"x\"}" })
             {
                 data.Add(target, body);
             }

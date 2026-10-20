@@ -12,7 +12,8 @@ tables below drift from those files.
 | Component | Version |
 |---|---|
 | .NET SDK | 10.0.402 |
-| ASP.NET Core runtime | 10.0.13 |
+| .NET runtime (`Microsoft.NETCore.App`) | 10.0.13 |
+| ASP.NET Core and Blazor shared framework (`Microsoft.AspNetCore.App`) | 10.0.13 |
 | PostgreSQL | 18.6 |
 
 The runtime and ASP.NET Core / Blazor shared-framework versions come from the pinned images below. The exact
@@ -33,10 +34,12 @@ run natively on the build machine while the final images are linux/amd64.
 
 | Source | Pin |
 |---|---|
-| Ubuntu apt snapshot (`APT_SNAPSHOT` in `Dockerfile`) | 20261016T000000Z |
+| Ubuntu apt snapshot (`APT_SNAPSHOT` in `Dockerfile`) | off by default (live mirror); opt in with `--build-arg APT_SNAPSHOT=20261016T000000Z` |
 
 `libgssapi-krb5-2` (runtime image) and the Chromium dependencies that `playwright install --with-deps` adds to the
-test image come from `snapshot.ubuntu.com` at that timestamp. The Chromium build itself is fixed by
+test image come from the live Ubuntu mirror (5 retries), or from `snapshot.ubuntu.com` at the given timestamp when
+`APT_SNAPSHOT` is set. The snapshot is not the default because that service returned 502/503 for hours, failing every
+uncached build. The Chromium build itself is fixed by
 `Microsoft.Playwright`.
 
 ## NuGet packages (runtime)
@@ -85,6 +88,6 @@ Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
 2. For an image, look up the new digest with `docker buildx imagetools inspect <image>:<tag>` (the `Digest:` line of
    the index) and update every reference: `Dockerfile`, `src/CaseIntake.VeteranLookup.Mock/Dockerfile`,
    `docker-compose.yml`, `PostgresDatabaseFixture.PostgresImage` and the README.
-3. For OS patches, move `APT_SNAPSHOT` to a newer timestamp (not older than the base images' build date).
+3. OS packages follow the live mirror on every uncached build. For a pinned build pass `APT_SNAPSHOT` (not older than the base images' build date).
 4. Update the tables above.
 5. Run `docker compose run --rm tests`; the consistency test fails until the files agree.
