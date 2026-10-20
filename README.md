@@ -17,6 +17,18 @@ Also needed: free host port **8080**, several GB of disk, and network access at 
 downloaded when containers run). Images are `linux/amd64`; the .NET build runs natively, so on Apple Silicon only the
 running containers are emulated. All pinned versions: [docs/versions.md](docs/versions.md).
 
+**Apple Silicon (M-series) Macs.** Every container runs under x86-64 emulation, so the stack is slower than on an x86-64
+host and needs enough Docker resources:
+
+- In Docker Desktop **Settings > Resources**, give Docker at least **8 GB of memory**. The test run starts PostgreSQL,
+  the lookup mock, a second copy of the app and headless Chromium at the same time. The suite has been verified with
+  10 CPUs and 8 GB (7.7 GiB reported by `docker info`); with less, expect slower runs.
+- In **Settings > General**, turn on **Use Rosetta for x86_64/amd64 emulation on Apple Silicon** if your Docker
+  Desktop version offers it; it is faster than the default emulation.
+- Expect `docker compose run --rm tests` to take roughly **7 to 15 minutes** there, including the image rebuild it does
+  on every run. First requests after a container starts are the slowest; the tests allow for that, but if a single test
+  fails on a timeout, check the resources above and run the command again.
+
 <details>
 <summary>macOS</summary>
 
@@ -30,7 +42,8 @@ running containers are emulated. All pinned versions: [docs/versions.md](docs/ve
    ```
 
 1. Install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/) (Apple Silicon or Intel)
-   and start it. Compose v2 is included.
+   and start it. Compose v2 is included. On Apple Silicon, set the Docker resources from the **Apple Silicon (M-series)
+   Macs** note above before the first build.
 2. Git: `xcode-select --install` (or `brew install git`). bash is preinstalled.
 3. .NET SDK 10.0.402 with [mise](https://mise.jdx.dev/):
 
