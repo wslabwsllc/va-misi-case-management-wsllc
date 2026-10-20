@@ -61,6 +61,17 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; a
     CaseCreated, 2002 CaseUpdated, 2003 CaseStatusChanged, 2005 CaseVersionConflict, 4101 AttachmentUploaded, 4103 AttachmentDownloaded, 3005 AuthorizationDenied,
     5101 CasesExported, 5201 TestRunImported. No SSN or password appears (`docker compose logs web | grep -E '[0-9]{3}-[0-9]{2}-[0-9]{4}'` finds nothing).
 
+### Q&A extras (optional, not part of the walkthrough)
+
+- **The lookup service serves the Government contract verbatim** (spec 4.6, ADR 0008). The mock is not published to
+  the host, so ask it from inside its container and compare hashes. Both commands print
+  `bbd95fc2a187220e9bfc1860c84fbf148bfc8b10282ae82f13c05bbb84730f26`:
+
+  ```bash
+  docker compose exec -T veteran-lookup bash -c 'exec 3<>/dev/tcp/127.0.0.1/8081; printf "GET /openapi/v1.yaml HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3; while IFS= read -r line <&3 && [ ${#line} -gt 1 ]; do :; done; cat <&3' | shasum -a 256
+  shasum -a 256 docs/contracts/veteran-lookup.spec.openapi.yaml
+  ```
+
 ## Restart and persistence
 
 `docker compose down` then `docker compose up -d`: cases, edits, attachments, sign-in cookies (Data Protection keys)
