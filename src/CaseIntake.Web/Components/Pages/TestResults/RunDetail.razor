@@ -5,6 +5,7 @@
 @using CaseIntake.Domain.TestResults
 @using CaseIntake.Web.Services
 @inject ITestResultsService Results
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<RunDetail> Logger
 
 @* One run: summary and counts (failed, skipped, blocked and not executed kept apart), suites, the comparison with the
@@ -228,6 +229,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         _error = null;
         _query = new TestExecutionQuery(RunId);
@@ -278,6 +280,7 @@ else
 
     private async Task LoadExecutionsAsync()
     {
+        using var busy = Activity.Begin();
         var result = await Results.ListExecutionsAsync(_query, _cts.Token);
         _executions = result.IsSuccess ? result.Value : null;
         _executionsError = result.IsSuccess ? null : result.Error!.Message;

@@ -21,6 +21,10 @@
                                title="@(Collapsed ? item.Text : null)">
                                 <Icon Name="@item.Icon" />
                                 <span class="nav-link__text">@item.Text</span>
+                                @if (item.Href == "notifications")
+                                {
+                                    <NotificationBadge TestId="nav-unread" />
+                                }
                             </a>
                         </li>
                     }

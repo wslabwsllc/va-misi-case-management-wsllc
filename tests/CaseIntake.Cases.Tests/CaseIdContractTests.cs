@@ -22,7 +22,7 @@ public class CaseIdContractTests
     public void Every_case_mutation_request_is_covered()
     {
         Assert.Equal(
-            [nameof(ChangeStatusRequest), nameof(CreateCaseRequest), nameof(UpdateCaseRequest)],
+            [nameof(AssignCaseRequest), nameof(ChangeStatusRequest), nameof(CreateCaseRequest), nameof(UpdateCaseRequest)],
             RequestTypes.Select(t => t.Name).Order(StringComparer.Ordinal));
     }
 
@@ -45,6 +45,8 @@ public class CaseIdContractTests
             var parameters = typeof(ICaseService).GetMethod(name)!.GetParameters();
             Assert.Equal(("id", typeof(long)), (parameters[0].Name, parameters[0].ParameterType));
         }
+        var assign = typeof(ICaseAssignmentService).GetMethod(nameof(ICaseAssignmentService.AssignAsync))!.GetParameters();
+        Assert.Equal(("id", typeof(long)), (assign[0].Name, assign[0].ParameterType));
     }
 
     [Fact]

@@ -10,7 +10,7 @@ namespace CaseIntake.TestKit.Fakes;
 /// It is deliberately thin (length checks, the five allowed edges, version bump); the real rules live in the Cases
 /// module. Never registered in the composed application.
 /// </summary>
-public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider time) : ICaseService
+public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider time) : ICaseService, ICaseAssignmentService
 {
     private static readonly Dictionary<CaseStatus, CaseStatus[]> Edges = new()
     {
@@ -31,7 +31,9 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
         if (title.Length is < 5 or > 200) return TitleInvalid<CaseDetailDto>();
 
         var now = time.GetUtcNow();
-        var row = new Row(_cases.Count + 1, title, request.Description, CaseStatus.New, now, actor.UserId!, now, actor.UserId!, 1, request.Veteran);
+        var triage = request.Triage ?? CaseTriage.Default;
+        triage = triage with { AssignedTo = CaseTriageRules.NormalizeAssignee(triage.AssignedTo), DueOn = triage.DueOn ?? CaseTriageRules.DefaultDueOn(triage.Priority, now) };
+        var row = new Row(_cases.Count + 1, title, request.Description, CaseStatus.New, now, actor.UserId!, now, actor.UserId!, 1, request.Veteran, triage);
         _cases.Add(row);
         Audit(row.Id, actor, "Created", null, CaseStatus.New);
         return Result<CaseDetailDto>.Success(ToDetail(row, actor));
@@ -56,7 +58,7 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
         var title = request.Title?.Trim() ?? string.Empty;
         if (title.Length is < 5 or > 200) return TitleInvalid<CaseDetailDto>();
 
-        var updated = row with { Title = title, Description = request.Description, UpdatedAtUtc = time.GetUtcNow(), UpdatedBy = actor.UserId!, Version = row.Version + 1 };
+        var updated = row with { Title = title, Description = request.Description, Triage = request.Triage is { } t ? t with { AssignedTo = row.Triage.AssignedTo } : row.Triage, UpdatedAtUtc = time.GetUtcNow(), UpdatedBy = actor.UserId!, Version = row.Version + 1 };
         _cases[_cases.IndexOf(row)] = updated;
         Audit(id, actor, "Edited", null, null);
         return Result<CaseDetailDto>.Success(ToDetail(updated, actor));
@@ -87,6 +89,15 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
 
         IEnumerable<Row> rows = _cases;
         if (query.Statuses is { Count: > 0 }) rows = rows.Where(r => query.Statuses.Contains(r.Status));
+        if (query.Priorities is { Count: > 0 }) rows = rows.Where(r => query.Priorities.Contains(r.Triage.Priority));
+        if (query.Categories is { Count: > 0 }) rows = rows.Where(r => query.Categories.Contains(r.Triage.Category));
+        if (query.AssignedTo is { Length: > 0 } owner) rows = rows.Where(r => owner == CaseListQuery.UnassignedFilter ? r.Triage.AssignedTo is null : r.Triage.AssignedTo == owner);
+        var today = DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);
+        if (query.OverdueOnly) rows = rows.Where(r => CaseTriageRules.IsOverdue(r.Status, r.Triage.DueOn, today));
+        if (query.CreatedFromUtc is { } cf) rows = rows.Where(r => r.CreatedAtUtc >= cf);
+        if (query.CreatedToUtc is { } ct2) rows = rows.Where(r => r.CreatedAtUtc <= ct2);
+        if (query.UpdatedFromUtc is { } uf) rows = rows.Where(r => r.UpdatedAtUtc >= uf);
+        if (query.UpdatedToUtc is { } ut) rows = rows.Where(r => r.UpdatedAtUtc <= ut);
         if (!string.IsNullOrWhiteSpace(query.Search))
             rows = rows.Where(r => r.Title.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
                                    || (r.Description?.Contains(query.Search, StringComparison.OrdinalIgnoreCase) ?? false));
@@ -96,12 +107,16 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
             CaseSortField.Title => r => r.Title,
             CaseSortField.Status => r => (int)r.Status,
             CaseSortField.CreatedAt => r => r.CreatedAtUtc,
+            CaseSortField.Priority => r => (int)r.Triage.Priority,
+            CaseSortField.DueOn => r => r.Triage.DueOn ?? DateOnly.MaxValue,
+            CaseSortField.Category => r => (int)r.Triage.Category,
+            CaseSortField.Owner => r => r.Triage.AssignedTo ?? "￿",   // unassigned last
             _ => r => r.UpdatedAtUtc,
         };
         var ordered = query.Direction == SortDirection.Ascending ? rows.OrderBy(key).ThenBy(r => r.Id) : rows.OrderByDescending(key).ThenBy(r => r.Id);
         var list = ordered.ToList();
         var page = list.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
-            .Select(r => new CaseSummaryDto(r.Id, r.Title, r.Status, r.CreatedAtUtc, r.UpdatedAtUtc)).ToList();
+            .Select(r => new CaseSummaryDto(r.Id, r.Title, r.Status, r.CreatedAtUtc, r.UpdatedAtUtc, r.Triage.Priority, r.Triage.Category, r.Triage.AssignedTo, r.Triage.DueOn)).ToList();
         return Result<PagedResult<CaseSummaryDto>>.Success(new PagedResult<CaseSummaryDto>(page, query.Page, query.PageSize, list.Count));
     }
 
@@ -112,12 +127,33 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
         return Result<IReadOnlyList<AuditEntryDto>>.Success([.. _audit.Where(a => a.CaseId == id)]);
     }
 
+    /// <summary>Same rules as the real service (CaseAssignmentRules); any non-empty owner counts as someone who works cases.</summary>
+    public async Task<Result<CaseDetailDto>> AssignAsync(long id, AssignCaseRequest request, CancellationToken ct)
+    {
+        var actor = await currentUser.GetAsync(ct);
+        var row = _cases.FirstOrDefault(c => c.Id == id);
+        if (row is null) return NotFound<CaseDetailDto>();
+        if (row.Status == CaseStatus.Closed) return Result<CaseDetailDto>.Failure(new Error(ErrorKind.Validation, "CaseClosed", "Closed cases cannot be reassigned."));
+        var me = string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.UserId : actor.DisplayName;
+        var target = CaseTriageRules.NormalizeAssignee(request.AssignedTo);
+        var right = CaseAssignmentRules.RightFor(actor, me, row.Status, row.Triage.AssignedTo);
+        if (!CaseAssignmentRules.Allows(right, me, row.Triage.AssignedTo, target)) return Forbidden<CaseDetailDto>();
+        if (row.Version != request.Version) return Conflict<CaseDetailDto>();
+        if (string.Equals(row.Triage.AssignedTo, target, StringComparison.Ordinal)) return Result<CaseDetailDto>.Success(ToDetail(row, actor));
+
+        var updated = row with { Triage = row.Triage with { AssignedTo = target }, UpdatedAtUtc = time.GetUtcNow(), UpdatedBy = actor.UserId!, Version = row.Version + 1 };
+        _cases[_cases.IndexOf(row)] = updated;
+        Audit(id, actor, AuditActions.Assigned, null, null);
+        return Result<CaseDetailDto>.Success(ToDetail(updated, actor));
+    }
+
     private void Audit(long caseId, OperationActor actor, string action, CaseStatus? from, CaseStatus? to) =>
         _audit.Add(new AuditEntryDto(_audit.Count + 1, caseId, time.GetUtcNow(), actor.UserId!, action, from, to, null));
 
     private static CaseDetailDto ToDetail(Row r, OperationActor actor) => new(
         r.Id, r.Title, r.Description, r.Status, r.CreatedAtUtc, r.CreatedBy, r.UpdatedAtUtc, r.UpdatedBy, r.Version, r.Veteran,
-        Edges.TryGetValue(r.Status, out var next) ? [.. next.Where(t => actor.HasPermission(Permissions.Transition(r.Status, t)))] : []);
+        Edges.TryGetValue(r.Status, out var next) ? [.. next.Where(t => actor.HasPermission(Permissions.Transition(r.Status, t)))] : [],
+        r.Triage.Priority, r.Triage.Category, r.Triage.AssignedTo, r.Triage.DueOn);
 
     private static Result<T> Forbidden<T>() => Result<T>.Failure(new Error(ErrorKind.Forbidden, "Forbidden", "Not allowed."));
     private static Result<T> NotFound<T>() => Result<T>.Failure(new Error(ErrorKind.NotFound, "CaseNotFound", "Case not found."));
@@ -126,5 +162,5 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
         new Dictionary<string, string[]> { ["Title"] = ["Title must be 5 to 200 characters."] }));
 
     private sealed record Row(long Id, string Title, string? Description, CaseStatus Status, DateTimeOffset CreatedAtUtc,
-        string CreatedBy, DateTimeOffset UpdatedAtUtc, string UpdatedBy, uint Version, VeteranSnapshot? Veteran);
+        string CreatedBy, DateTimeOffset UpdatedAtUtc, string UpdatedBy, uint Version, VeteranSnapshot? Veteran, CaseTriage Triage);
 }

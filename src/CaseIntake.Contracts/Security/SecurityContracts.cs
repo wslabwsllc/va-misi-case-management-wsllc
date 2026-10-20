@@ -40,6 +40,10 @@ public static class Permissions
     public const string AttachmentsUpload = "attachments.upload", AttachmentsDownload = "attachments.download";
     public const string VeteranLookup = "veteran.lookup";
 
+    /// <summary>Assign or reassign the owner of any case (supervisors). Without it, a user who edits cases may only take an
+    /// unassigned case for themselves or hand back their own.</summary>
+    public const string CasesAssign = "cases.assign";
+
     /// <summary>View test results, evidence (screenshots, traces, logs) and exports.</summary>
     public const string TestResultsView = "testresults.view";
 

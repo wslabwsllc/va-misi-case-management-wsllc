@@ -2,7 +2,8 @@
 @using CaseIntake.Contracts.Cases
 @using CaseIntake.Web.Services
 
-@* Append-only audit trail (E2-S4) as an ordered list, newest first: when (UTC), who, what. *@
+@* Append-only audit trail (E2-S4) as an ordered list, newest first: when (UTC), who, what. Paged (issue #22), with the
+   range announced politely when the page changes. *@
 <section class="card" aria-labelledby="audit-heading" data-testid="audit-section">
     <div class="card__header">
         <h2 id="audit-heading">Audit trail</h2>
@@ -22,8 +23,11 @@
     }
     else if (Entries is { } list)
     {
+        var ordered = list.OrderByDescending(e => e.OccurredAtUtc).ThenByDescending(e => e.Id).ToList();
+        var pageCount = Math.Max(1, (int)Math.Ceiling(ordered.Count / (double)PageSize));
+        var page = Math.Clamp(_page, 1, pageCount);
         <ol class="timeline" aria-label="Audit entries, newest first" data-testid="audit-list">
-            @foreach (var entry in list.OrderByDescending(e => e.OccurredAtUtc).ThenByDescending(e => e.Id))
+            @foreach (var entry in ordered.Skip((page - 1) * PageSize).Take(PageSize))
             {
                 <li>
                     <div class="timeline__head">@Describe(entry)</div>
@@ -35,12 +39,46 @@
                 </li>
             }
         </ol>
+        @if (pageCount > 1)
+        {
+            <nav class="pager pager--compact" aria-label="Audit trail pages">
+                <button type="button" class="btn" disabled="@(page <= 1)" @onclick="() => GoTo(page - 1, ordered.Count)" data-testid="audit-previous">
+                    <Icon Name="chevron-left" Small="true" /> Newer
+                </button>
+                <span class="pager__info" data-testid="audit-page-info">@UiText.ShowingRange(page, PageSize, ordered.Count, "entries")</span>
+                <button type="button" class="btn" disabled="@(page >= pageCount)" @onclick="() => GoTo(page + 1, ordered.Count)" data-testid="audit-next">
+                    Older <Icon Name="chevron-right" Small="true" />
+                </button>
+            </nav>
+            <p class="visually-hidden" role="status" aria-live="polite">@_announcement</p>
+        }
     }
 </section>
 
 @code {
+    private int _page = 1;
+    private string? _announcement;
+    private int _lastCount;
+
     [Parameter] public IReadOnlyList<AuditEntryDto>? Entries { get; set; }
     [Parameter] public string? Error { get; set; }
+    [Parameter] public int PageSize { get; set; } = 10;
+
+    protected override void OnParametersSet()
+    {
+        // New activity (a save, a status change, an upload) shows the newest entries again.
+        if (Entries is { } entries && entries.Count != _lastCount)
+        {
+            _lastCount = entries.Count;
+            _page = 1;
+        }
+    }
+
+    private void GoTo(int page, int total)
+    {
+        _page = page;
+        _announcement = UiText.ShowingRange(page, PageSize, total, "entries");
+    }
 
     private static string Describe(AuditEntryDto entry)
     {

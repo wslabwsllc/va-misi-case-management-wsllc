@@ -23,6 +23,43 @@ public static class UiText
 
     public static string StatusCss(CaseStatus status) => "status-" + status.ToString().ToLowerInvariant();
 
+    public static string Priority(CasePriority priority) => priority.ToString();
+
+    public static string PriorityCss(CasePriority priority) => "priority-" + priority.ToString().ToLowerInvariant();
+
+    public static string Category(CaseCategory category) => category switch
+    {
+        CaseCategory.ContactDetails => "Contact details",
+        _ => category.ToString(),
+    };
+
+    /// <summary>The owner's user name, or "Unassigned".</summary>
+    public static string Owner(string? assignedTo) => string.IsNullOrEmpty(assignedTo) ? "Unassigned" : assignedTo;
+
+    /// <summary>"2026-10-24", or "No due date".</summary>
+    public static string DueDate(DateOnly? dueOn) =>
+        dueOn is { } due ? due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "No due date";
+
+    /// <summary>A short due-date status relative to today (UTC): "Overdue by 3 days", "Due today", "Due in 5 days".</summary>
+    public static string? DueState(CaseStatus status, DateOnly? dueOn, DateOnly todayUtc)
+    {
+        if (dueOn is not { } due || status is CaseStatus.Resolved or CaseStatus.Closed)
+        {
+            return null;
+        }
+        var days = due.DayNumber - todayUtc.DayNumber;
+        return days switch
+        {
+            < 0 => $"Overdue by {Days(-days)}",
+            0 => "Due today",
+            _ => $"Due in {Days(days)}",
+        };
+    }
+
+    private static string Days(int days) => days == 1 ? "1 day" : string.Create(CultureInfo.InvariantCulture, $"{days} days");
+
+    public static DateOnly TodayUtc(TimeProvider time) => DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);
+
     /// <summary>
     /// The label of a transition button. The available targets come from the server (<c>AllowedNextStatuses</c>);
     /// only the wording is chosen here. Resolved to In Progress is the reopen edge (spec 4.3).

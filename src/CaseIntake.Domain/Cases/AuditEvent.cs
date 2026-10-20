@@ -8,6 +8,7 @@ public static class AuditActions
     public const string StatusChanged = "StatusChanged";
     public const string Reopened = "Reopened";
     public const string AttachmentUploaded = "AttachmentUploaded";
+    public const string Assigned = "Assigned";
 }
 
 /// <summary>
@@ -36,6 +37,19 @@ public sealed record AuditEvent(
     public static AuditEvent AttachmentUploaded(DateTimeOffset occurredAtUtc, Guid attachmentId, long sizeBytes, string contentType) =>
         new(AuditActions.AttachmentUploaded, occurredAtUtc,
             Details: string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Attachment {attachmentId:D} ({sizeBytes} bytes, {contentType})"));
+
+    /// <summary>
+    /// The owner changed. Details name the new and the previous owner (user names of staff accounts, never case data):
+    /// "Assigned to X (was Y)", "Assigned to X" or "Unassigned (was Y)".
+    /// </summary>
+    public static AuditEvent Assigned(DateTimeOffset occurredAtUtc, string? from, string? to) =>
+        new(AuditActions.Assigned, occurredAtUtc, Details: (to, from) switch
+        {
+            (null, { } previous) => $"Unassigned (was {previous})",
+            ({ } owner, null) => $"Assigned to {owner}",
+            ({ } owner, { } previous) => $"Assigned to {owner} (was {previous})",
+            _ => "Unassigned",
+        });
 
     /// <summary>Resolved→InProgress is recorded as <see cref="AuditActions.Reopened"/>; every other edge as <see cref="AuditActions.StatusChanged"/>.</summary>
     public static AuditEvent StatusChange(DateTimeOffset occurredAtUtc, CaseStatus from, CaseStatus to) =>

@@ -212,6 +212,26 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         await TransitionAsync(s, "Resolved", "Resolved");
 
         // ---- Attachments: rejected type, then upload and download round trip ----
+        await s.StepAsync("Open the Attachments tab with the keyboard (arrow keys move between tabs)", async () =>
+        {
+            var overview = page.GetByTestId("tab-overview");
+            await overview.FocusAsync();
+            await page.Keyboard.PressAsync("ArrowRight");
+            await page.Keyboard.PressAsync("ArrowRight");
+            var attachments = page.GetByTestId("tab-attachments");
+            await E2ESession.ExpectFocusedAsync(attachments);
+            await Expect(attachments).ToHaveAttributeAsync("aria-selected", "true");
+            await Expect(page.GetByTestId("upload-form")).ToBeVisibleAsync();
+        });
+        await s.AxeAsync("Case detail, Attachments tab");
+        await s.StepAsync("A chosen file can be removed before upload", async () =>
+        {
+            await page.GetByTestId("attachment-input").SetInputFilesAsync(new FilePayload { Name = "wrong-file.txt", MimeType = "text/plain", Buffer = [0x61] });
+            await Expect(page.GetByTestId("selected-file")).ToContainTextAsync("wrong-file.txt");
+            await PressAsync(page.GetByTestId("remove-selected-file"));
+            await Expect(page.GetByTestId("selected-file")).ToHaveCountAsync(0);
+            await Expect(Announcer(page)).ToHaveTextAsync("wrong-file.txt removed. No file is selected.");
+        });
         await s.StepAsync("A file of a disallowed type is rejected with an alert and focus returns to the file input", async () =>
         {
             await page.GetByTestId("attachment-input").SetInputFilesAsync(new FilePayload { Name = "tool.exe", MimeType = "application/x-msdownload", Buffer = [0x4D, 0x5A, 0x90, 0x00] });
@@ -241,6 +261,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         await TransitionAsync(s, "Closed", "Closed");
         await s.StepAsync("A Closed case offers no status changes and no Edit", async () =>
         {
+            await PressAsync(page.GetByTestId("tab-overview"));
             await Expect(page.GetByTestId("no-transitions")).ToHaveTextAsync("No status changes available");
             await Expect(page.GetByTestId("edit-case")).ToHaveCountAsync(0);
             await Expect(page.GetByTestId("closed-note")).ToBeVisibleAsync();

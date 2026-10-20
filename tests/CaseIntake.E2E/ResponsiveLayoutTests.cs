@@ -56,7 +56,7 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
             await Expect(page.GetByTestId("kpi-total")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("kpi-overdue")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("kpi-resolved")).ToBeHiddenAsync();
-            await Expect(page.GetByTestId("chart-volume").Locator("svg[role=img]")).ToBeVisibleAsync();
+            await Expect(page.GetByTestId("chart-volume").Locator("svg.chart__svg")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("chart-status")).ToBeHiddenAsync();
             await Expect(page.GetByTestId("fab-new-case")).ToBeVisibleAsync();
             await ExpectNoHorizontalOverflowAsync(page, "dashboard");
@@ -136,11 +136,12 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
             {
                 await Expect(page.GetByTestId(kpi)).ToBeVisibleAsync();
             }
-            foreach (var chart in new[] { "chart-volume", "chart-status", "chart-resolution" })
+            foreach (var chart in new[] { "chart-volume", "chart-status", "chart-resolution", "chart-priority", "chart-category" })
             {
-                await Expect(page.GetByTestId(chart).Locator("svg[role=img]")).ToBeVisibleAsync();
+                await Expect(page.GetByTestId(chart).Locator("svg.chart__svg")).ToBeVisibleAsync();
             }
-            await Expect(page.GetByTestId("chart-priority")).ToContainTextAsync("Not available");
+            // Issue #21: bars and columns are links to the matching cases.
+            await Expect(page.GetByTestId("chart-status").Locator("svg a.chart__point")).ToHaveCountAsync(5);
             await ExpectNoHorizontalOverflowAsync(page, "dashboard");
         });
         await s.ScreenshotAsync($"Dashboard {Viewports.Label(viewport)}");

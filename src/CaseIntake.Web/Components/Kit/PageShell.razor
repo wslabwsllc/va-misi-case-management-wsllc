@@ -5,6 +5,13 @@
    breadcrumb and mobile back target shown by the layout, and optional actions next to the heading. *@
 <PageTitle>@UiText.DocumentTitle(DocumentTitle ?? Title)</PageTitle>
 <div class="page-header">
+    @if (ShowBackButton && (BackHref ?? Breadcrumbs.LastOrDefault(c => c.Href is not null)?.Href) is { } back)
+    {
+        <a class="btn btn--subtle btn--icon page-header__back desktop-only" href="@back" data-testid="page-back"
+           aria-label="@($"Back to {Breadcrumbs.LastOrDefault(c => c.Href == back)?.Text ?? "previous page"}")" title="Back">
+            <Icon Name="back" />
+        </a>
+    }
     <div class="page-header__titles">
         <h1 tabindex="-1" id="page-title">@Title</h1>
         @if (!string.IsNullOrEmpty(Subtitle))
@@ -28,6 +35,9 @@
 
     /// <summary>The mobile back button target; defaults to the nearest ancestor breadcrumb with a link.</summary>
     [Parameter] public string? BackHref { get; set; }
+
+    /// <summary>Shows a back arrow before the title on wider screens (phones have it in the app bar).</summary>
+    [Parameter] public bool ShowBackButton { get; set; }
 
     protected override void OnParametersSet()
     {

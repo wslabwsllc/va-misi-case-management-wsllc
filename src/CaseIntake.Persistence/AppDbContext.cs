@@ -18,6 +18,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<Case> Cases => Set<Case>();
     public DbSet<CaseAuditEntry> CaseAuditEntries => Set<CaseAuditEntry>();
+    public DbSet<CaseNotificationCursor> CaseNotificationCursors => Set<CaseNotificationCursor>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
     // Test results and evidence (E5 test management).

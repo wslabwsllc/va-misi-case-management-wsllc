@@ -7,7 +7,7 @@ internal sealed record SeedStep(DateTimeOffset AtUtc, string ActorUserName, Case
 
 /// <summary>A synthetic demo case and its history, keyed by a stable <see cref="Key"/>.</summary>
 internal sealed record SeedCase(string Key, string Title, string? Description, DateTimeOffset CreatedAtUtc,
-    string CreatorUserName, IReadOnlyList<SeedStep> Steps);
+    string CreatorUserName, IReadOnlyList<SeedStep> Steps, CaseTriage Triage);
 
 /// <summary>
 /// Deterministic, clearly fictional demo cases (E2-S9). A fixed <see cref="Random"/> seed and fixed UTC base time
@@ -29,6 +29,32 @@ internal static class CaseSeedData
         "Travel reimbursement", "Records request", "Claim status", "Equipment request", "Facility access",
         "Billing question", "Eligibility review",
     ];
+
+    /// <summary>The category of each entry of <see cref="Subjects"/> (same order).</summary>
+    private static readonly CaseCategory[] SubjectCategories =
+    [
+        CaseCategory.Facilities, CaseCategory.Benefits, CaseCategory.ContactDetails, CaseCategory.Appointments, CaseCategory.Pharmacy,
+        CaseCategory.Travel, CaseCategory.Records, CaseCategory.Claims, CaseCategory.Equipment, CaseCategory.Facilities,
+        CaseCategory.Billing, CaseCategory.Eligibility,
+    ];
+
+    private static readonly CasePriority[] PriorityCycle = [CasePriority.Medium, CasePriority.High, CasePriority.Low, CasePriority.Urgent, CasePriority.Medium];
+
+    /// <summary>
+    /// Seeded due dates are spread from <see cref="FirstDueOn"/> over <see cref="DueSpreadDays"/> days, so the demo shows a
+    /// mix of overdue, due-soon and later cases for about a year instead of every open case being overdue. The E6
+    /// migration applies the same formula to seeded rows of existing databases.
+    /// </summary>
+    public static readonly DateOnly FirstDueOn = new(2026, 6, 1);
+    public const int DueSpreadDays = 420;
+    public const int DueStepDays = 37;
+
+    /// <summary>Triage fields of the seeded case at <paramref name="index"/> (0-based), derived from the index only.</summary>
+    public static CaseTriage TriageFor(int index) => new(
+        PriorityCycle[index % PriorityCycle.Length],
+        SubjectCategories[index % Subjects.Length],
+        (index % 3) switch { 0 => CaseWorkerUserName, 1 => SupervisorUserName, _ => null },
+        FirstDueOn.AddDays(index * DueStepDays % DueSpreadDays));
 
     private static readonly string[] Qualifiers =
     [
@@ -91,7 +117,7 @@ internal static class CaseSeedData
                 from = target;
             }
 
-            cases.Add(new SeedCase($"case-{number:000}", title, description, created, CaseWorkerUserName, steps));
+            cases.Add(new SeedCase($"case-{number:000}", title, description, created, CaseWorkerUserName, steps, TriageFor(i)));
         }
 
         return cases;

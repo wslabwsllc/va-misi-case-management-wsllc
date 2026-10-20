@@ -11,7 +11,7 @@ public sealed class FakeCurrentUser : ICurrentUser
 
     public static IEnumerable<string> AllPermissions { get; } =
     [
-        Permissions.CasesView, Permissions.CasesCreate, Permissions.CasesEdit,
+        Permissions.CasesView, Permissions.CasesCreate, Permissions.CasesEdit, Permissions.CasesAssign,
         Permissions.AttachmentsUpload, Permissions.AttachmentsDownload, Permissions.VeteranLookup,
         .. from f in AllStatuses from t in AllStatuses select Permissions.Transition(f, t),
     ];

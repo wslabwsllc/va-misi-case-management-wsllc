@@ -21,6 +21,10 @@ internal sealed class CaseConfiguration : IEntityTypeConfiguration<Case>
                 "\"VeteranSsnLast4\" IS NULL OR \"VeteranSsnLast4\" ~ '^[0-9]{4}$'");
             t.HasCheckConstraint("CK_Case_Veteran_Complete",
                 "(\"VeteranName\" IS NULL) = (\"VeteranAddress\" IS NULL) AND (\"VeteranName\" IS NULL) = (\"VeteranSsnLast4\" IS NULL)");
+            t.HasCheckConstraint("CK_Case_Priority_Range",
+                $"\"Priority\" BETWEEN {(int)CasePriority.Low} AND {(int)CasePriority.Urgent}");
+            t.HasCheckConstraint("CK_Case_Category_Range",
+                $"\"Category\" BETWEEN {(int)CaseCategory.General} AND {(int)Enum.GetValues<CaseCategory>().Max()}");
         });
 
         builder.HasKey(c => c.Id);
@@ -43,9 +47,19 @@ internal sealed class CaseConfiguration : IEntityTypeConfiguration<Case>
         builder.Property(c => c.VeteranSsnLast4).HasMaxLength(CaseFieldLimits.SsnLast4Length).IsFixedLength();
         builder.Property(c => c.SeedKey).HasMaxLength(CaseFieldLimits.SeedKeyMaxLength);
         builder.Ignore(c => c.Veteran);
+        builder.Ignore(c => c.Triage);
         builder.Ignore(c => c.IsClosed);
 
+        // Triage fields (issue #22). The E6 migration fills them for rows that existed before.
+        builder.Property(c => c.Priority).HasConversion<int>().IsRequired();
+        builder.Property(c => c.Category).HasConversion<int>().IsRequired();
+        builder.Property(c => c.AssignedTo).HasMaxLength(CaseFieldLimits.ActorMaxLength);
+        builder.Property(c => c.DueOn).HasColumnType("date");
+
         builder.HasIndex(c => c.Status);
+        builder.HasIndex(c => c.Priority);
+        builder.HasIndex(c => c.AssignedTo);
+        builder.HasIndex(c => c.DueOn);
         builder.HasIndex(c => c.CreatedAtUtc);
         builder.HasIndex(c => c.UpdatedAtUtc);
         builder.HasIndex(c => c.SeedKey).IsUnique().HasFilter("\"SeedKey\" IS NOT NULL");

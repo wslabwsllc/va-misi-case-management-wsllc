@@ -1,0 +1,54 @@
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+
+@* The case's place in the workflow (issue #22): the five stages as an ordered list, the current one marked with
+   aria-current="step", earlier ones as completed, each with the time it was last entered (from the audit trail).
+   Text carries the state; the colours and check marks only repeat it. *@
+<ol class="stepper" aria-label="Workflow stages" data-testid="workflow-stepper">
+    @foreach (var stage in Stages)
+    {
+        var state = StateOf(stage);
+        <li class="stepper__step stepper__step--@state" aria-current="@(state == "current" ? "step" : null)" data-stage="@stage">
+            <span class="stepper__marker" aria-hidden="true">
+                @if (state == "complete")
+                {
+                    <Icon Name="success" Small="true" />
+                }
+            </span>
+            <span class="stepper__text">
+                <span class="stepper__name">@UiText.Status(stage)</span>
+                <span class="stepper__meta">
+                    <span class="visually-hidden">, </span>@StateText(state)@(EnteredAt(stage) is { } at ? $" · {UiText.Utc(at)}" : null)
+                </span>
+            </span>
+        </li>
+    }
+</ol>
+
+@code {
+    private static readonly CaseStatus[] Stages = [CaseStatus.New, CaseStatus.Triaged, CaseStatus.InProgress, CaseStatus.Resolved, CaseStatus.Closed];
+
+    [Parameter, EditorRequired] public CaseStatus Status { get; set; }
+
+    /// <summary>The case's audit trail (any order); used for the time each stage was entered. Optional.</summary>
+    [Parameter] public IReadOnlyList<AuditEntryDto>? History { get; set; }
+
+    /// <summary>Stages before the current one are complete; Closed is complete once reached (the workflow ends there).</summary>
+    private string StateOf(CaseStatus stage) =>
+        stage == Status ? (Status == CaseStatus.Closed ? "complete" : "current")
+        : Array.IndexOf(Stages, stage) < Array.IndexOf(Stages, Status) ? "complete" : "upcoming";
+
+    private static string StateText(string state) => state switch
+    {
+        "complete" => "Completed",
+        "current" => "Current stage",
+        _ => "Not started",
+    };
+
+    private DateTimeOffset? EnteredAt(CaseStatus stage) =>
+        StateOf(stage) == "upcoming" || History is null
+            ? null
+            : History.Where(e => e.ToStatus == stage).OrderByDescending(e => e.OccurredAtUtc).ThenByDescending(e => e.Id)
+                .Select(e => (DateTimeOffset?)e.OccurredAtUtc).FirstOrDefault();
+}

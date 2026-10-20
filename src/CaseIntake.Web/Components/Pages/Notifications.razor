@@ -2,40 +2,76 @@
 @attribute [Authorize(Policy = Permissions.CasesView)]
 @implements IDisposable
 @using CaseIntake.Contracts.Cases
+@using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Services
-@using Microsoft.Extensions.Options
-@inject CaseDashboardService Dashboard
-@inject IOptions<DashboardOptions> Options
+@inject ICaseNotificationService NotificationService
+@inject CaseActivitySignal ActivitySignal
+@inject PageActivity Activity
+@inject StatusAnnouncer Announcer
+@inject ILogger<Notifications> Logger
 
-@* Notifications: recent activity on the cases the user can see (updates in the last N days, newest first). The app has
-   no push or per-user notification store, so this is a live view of case activity, not a message inbox. *@
-<PageShell Title="Notifications" Breadcrumbs="@([new Crumb("Dashboard", "")])"
-           Subtitle="@($"Cases updated in the last {Options.Value.RecentActivityDays} days, newest first.")" />
+@* Notifications (issue #21): what other people did on cases you can see in the last two weeks, newest first. Entries
+   since you last marked them as read are unread: they are highlighted, counted in the navigation badge, and listed
+   with a "New" label (text, not colour alone). The list refreshes when cases change. *@
+<PageShell Title="Notifications" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="@Subtitle">
+    <Actions>
+        <div class="btn-row">
+            <button type="button" class="btn" @onclick="ReloadAsync" disabled="@_busy" data-testid="notifications-refresh">
+                <Icon Name="refresh" Small="true" Class="@(_busy ? "icon--spin" : null)" /> Refresh
+            </button>
+            <button type="button" class="btn btn--primary" @onclick="MarkAllReadAsync" disabled="@(_busy || _feed is not { UnreadCount: > 0 })"
+                    data-testid="mark-all-read">
+                <Icon Name="success" Small="true" /> Mark all as read
+            </button>
+        </div>
+    </Actions>
+</PageShell>
 
 <ErrorAlert Message="@_error" TestId="notifications-error" />
 
-@if (_items is null && _error is null)
+@if (_feed is null && _error is null)
 {
-    <LoadingIndicator Text="Loading recent activity…" />
+    <LoadingIndicator Text="Loading notifications…" />
 }
-else if (_items is { Count: 0 })
+else if (_feed is { Items.Count: 0 })
 {
-    <div class="card"><EmptyState Title="No recent activity" Message="No case was updated recently." IconName="bell" TestId="notifications-empty" /></div>
+    <div class="card"><EmptyState Title="No notifications" Message="Nobody else changed a case you can see in the last two weeks." IconName="bell" TestId="notifications-empty" /></div>
 }
-else if (_items is { } items)
+else if (_feed is { } feed)
 {
+    <p class="notifications-summary" role="status" data-testid="unread-summary">
+        @(feed.UnreadCount == 0 ? "All caught up: no unread notifications." : $"{feed.UnreadCount} unread {(feed.UnreadCount == 1 ? "notification" : "notifications")}.")
+    </p>
     <div class="card card--flush">
-        <ul class="record-list" aria-label="Recent case activity" data-testid="notifications-list">
-            @foreach (var c in items)
+        <ul class="record-list" aria-label="Notifications, newest first" data-testid="notifications-list">
+            @foreach (var n in feed.Items)
             {
-                <li class="record-card">
+                <li class="record-card notification @(n.Unread ? "notification--unread" : null)" data-unread="@(n.Unread ? "true" : "false")">
                     <div class="record-card__top">
-                        <div class="record-card__title"><a href="@($"cases/{c.Id}")">@c.Title</a></div>
-                        <StatusPill Status="c.Status" />
+                        <div class="record-card__title">
+                            @if (n.Unread)
+                            {
+                                <span class="badge badge--new">New</span>
+                            }
+                            <a href="@($"cases/{n.CaseId}?tab=history")">@n.CaseTitle</a>
+                        </div>
+                        @if (n.ToStatus is { } to)
+                        {
+                            <StatusPill Status="to" />
+                        }
                     </div>
+                    <p class="notification__text">@Describe(n)</p>
                     <div class="record-card__meta">
-                        <span>Case @c.Id</span>
-                        <span>Updated @UiText.Utc(c.UpdatedAtUtc)</span>
+                        <span>Case @n.CaseId</span>
+                        <span>@UiText.Utc(n.OccurredAtUtc)</span>
+                        @if (n.AssignedToYou)
+                        {
+                            <span class="badge badge--new" data-testid="assigned-to-you">Assigned to you</span>
+                        }
+                        else if (n.AssignedToMe)
+                        {
+                            <span class="badge">Your case</span>
+                        }
                     </div>
                 </li>
             }
@@ -45,18 +81,89 @@ else if (_items is { } items)
 
 @code {
     private readonly CancellationTokenSource _cts = new();
-    private IReadOnlyList<CaseSummaryDto>? _items;
+    private CaseNotificationFeed? _feed;
     private string? _error;
+    private bool _busy;
+
+    private string Subtitle => _feed?.LastReadAtUtc is { } read
+        ? $"Changes by other people in the last two weeks. Last marked as read {UiText.Utc(read)}."
+        : "Changes by other people in the last two weeks, newest first.";
 
     protected override async Task OnInitializedAsync()
     {
-        var result = await Dashboard.RecentActivityAsync(50, _cts.Token);
-        _items = result.IsSuccess ? result.Value : null;
-        _error = result.IsSuccess ? null : result.Error!.Message;
+        ActivitySignal.Changed += OnActivity;
+        await ReloadAsync();
     }
+
+    private void OnActivity() => _ = InvokeAsync(ReloadAsync);
+
+    private async Task ReloadAsync()
+    {
+        using var busy = Activity.Begin();
+        _busy = true;
+        try
+        {
+            var result = await NotificationService.GetFeedAsync(50, _cts.Token);
+            _feed = result.IsSuccess ? result.Value : null;
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5011, "NotificationsLoadFailed"), "Notifications load failed ({ExceptionType})", ex.GetType().Name);
+            _error = "The notifications could not be loaded. Try again.";
+        }
+        finally
+        {
+            _busy = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        using var busy = Activity.Begin();
+        _busy = true;
+        try
+        {
+            var result = await NotificationService.MarkAllReadAsync(_cts.Token);
+            if (result.IsSuccess)
+            {
+                _feed = result.Value;
+                Announcer.Announce("All notifications marked as read");
+                ActivitySignal.Raise();   // the badges of this user's other pages update too
+            }
+            else
+            {
+                _error = result.Error!.Message;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string Describe(CaseNotificationDto n) => n.Action switch
+    {
+        AuditActions.Created => $"{n.Actor} created this case.",
+        AuditActions.StatusChanged when n is { FromStatus: { } from, ToStatus: { } to } => $"{n.Actor} moved it from {UiText.Status(from)} to {UiText.Status(to)}.",
+        AuditActions.Reopened => $"{n.Actor} reopened it (In Progress).",
+        AuditActions.AttachmentUploaded => $"{n.Actor} attached a file.",
+        AuditActions.Edited => $"{n.Actor} edited it. {n.Details}",
+        AuditActions.Assigned when n.AssignedToYou => $"{n.Actor} assigned this case to you.",
+        AuditActions.Assigned => $"{n.Actor}: {n.Details}.",
+        _ => $"{n.Actor}: {n.Action}.",
+    };
 
     public void Dispose()
     {
+        ActivitySignal.Changed -= OnActivity;
         _cts.Cancel();
         _cts.Dispose();
     }

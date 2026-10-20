@@ -12,11 +12,13 @@ public static class WebUiServiceCollectionExtensions
     {
         ArgumentNullException.ThrowIfNull(configuration);
         services.AddOptions<DashboardOptions>().BindConfiguration(DashboardOptions.SectionName)
-            .Validate(o => o.OverdueAfterDays >= 1 && o.MaxCasesScanned >= 100 && o.TrendMonths is >= 1 and <= 36 && o.RecentActivityDays >= 1,
+            .Validate(o => o.NewCasesDays >= 1 && o.MaxCasesScanned >= 100 && o.TrendMonths is >= 1 and <= 36 && o.RecentActivityDays >= 1,
                 "Dashboard settings are out of range.")
             .ValidateOnStart();
         services.AddScoped<StatusAnnouncer>();
         services.AddScoped<ShellState>();
+        services.AddScoped<PageActivity>();
+        services.AddSingleton<CaseActivitySignal>();
         services.AddScoped<UiInterop>();
         services.AddScoped<CaseDashboardService>();
         return services;

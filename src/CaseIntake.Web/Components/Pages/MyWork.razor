@@ -6,13 +6,15 @@
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Services
 @inject ICaseService Cases
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject CaseDashboardService Dashboard
 @inject ICaseWorkflow Workflow
 @inject ICurrentUser CurrentUser
 @inject NavigationManager Navigation
 
-@* My tasks: cases waiting for a status change the signed-in user's role may make, longest waiting first. Cases have no
-   assignee, so "my work" is defined by the user's transition permissions (ADR 0011). Server-side paging. *@
+@* My tasks: cases waiting for a status change the signed-in user's role may make, longest waiting first ("My pending
+   tasks" on the dashboard; owned cases are "Assigned to me"). Defined by the user's transition permissions (ADR 0011).
+   Server-side paging. *@
 <PageShell Title="My tasks" Breadcrumbs="@([new Crumb("Dashboard", "")])"
            Subtitle="Cases waiting for a status change your role can make, longest waiting first." />
 
@@ -82,6 +84,7 @@ else if (_page is { } page)
 
     protected override async Task OnParametersSetAsync()
     {
+        using var busy = Activity.Begin();
         _pageNumber = QueryPage is >= 1 ? QueryPage.Value : 1;
         _loading = true;
         _error = null;

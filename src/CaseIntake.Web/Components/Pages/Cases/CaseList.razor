@@ -4,28 +4,42 @@
 @using CaseIntake.Contracts.Cases
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Services
+@using Microsoft.AspNetCore.WebUtilities
 @inject ICaseService Cases
+@inject ICaseAssigneeDirectory Assignees
+@inject ICurrentUser CurrentUser
 @inject NavigationManager Navigation
+@inject PageActivity Activity
+@inject StatusAnnouncer Announcer
+@inject TimeProvider Time
 @inject ILogger<CaseList> Logger
 
 @* Case list (E5-S3): server-side paging, filtering and sorting through ICaseService.ListAsync. A semantic table with
-   button-based sortable headers on wider screens and record cards on phones. The URL holds the view state. *@
-<PageShell Title="Cases" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="Find, filter and open cases." />
+   button-based sortable headers on wider screens and record cards on phones. The URL holds the view state, including
+   the priority, category, owner, overdue and date filters that dashboard drill-through links set (issue #21/#22). *@
+<PageShell Title="Cases" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="Find, filter and open cases.">
+    <Actions>
+        <div class="btn-row page-actions" role="toolbar" aria-label="Case commands">
+            <AuthorizeView Policy="@Permissions.CasesCreate">
+                <a class="btn btn--primary" href="cases/new" data-testid="new-case"><Icon Name="add" Small="true" /> New case</a>
+            </AuthorizeView>
+            <button type="button" class="btn" @onclick="RefreshAsync" disabled="@_loading" aria-busy="@(_loading ? "true" : "false")" data-testid="refresh">
+                <Icon Name="refresh" Small="true" Class="@(_refreshing ? "icon--spin" : null)" /> @(_refreshing ? "Refreshing…" : "Refresh")
+            </button>
+            <a class="btn" href="@ExportHref" download data-enhance-nav="false" data-testid="export-csv"><Icon Name="export" Small="true" /> Export to CSV</a>
+        </div>
+    </Actions>
+</PageShell>
 
-<div class="command-bar" role="toolbar" aria-label="Case commands">
-    <AuthorizeView Policy="@Permissions.CasesCreate">
-        <a class="command" href="cases/new" data-testid="new-case"><Icon Name="add" /> New case</a>
-    </AuthorizeView>
-    <button type="button" class="command" @onclick="LoadAsync" data-testid="refresh"><Icon Name="refresh" /> Refresh</button>
-    <a class="command" href="@ExportHref" download data-enhance-nav="false" data-testid="export-csv"><Icon Name="export" /> Export to CSV</a>
-</div>
-
-<div class="card card--flush">
-    <form class="grid-toolbar" @onsubmit="ApplyFiltersAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter cases" data-testid="case-filters">
-        <div class="field grid-toolbar__search">
+<div class="card filters-card">
+    <form class="filters" @onsubmit="ApplyFiltersAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter cases" data-testid="case-filters">
+        <div class="field filters__search">
             <label class="field__label" for="case-search">Search title or description</label>
-            <input id="case-search" type="search" @bind="_searchDraft" @bind:event="oninput"
-                   maxlength="@CaseFieldLimits.SearchMaxLength" enterkeyhint="search" autocomplete="off" />
+            <span class="input-icon">
+                <Icon Name="search" Small="true" />
+                <input id="case-search" type="search" @bind="_searchDraft" @bind:event="oninput" placeholder="Search cases…"
+                       maxlength="@CaseFieldLimits.SearchMaxLength" enterkeyhint="search" autocomplete="off" />
+            </span>
         </div>
         <fieldset class="mb-0">
             <legend>Status</legend>
@@ -34,12 +48,58 @@
                 {
                     var s = status;
                     <label class="checkbox">
-                        <input type="checkbox" checked="@_statusDraft.Contains(s)" @onchange="e => ToggleStatus(s, e)" data-testid="@($"status-{s}")" />
+                        <input type="checkbox" checked="@_statusDraft.Contains(s)" @onchange="e => Toggle(_statusDraft, s, e)" data-testid="@($"status-{s}")" />
                         @UiText.Status(s)
                     </label>
                 }
             </div>
         </fieldset>
+        <fieldset class="mb-0">
+            <legend>Priority</legend>
+            <div class="checkbox-row">
+                @foreach (var priority in Enum.GetValues<CasePriority>().OrderDescending())
+                {
+                    var p = priority;
+                    <label class="checkbox">
+                        <input type="checkbox" checked="@_priorityDraft.Contains(p)" @onchange="e => Toggle(_priorityDraft, p, e)" data-testid="@($"priority-{p}")" />
+                        @UiText.Priority(p)
+                    </label>
+                }
+            </div>
+        </fieldset>
+        <div class="field">
+            <label class="field__label" for="case-category">Category</label>
+            <select id="case-category" @bind="_categoryDraft" data-testid="filter-category">
+                <option value="">Any category</option>
+                @foreach (var category in Enum.GetValues<CaseCategory>().OrderBy(UiText.Category))
+                {
+                    <option value="@category">@UiText.Category(category)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="case-owner">Owner</label>
+            <select id="case-owner" @bind="_ownerDraft" data-testid="filter-owner">
+                <option value="">Anyone</option>
+                @if (_me is not null)
+                {
+                    <option value="@_me">Me (@_me)</option>
+                }
+                <option value="@CaseListQuery.UnassignedFilter">Unassigned</option>
+                @foreach (var a in _assignees.Where(a => a.UserName != _me))
+                {
+                    <option value="@a.UserName">@a.UserName</option>
+                }
+                @if (_ownerDraft is { Length: > 0 } other && other != _me && other != CaseListQuery.UnassignedFilter && _assignees.All(a => a.UserName != other))
+                {
+                    <option value="@other">@other</option>
+                }
+            </select>
+        </div>
+        <label class="checkbox filters__check">
+            <input type="checkbox" checked="@_overdueDraft" @onchange="e => _overdueDraft = e.Value is true" data-testid="filter-overdue" />
+            Overdue only
+        </label>
         <div class="field mobile-only">
             <label class="field__label" for="case-sort">Sort by</label>
             <select id="case-sort" value="@SortValue" @onchange="SortFromSelectAsync">
@@ -49,11 +109,29 @@
                 }
             </select>
         </div>
-        <div class="btn-row">
+        <div class="btn-row filters__actions">
             <button type="submit" class="btn btn--primary" data-testid="apply-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
             <button type="button" class="btn" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-filters">Clear</button>
         </div>
     </form>
+</div>
+
+<div class="card card--flush results-card">
+    @if (DateChips.Count > 0)
+    {
+        <div class="filter-chips" role="group" aria-label="Date filters" data-testid="filter-chips">
+            @foreach (var chip in DateChips)
+            {
+                var c = chip;
+                <span class="chip">
+                    @c.Text
+                    <button type="button" class="chip__remove" @onclick="() => NavigateAsync(c.Remove(_state))" aria-label="@($"Remove filter: {c.Text}")">
+                        <Icon Name="close" Small="true" />
+                    </button>
+                </span>
+            }
+        </div>
+    }
 
     <ErrorAlert Message="@_error" TestId="list-error" />
 
@@ -68,7 +146,7 @@
     {
         @if (page.TotalCount == 0)
         {
-            <EmptyState Title="No cases match these filters" Message="Try a different search or fewer statuses." IconName="search" TestId="list-empty">
+            <EmptyState Title="No cases match these filters" Message="Try a different search or fewer filters." IconName="search" TestId="list-empty">
                 @if (HasFilters)
                 {
                     <button type="button" class="btn" @onclick="ClearFiltersAsync">Clear filters</button>
@@ -77,18 +155,46 @@
         }
         else
         {
+            <div class="table-toolbar">
+                <p class="table-toolbar__title" aria-hidden="true">Cases <span class="page-header__subtitle">(@ResultsText)</span></p>
+                <nav class="pager" aria-label="Pagination">
+                    <div class="pager__size">
+                        <label for="page-size">Rows per page</label>
+                        <select id="page-size" value="@_state.PageSize" @onchange="PageSizeAsync" data-testid="page-size">
+                            @foreach (var size in CaseListState.PageSizes)
+                            {
+                                <option value="@size">@size</option>
+                            }
+                        </select>
+                    </div>
+                    <span class="pager__info" data-testid="page-info">Page @_state.Page of @PageCount</span>
+                    <button type="button" class="btn btn--icon" @ref="_previous" disabled="@(_state.Page <= 1)" @onclick="PreviousAsync" aria-label="Go to previous page" title="Previous page" data-testid="page-previous">
+                        <Icon Name="chevron-left" Small="true" />
+                    </button>
+                    <button type="button" class="btn btn--icon" @ref="_next" disabled="@(_state.Page >= PageCount)" @onclick="NextAsync" aria-label="Go to next page" title="Next page" data-testid="page-next">
+                        <Icon Name="chevron-right" Small="true" />
+                    </button>
+                </nav>
+            </div>
             <div class="table-wrap desktop-only">
                 <table class="data-grid" aria-busy="@(_loading ? "true" : "false")" data-testid="case-table">
-                    <caption>Cases <span class="page-header__subtitle">(@ResultsText)</span></caption>
+                    <caption class="visually-hidden">Cases (@ResultsText)</caption>
                     <thead>
                         <tr>
                             @foreach (var column in Columns)
                             {
-                                <th scope="col" aria-sort="@AriaSort(column.Field)" class="@(column.Field == CaseSortField.Id ? "num" : null)">
-                                    <button type="button" class="sort-button" @onclick="() => SortAsync(column.Field)" data-testid="@($"sort-{column.Field}")">
-                                        @column.Text
-                                        <span class="sort-indicator" aria-hidden="true">@SortGlyph(column.Field)</span>
-                                    </button>
+                                <th scope="col" aria-sort="@(column.Field is { } f ? AriaSort(f) : null)" class="@(column.Field == CaseSortField.Id ? "num" : null)">
+                                    @if (column.Field is { } sortField)
+                                    {
+                                        <button type="button" class="sort-button" @onclick="() => SortAsync(sortField)" data-testid="@($"sort-{sortField}")">
+                                            @column.Text
+                                            <span class="sort-indicator @(_state.SortBy == sortField ? "sort-indicator--active" : null)" aria-hidden="true">@SortGlyph(sortField)</span>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <span class="visually-hidden">@column.Text</span>
+                                    }
                                 </th>
                             }
                         </tr>
@@ -96,12 +202,41 @@
                     <tbody>
                         @foreach (var c in page.Items)
                         {
+                            var dueState = UiText.DueState(c.Status, c.DueOn, _today);
                             <tr>
                                 <td class="num">@c.Id</td>
                                 <td><a href="@($"cases/{c.Id}")">@c.Title</a></td>
                                 <td><StatusPill Status="c.Status" /></td>
+                                <td><PriorityBadge Priority="c.Priority" /></td>
+                                <td>@UiText.Category(c.Category)</td>
+                                <td class="cell-owner">@UiText.Owner(c.AssignedTo)</td>
+                                <td class="nowrap @(dueState?.StartsWith("Overdue", StringComparison.Ordinal) == true ? "cell-overdue" : null)">
+                                    @UiText.DueDate(c.DueOn)
+                                    @if (dueState is not null)
+                                    {
+                                        <span class="cell-sub">@dueState</span>
+                                    }
+                                </td>
                                 <td class="nowrap">@UiText.Utc(c.CreatedAtUtc)</td>
                                 <td class="nowrap">@UiText.Utc(c.UpdatedAtUtc)</td>
+                                <td class="cell-actions">
+                                    @* Row menu: a disclosure of links (no script), each a separate destination on the case. *@
+                                    <details class="row-menu" data-testid="row-menu">
+                                        <summary class="btn btn--subtle btn--icon" aria-label="@($"Actions for case {c.Id}")" title="Actions"><Icon Name="more" Small="true" /></summary>
+                                        <ul class="row-menu__list">
+                                            <li><a href="@($"cases/{c.Id}")">Open case</a></li>
+                                            @if (c.Status != CaseStatus.Closed)
+                                            {
+                                                <AuthorizeView Policy="@Permissions.CasesAssign" Context="assignAuth">
+                                                    <li><a href="@($"cases/{c.Id}?assign=true")" data-testid="row-assign">Assign…</a></li>
+                                                </AuthorizeView>
+                                            }
+                                            <li><a href="@($"cases/{c.Id}?tab=workflow")">Workflow</a></li>
+                                            <li><a href="@($"cases/{c.Id}?tab=attachments")">Attachments</a></li>
+                                            <li><a href="@($"cases/{c.Id}?tab=history")">History</a></li>
+                                        </ul>
+                                    </details>
+                                </td>
                             </tr>
                         }
                     </tbody>
@@ -117,50 +252,42 @@
                         </div>
                         <div class="record-card__meta">
                             <span>Case @c.Id</span>
-                            <span>Updated @UiText.Utc(c.UpdatedAtUtc)</span>
+                            <PriorityBadge Priority="c.Priority" />
+                            <span>Due @UiText.DueDate(c.DueOn)</span>
+                            <span>@UiText.Owner(c.AssignedTo)</span>
                         </div>
                     </li>
                 }
             </ul>
 
-            <nav class="pager" aria-label="Pagination">
-                <button type="button" class="btn" @ref="_previous" disabled="@(_state.Page <= 1)" @onclick="PreviousAsync" aria-label="Go to previous page" data-testid="page-previous">
-                    <Icon Name="chevron-left" Small="true" /> Previous
-                </button>
-                <span class="pager__info" data-testid="page-info">Page @_state.Page of @PageCount</span>
-                <button type="button" class="btn" @ref="_next" disabled="@(_state.Page >= PageCount)" @onclick="NextAsync" aria-label="Go to next page" data-testid="page-next">
-                    Next <Icon Name="chevron-right" Small="true" />
-                </button>
-                <div class="pager__size">
-                    <label for="page-size">Rows per page</label>
-                    <select id="page-size" value="@_state.PageSize" @onchange="PageSizeAsync" data-testid="page-size">
-                        @foreach (var size in CaseListState.PageSizes)
-                        {
-                            <option value="@size">@size</option>
-                        }
-                    </select>
-                </div>
-            </nav>
         }
     }
 </div>
 
 @code {
-    private sealed record Column(CaseSortField Field, string Text);
+    private sealed record Column(CaseSortField? Field, string Text);
+
+    private sealed record Chip(string Text, Func<CaseListState, CaseListState> Remove);
 
     private static readonly Column[] Columns =
     [
         new(CaseSortField.Id, "ID"),
         new(CaseSortField.Title, "Title"),
         new(CaseSortField.Status, "Status"),
+        new(CaseSortField.Priority, "Priority"),
+        new(CaseSortField.Category, "Category"),
+        new(CaseSortField.Owner, "Owner"),
+        new(CaseSortField.DueOn, "Due date"),
         new(CaseSortField.CreatedAt, "Created (UTC)"),
         new(CaseSortField.UpdatedAt, "Updated (UTC)"),
+        new(null, "Actions"),
     ];
 
     private static readonly (string Value, string Text)[] SortOptions =
     [
         ("UpdatedAt:desc", "Recently updated"), ("UpdatedAt:asc", "Least recently updated"),
         ("CreatedAt:desc", "Newest"), ("CreatedAt:asc", "Oldest"),
+        ("DueOn:asc", "Due soonest"), ("Priority:desc", "Highest priority"),
         ("Title:asc", "Title A to Z"), ("Title:desc", "Title Z to A"),
         ("Status:asc", "Status (New first)"), ("Id:desc", "ID (highest first)"), ("Id:asc", "ID (lowest first)"),
     ];
@@ -169,39 +296,125 @@
     private CaseListState _state = CaseListState.Default;
     private PagedResult<CaseSummaryDto>? _result;
     private bool _loading;
+    private bool _refreshing;
     private string? _error;
     private string? _announcement;
     private string? _searchDraft;
     private HashSet<CaseStatus> _statusDraft = [];
+    private HashSet<CasePriority> _priorityDraft = [];
+    private string? _categoryDraft;
+    private string? _ownerDraft;
+    private bool _overdueDraft;
+    private string? _me;
+    private IReadOnlyList<AssigneeDto> _assignees = [];
+    private DateOnly _today;
     private ElementReference _previous;
     private ElementReference _next;
     private string? _pagedWith;
 
+    // Declared so that the router re-supplies parameters when only the query string changes.
     [SupplyParameterFromQuery(Name = "page")] private int? QueryPage { get; set; }
     [SupplyParameterFromQuery(Name = "size")] private int? QuerySize { get; set; }
     [SupplyParameterFromQuery(Name = "status")] private string[]? QueryStatus { get; set; }
     [SupplyParameterFromQuery(Name = "q")] private string? QuerySearch { get; set; }
     [SupplyParameterFromQuery(Name = "sort")] private string? QuerySort { get; set; }
     [SupplyParameterFromQuery(Name = "dir")] private string? QueryDirection { get; set; }
+    [SupplyParameterFromQuery(Name = "priority")] private string[]? QueryPriority { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] private string[]? QueryCategory { get; set; }
+    [SupplyParameterFromQuery(Name = "owner")] private string? QueryOwner { get; set; }
+    [SupplyParameterFromQuery(Name = "overdue")] private string? QueryOverdue { get; set; }
+    [SupplyParameterFromQuery(Name = "createdFrom")] private string? QueryCreatedFrom { get; set; }
+    [SupplyParameterFromQuery(Name = "createdTo")] private string? QueryCreatedTo { get; set; }
+    [SupplyParameterFromQuery(Name = "updatedFrom")] private string? QueryUpdatedFrom { get; set; }
+    [SupplyParameterFromQuery(Name = "updatedTo")] private string? QueryUpdatedTo { get; set; }
 
     private int PageCount => _result is { TotalCount: > 0 } r ? (int)Math.Ceiling(r.TotalCount / (double)_state.PageSize) : 1;
-    private bool HasFilters => _state.Statuses.Count > 0 || _state.Search is not null || _statusDraft.Count > 0 || !string.IsNullOrWhiteSpace(_searchDraft);
+    private bool HasFilters => _state.Statuses.Count > 0 || _state.Search is not null || _state.HasExtraFilters
+        || _statusDraft.Count > 0 || _priorityDraft.Count > 0 || !string.IsNullOrEmpty(_categoryDraft) || !string.IsNullOrEmpty(_ownerDraft)
+        || _overdueDraft || !string.IsNullOrWhiteSpace(_searchDraft);
     private string ResultsText => _result is { } r ? UiText.ShowingRange(_state.Page, _state.PageSize, r.TotalCount, "cases") : string.Empty;
     private string SortValue => $"{_state.SortBy}:{(_state.Direction == SortDirection.Ascending ? "asc" : "desc")}";
     private string ExportHref => Navigation.GetUriWithQueryParameters("exports/cases.csv", _state.ToQueryParameters().Where(p => p.Key is not ("page" or "size")).ToDictionary());
 
+    private IReadOnlyList<Chip> DateChips
+    {
+        get
+        {
+            List<Chip> chips = [];
+            if (_state.CreatedFrom is not null || _state.CreatedTo is not null)
+            {
+                chips.Add(new Chip($"Created {Range(_state.CreatedFrom, _state.CreatedTo)}", s => s with { CreatedFrom = null, CreatedTo = null, Page = 1 }));
+            }
+            if (_state.UpdatedFrom is not null || _state.UpdatedTo is not null)
+            {
+                chips.Add(new Chip($"Updated {Range(_state.UpdatedFrom, _state.UpdatedTo)}", s => s with { UpdatedFrom = null, UpdatedTo = null, Page = 1 }));
+            }
+            return chips;
+        }
+    }
+
+    private static string Range(DateOnly? from, DateOnly? to) => (from, to) switch
+    {
+        ({ } f, { } t) => $"{UiText.DueDate(f)} to {UiText.DueDate(t)}",
+        ({ } f, null) => $"on or after {UiText.DueDate(f)}",
+        (null, { } t) => $"on or before {UiText.DueDate(t)}",
+        _ => string.Empty,
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _me = CaseDashboardService.UserNameOf(await CurrentUser.GetAsync(_cts.Token));
+        try
+        {
+            var assignees = await Assignees.ListAsync(_cts.Token);
+            _assignees = assignees.IsSuccess ? assignees.Value! : [];
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The owner filter still offers Me and Unassigned.
+            Logger.LogWarning(new EventId(5010, "AssigneeListFailed"), "Assignee list failed ({ExceptionType})", ex.GetType().Name);
+        }
+    }
+
     protected override async Task OnParametersSetAsync()
     {
-        _state = CaseListState.Parse(QueryPage, QuerySize, QueryStatus, QuerySearch, QuerySort, QueryDirection);
+        var query = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        _state = CaseListState.Parse(key => query.TryGetValue(key, out var values) ? [.. values.OfType<string>()] : []);
         _searchDraft = _state.Search;
         _statusDraft = [.. _state.Statuses];
+        _priorityDraft = [.. _state.Priorities];
+        _categoryDraft = _state.Categories.Count == 1 ? _state.Categories[0].ToString() : null;
+        _ownerDraft = _state.Owner;
+        _overdueDraft = _state.Overdue;
         await LoadAsync();
+    }
+
+    private async Task RefreshAsync()
+    {
+        _refreshing = true;
+        try
+        {
+            await Task.WhenAll(LoadAsync(), Task.Delay(TimeSpan.FromMilliseconds(400), _cts.Token));
+            if (_error is null && _result is { } r)
+            {
+                Announcer.Announce($"Case list refreshed. {UiText.ShowingRange(_state.Page, _state.PageSize, r.TotalCount, "cases")}.");
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _refreshing = false;
+        }
     }
 
     private async Task LoadAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         _error = null;
+        _today = UiText.TodayUtc(Time);
         try
         {
             var result = await Cases.ListAsync(_state.ToQuery(), _cts.Token);
@@ -263,15 +476,15 @@
         return Task.CompletedTask;
     }
 
-    private void ToggleStatus(CaseStatus status, ChangeEventArgs e)
+    private static void Toggle<T>(HashSet<T> set, T value, ChangeEventArgs e)
     {
         if (e.Value is true)
         {
-            _statusDraft.Add(status);
+            set.Add(value);
         }
         else
         {
-            _statusDraft.Remove(status);
+            set.Remove(value);
         }
     }
 
@@ -280,13 +493,21 @@
         Page = 1,
         Statuses = [.. _statusDraft.Order()],
         Search = string.IsNullOrWhiteSpace(_searchDraft) ? null : _searchDraft.Trim(),
+        Priorities = [.. _priorityDraft.Order()],
+        Categories = Enum.TryParse<CaseCategory>(_categoryDraft, out var category) && Enum.IsDefined(category) ? [category] : [],
+        Owner = string.IsNullOrWhiteSpace(_ownerDraft) ? null : _ownerDraft,
+        Overdue = _overdueDraft,
     });
 
     private Task ClearFiltersAsync()
     {
         _statusDraft.Clear();
+        _priorityDraft.Clear();
+        _categoryDraft = null;
+        _ownerDraft = null;
+        _overdueDraft = false;
         _searchDraft = null;
-        return NavigateAsync(_state with { Page = 1, Statuses = [], Search = null });
+        return NavigateAsync(_state.WithoutFilters());
     }
 
     private Task SortAsync(CaseSortField field) => NavigateAsync(_state.SortedBy(field));
@@ -319,7 +540,8 @@
     private string? AriaSort(CaseSortField field) => _state.SortBy != field ? null
         : _state.Direction == SortDirection.Ascending ? "ascending" : "descending";
 
-    private string SortGlyph(CaseSortField field) => _state.SortBy != field ? string.Empty
+    /// <summary>▲ / ▼ on the sorted column, ⇅ on the others (decorative; aria-sort carries the state).</summary>
+    private string SortGlyph(CaseSortField field) => _state.SortBy != field ? "⇅"
         : _state.Direction == SortDirection.Ascending ? "▲" : "▼";
 
     public void Dispose()

@@ -19,9 +19,68 @@ public sealed class CaseService(
     ICurrentUser currentUser,
     ICaseWorkflow workflow,
     TimeProvider timeProvider,
-    ILogger<CaseService> logger) : ICaseService
+    ILogger<CaseService> logger) : ICaseService, ICaseAssignmentService
 {
     public const int MaxPageSize = 100;
+
+    /// <summary>
+    /// Changes the owner under <see cref="CaseAssignmentRules"/>: supervisors assign anyone who works cases (or nobody);
+    /// someone who edits cases takes an unassigned case or hands back their own. Recorded as an Assigned audit entry,
+    /// which the new owner's notification feed shows as assigned to them.
+    /// </summary>
+    public async Task<Result<CaseDetailDto>> AssignAsync(long id, AssignCaseRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        var actor = await currentUser.GetAsync(ct);
+        if (!actor.HasPermission(Permissions.CasesView))
+        {
+            return Denied<CaseDetailDto>(nameof(AssignAsync), actor, Permissions.CasesView, id);
+        }
+
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        var entity = await db.Cases.SingleOrDefaultAsync(c => c.Id == id, ct);
+        if (entity is null)
+        {
+            return Result<CaseDetailDto>.Failure(CaseErrors.NotFound);
+        }
+        if (entity.IsClosed)
+        {
+            return Rejected<CaseDetailDto>(nameof(AssignAsync), CaseErrors.CaseClosed);
+        }
+
+        var me = AuditAppender.ActorName(actor);
+        var target = CaseTriageRules.NormalizeAssignee(request.AssignedTo);
+        var right = CaseAssignmentRules.RightFor(actor, me, entity.Status, entity.AssignedTo);
+        if (!CaseAssignmentRules.Allows(right, me, entity.AssignedTo, target))
+        {
+            return Denied<CaseDetailDto>(nameof(AssignAsync), actor, Permissions.CasesAssign, id);
+        }
+        if (entity.Version != request.Version)
+        {
+            CaseLog.VersionConflict(logger, id, nameof(AssignAsync));
+            return Result<CaseDetailDto>.Failure(CaseErrors.Conflict);
+        }
+        if (target is not null && !string.Equals(target, entity.AssignedTo, StringComparison.Ordinal)
+            && !await CaseAssigneeDirectory.IsAssignableAsync(db, target, ct))
+        {
+            return Rejected<CaseDetailDto>(nameof(AssignAsync), CaseErrors.InvalidAssignee);
+        }
+
+        var now = timeProvider.GetUtcNow();
+        var (changed, previous) = entity.Assign(target, me, now);
+        if (!changed)
+        {
+            return Result<CaseDetailDto>.Success(ToDetail(entity, actor));
+        }
+        AuditAppender.Append(db, entity, actor, AuditEvent.Assigned(now, previous, target));
+        if (!await TrySaveWithVersionAsync(db, entity, request.Version, nameof(AssignAsync), ct))
+        {
+            return Result<CaseDetailDto>.Failure(CaseErrors.Conflict);
+        }
+
+        CaseLog.CaseAssigned(logger, id, actor.UserId!);
+        return Result<CaseDetailDto>.Success(ToDetail(entity, actor));
+    }
 
     public async Task<Result<CaseDetailDto>> CreateAsync(CreateCaseRequest request, CancellationToken ct)
     {
@@ -37,10 +96,29 @@ public sealed class CaseService(
         }
 
         var now = timeProvider.GetUtcNow();
-        var veteran = request.Veteran is { } v ? new CaseVeteran(v.Name, v.Address, v.SsnLast4) : null;
-        var entity = Case.Create(request.Title, request.Description, veteran, AuditAppender.ActorName(actor), now);
+        var triage = request.Triage ?? CaseTriage.Default;
+        triage = triage with
+        {
+            AssignedTo = CaseTriageRules.NormalizeAssignee(triage.AssignedTo),
+            DueOn = triage.DueOn ?? CaseTriageRules.DefaultDueOn(triage.Priority, now),
+        };
 
         await using var db = await contextFactory.CreateDbContextAsync(ct);
+        if (triage.AssignedTo is { } owner)
+        {
+            // Choosing the owner at intake is assignment, which only supervisors (cases.assign) may do for others.
+            if (!actor.HasPermission(Permissions.CasesAssign))
+            {
+                return Rejected<CaseDetailDto>(nameof(CreateAsync), CaseErrors.AssignNotAllowed);
+            }
+            if (!await CaseAssigneeDirectory.IsAssignableAsync(db, owner, ct))
+            {
+                return Rejected<CaseDetailDto>(nameof(CreateAsync), CaseErrors.InvalidAssignee);
+            }
+        }
+
+        var veteran = request.Veteran is { } v ? new CaseVeteran(v.Name, v.Address, v.SsnLast4) : null;
+        var entity = Case.Create(request.Title, request.Description, veteran, AuditAppender.ActorName(actor), now, triage: triage);
         db.Cases.Add(entity);
         AuditAppender.Append(db, entity, actor, AuditEvent.Created(now, veteran is not null));
         await db.SaveChangesAsync(ct);
@@ -93,8 +171,9 @@ public sealed class CaseService(
             return Result<CaseDetailDto>.Failure(CaseErrors.Conflict);
         }
 
+        // The owner in request.Triage is ignored here (Case.Edit keeps it); it changes only through AssignAsync.
         var now = timeProvider.GetUtcNow();
-        var changed = entity.Edit(request.Title, request.Description, AuditAppender.ActorName(actor), now);
+        var changed = entity.Edit(request.Title, request.Description, AuditAppender.ActorName(actor), now, request.Triage);
         if (changed.Count == 0)
         {
             // No-op edit: no timestamp, version or audit change.
@@ -172,12 +251,14 @@ public sealed class CaseService(
         }
 
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        var filtered = CaseListQueryBuilder.Filter(db.Cases.AsNoTracking(), query);
+        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var filtered = CaseListQueryBuilder.Filter(db.Cases.AsNoTracking(), query, today);
         var total = await filtered.CountAsync(ct);
         var items = await CaseListQueryBuilder.Sort(filtered, query.SortBy, query.Direction)
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(c => new CaseSummaryDto(c.Id, c.Title, c.Status, c.CreatedAtUtc, c.UpdatedAtUtc))
+            .Select(c => new CaseSummaryDto(c.Id, c.Title, c.Status, c.CreatedAtUtc, c.UpdatedAtUtc,
+                c.Priority, c.Category, c.AssignedTo, c.DueOn))
             .ToListAsync(ct);
 
         return Result<PagedResult<CaseSummaryDto>>.Success(new PagedResult<CaseSummaryDto>(items, query.Page, query.PageSize, total));
@@ -212,7 +293,8 @@ public sealed class CaseService(
     private CaseDetailDto ToDetail(Case c, OperationActor actor) => new(
         c.Id, c.Title, c.Description, c.Status, c.CreatedAtUtc, c.CreatedBy, c.UpdatedAtUtc, c.UpdatedBy, c.Version,
         c.Veteran is { } v ? new VeteranSnapshot(v.Name, v.Address, v.SsnLast4) : null,
-        AllowedNextStatuses(c.Status, actor, workflow));
+        AllowedNextStatuses(c.Status, actor, workflow),
+        c.Priority, c.Category, c.AssignedTo, c.DueOn);
 
     /// <summary>
     /// Saves with the version the caller last saw as the concurrency token's original value, so a stale browser form

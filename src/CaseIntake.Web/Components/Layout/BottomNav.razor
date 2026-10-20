@@ -14,6 +14,10 @@
                     <a class="bottom-nav__item" href="@item.Href" aria-current="@CurrentAttr(item, items)">
                         <Icon Name="@item.Icon" />
                         <span>@item.Text</span>
+                        @if (item.Href == "notifications")
+                        {
+                            <NotificationBadge TestId="bottom-unread" />
+                        }
                     </a>
                 </li>
             }

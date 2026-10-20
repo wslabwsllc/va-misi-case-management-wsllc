@@ -5,6 +5,7 @@
 @using CaseIntake.Domain.TestResults
 @using CaseIntake.Web.Services
 @inject ITestResultsService Results
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<TestRuns> Logger
 
 @* Imported test runs, newest first, filtered by run key/branch/commit/build, status, environment and UTC dates. *@
@@ -153,6 +154,7 @@
 
     private async Task LoadAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         _error = null;
         try

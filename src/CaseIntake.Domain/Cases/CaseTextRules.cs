@@ -28,6 +28,10 @@ public static class CaseFieldNames
     public const string VeteranName = "Veteran.Name";
     public const string VeteranAddress = "Veteran.Address";
     public const string VeteranSsnLast4 = "Veteran.SsnLast4";
+    public const string Priority = "Priority";
+    public const string Category = "Category";
+    public const string AssignedTo = "AssignedTo";
+    public const string DueOn = "DueOn";
 }
 
 /// <summary>One violated rule for one field.</summary>

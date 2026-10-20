@@ -10,6 +10,11 @@
 @inject IVeteranLookupClient VeteranLookup
 @inject StatusAnnouncer Announcer
 @inject NavigationManager Navigation
+@inject ICaseAssigneeDirectory Assignees
+@inject ICurrentUser CurrentUser
+@inject PageActivity Activity
+@inject CaseActivitySignal ActivitySignal
+@inject TimeProvider Time
 @inject ILogger<NewCase> Logger
 
 @* Case intake (E5-S4). Validation uses the shared CaseRequestValidator, so the messages are exactly the server's. The
@@ -17,7 +22,7 @@
    cleared after every completed lookup; only the last four digits of a found veteran are kept, and only if the user
    chooses "Use this veteran". A new or failed lookup clears any previously selected veteran. *@
 <PageShell Title="New case" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])"
-           Subtitle="Fields marked (required) must be completed." />
+           Subtitle="Fields marked * are required." ShowBackButton="true" />
 
 <ErrorAlert @ref="_submitAlert" Title="@(_submitError is null ? null : "The case was not created")" Message="@_submitError" TestId="intake-error" />
 
@@ -25,28 +30,51 @@
     <div class="card">
         <EditForm EditContext="_editContext" OnSubmit="SubmitAsync" id="intake-form" novalidate class="form" data-testid="intake-form">
             <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" />
-            <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title"
+            <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title" placeholder="Enter a brief title for the case…"
                               Hint="@($"A short summary, {CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
                               MaxCharacters="CaseFieldLimits.TitleMaxLength" />
-            <LabeledTextArea Id="intake-description" Label="Description" @bind-Value="_model.Description" Rows="8"
+            <LabeledTextArea Id="intake-description" Label="Description" @bind-Value="_model.Description" Rows="6" placeholder="Enter case details…"
                              Hint="@($"Details of the request, up to {CaseFieldLimits.DescriptionMaxLength:N0} characters.")"
                              MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
+            @* OnChanged re-renders this page, so the due-date hint follows the chosen priority. *@
+            <TriageFields IdPrefix="intake" Model="_model" Assignees="_assignees" CanAssign="_canAssign" DueHint="@DueHint" OnChanged="OnTriageChanged" />
         </EditForm>
+        <div class="form-actions">
+            <button type="submit" form="intake-form" class="btn btn--primary" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="create-case">
+                @if (_submitting)
+                {
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Creating case…</span>
+                }
+                else
+                {
+                    <Icon Name="add" Small="true" /><span>Create case</span>
+                }
+            </button>
+            <a class="btn" href="cases">Cancel</a>
+        </div>
     </div>
 
     <AuthorizeView Policy="@Permissions.VeteranLookup">
         <Authorized>
             <section class="card" aria-labelledby="lookup-heading" data-testid="lookup-section">
-                <div class="card__header"><h2 id="lookup-heading">Veteran lookup (optional)</h2></div>
+                <div class="card__header lookup-header">
+                    <span class="lookup-header__icon" aria-hidden="true"><Icon Name="person" /></span>
+                    <h2 id="lookup-heading">Veteran lookup (optional)</h2>
+                </div>
                 <p class="page-header__subtitle">Look up a veteran to attach their name and address to the case. You can create the case without a lookup.</p>
                 <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
                     <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
                                       Hint="Nine digits, with or without dashes (NNN-NN-NNNN). It is used for this lookup only and is not saved."
-                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" />
-                    <button type="submit" class="btn" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
+                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" placeholder="XXX-XX-XXXX" />
+                    <button type="submit" class="btn btn--outline" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
                         @if (_lookingUp)
                         {
                             <span class="spinner" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <Icon Name="search" Small="true" />
                         }
                         Look up veteran
                     </button>
@@ -89,26 +117,16 @@
     </AuthorizeView>
 </div>
 
-<div class="form-actions">
-    <button type="submit" form="intake-form" class="btn btn--primary" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="create-case">
-        @if (_submitting)
-        {
-            <span class="spinner" aria-hidden="true"></span>
-            <span>Creating case…</span>
-        }
-        else
-        {
-            <span>Create case</span>
-        }
-    </button>
-    <a class="btn" href="cases">Cancel</a>
-</div>
 
 @code {
-    private sealed class IntakeModel
+    private sealed class IntakeModel : ITriageForm
     {
         public string? Title { get; set; }
         public string? Description { get; set; }
+        public CasePriority Priority { get; set; } = CasePriority.Medium;
+        public CaseCategory Category { get; set; } = CaseCategory.General;
+        public string? AssignedTo { get; set; }
+        public DateOnly? DueOn { get; set; }
     }
 
     private sealed class LookupModel
@@ -120,7 +138,22 @@
     [
         new(CaseFieldNames.Title, "intake-title"),
         new(CaseFieldNames.Description, "intake-description"),
+        .. TriageFormExtensions.SummaryFields("intake"),
     ];
+
+    private IReadOnlyList<AssigneeDto> _assignees = [];
+    private bool _canAssign;
+
+    private void OnTriageChanged()
+    {
+        // Nothing to do: handling the callback re-renders the page with the new due-date hint.
+    }
+
+    /// <summary>Explains the default due date for the chosen priority, with the date it would get today.</summary>
+    private string DueHint => _model.DueOn is null
+        ? $"Leave empty to use the target for {UiText.Priority(_model.Priority)} priority: {CaseTriageRules.TargetDays(_model.Priority)} days "
+          + $"({UiText.DueDate(CaseTriageRules.DefaultDueOn(_model.Priority, Time.GetUtcNow()))})."
+        : "The case counts as overdue if it is still open after this date.";
 
     private readonly CancellationTokenSource _cts = new();
     private readonly IntakeModel _model = new();
@@ -147,12 +180,27 @@
     private VeteranSnapshot? _found;
     private VeteranSnapshot? _selected;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _editContext = new EditContext(_model);
         _messages = new ValidationMessageStore(_editContext);
         _lookupContext = new EditContext(_lookupModel);
         _lookupMessages = new ValidationMessageStore(_lookupContext);
+
+        // Only supervisors (cases.assign) choose the owner at intake; the service enforces the same rule.
+        _canAssign = (await CurrentUser.GetAsync(_cts.Token)).HasPermission(Permissions.CasesAssign);
+        if (_canAssign)
+        {
+            try
+            {
+                var result = await Assignees.ListAsync(_cts.Token);
+                _assignees = result.IsSuccess ? result.Value! : [];
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                Logger.LogWarning(new EventId(5010, "AssigneeListFailed"), "Assignee list failed ({ExceptionType})", ex.GetType().Name);
+            }
+        }
     }
 
     private async Task SubmitAsync()
@@ -162,7 +210,7 @@
             return;   // no double submit
         }
         _submitError = null;
-        var request = new CreateCaseRequest(_model.Title ?? string.Empty, _model.Description, _selected);
+        var request = new CreateCaseRequest(_model.Title ?? string.Empty, _model.Description, _selected, _model.ToTriage());
         if (CaseRequestValidator.Validate(request) is { } invalid)
         {
             ShowValidation(invalid);
@@ -170,12 +218,14 @@
         }
 
         _submitting = true;
+        using var busy = Activity.Begin();
         try
         {
             var result = await Cases.CreateAsync(request, _cts.Token);
             if (result.IsSuccess)
             {
                 ClearValidation();
+                ActivitySignal.Raise();
                 Announcer.Announce($"Case {result.Value!.Id} created");
                 Navigation.NavigateTo($"cases/{result.Value.Id}");
                 return;
@@ -211,7 +261,7 @@
         _formMessages = [];
         foreach (var (field, fieldMessages) in error.FieldErrors ?? new Dictionary<string, string[]>())
         {
-            if (field is CaseFieldNames.Title or CaseFieldNames.Description)
+            if (field is CaseFieldNames.Title or CaseFieldNames.Description || TriageFormExtensions.IsTriageField(field))
             {
                 _messages.Add(new FieldIdentifier(_model, field), fieldMessages);
             }
