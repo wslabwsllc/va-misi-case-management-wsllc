@@ -22,19 +22,26 @@ in with their email as user name on a static SSR page (`/account/login`); sign-o
 are plain HTTP form posts protected by antiforgery tokens. There is no self-registration, password reset or external
 login (OQ-18). Data Protection keys persist on the `dataprotection` volume, so cookies survive container recreation.
 
-**Roles and the adopted permission matrix (assumption recorded under OQ-3).** Two roles, `CaseWorker` and
-`Supervisor`. Supervisors make the triage and closure decisions; case workers do the day-to-day work.
+**Roles and the adopted permission matrix (assumption recorded under OQ-3).** Four case roles that build on each
+other, `Auditor` ⊂ `IntakeClerk` ⊂ `CaseWorker` ⊂ `Supervisor`, plus the separate `QualityAnalyst` added by the test
+results module ([ADR 0012](0012-test-results-module.md)). Auditors review without changing anything; intake clerks
+open cases at the front door; case workers do the day-to-day work; supervisors make the triage and closure decisions.
+The spec requires at least two roles; the extra two separate read-only oversight and intake from casework.
 
-| Permission | CaseWorker | Supervisor |
-|---|:-:|:-:|
-| `cases.view` / `cases.create` / `cases.edit` | ✔ | ✔ |
-| `veteran.lookup` | ✔ | ✔ |
-| `attachments.upload` / `attachments.download` | ✔ | ✔ |
-| `cases.transition.New.Triaged` | – | ✔ |
-| `cases.transition.Triaged.InProgress` | ✔ | ✔ |
-| `cases.transition.InProgress.Resolved` | ✔ | ✔ |
-| `cases.transition.Resolved.Closed` | – | ✔ |
-| `cases.transition.Resolved.InProgress` (reopen) | – | ✔ |
+| Permission | Auditor | IntakeClerk | CaseWorker | Supervisor | QualityAnalyst |
+|---|:-:|:-:|:-:|:-:|:-:|
+| `cases.view` | ✔ | ✔ | ✔ | ✔ | ✔ |
+| `attachments.download` | ✔ | ✔ | ✔ | ✔ | – |
+| `cases.create` / `veteran.lookup` / `attachments.upload` | – | ✔ | ✔ | ✔ | – |
+| `cases.edit` | – | – | ✔ | ✔ | – |
+| `cases.transition.Triaged.InProgress` | – | – | ✔ | ✔ | – |
+| `cases.transition.InProgress.Resolved` | – | – | ✔ | ✔ | – |
+| `cases.transition.New.Triaged` | – | – | – | ✔ | – |
+| `cases.transition.Resolved.Closed` | – | – | – | ✔ | – |
+| `cases.transition.Resolved.InProgress` (reopen) | – | – | – | ✔ | – |
+| `testresults.view` / `testresults.manage` | – | – | – | – | ✔ |
+
+The UI shows roles by display name (`AppRoles.DisplayName`: "Intake clerk", "Case worker", "Quality analyst").
 
 A user with several roles gets the union; an unknown role grants nothing. The matrix is the single
 `RolePermissionMap` in `CaseIntake.Contracts.Security`, shared by the authorization handler, both `ICurrentUser`
@@ -76,9 +83,10 @@ A small middleware adds `X-Content-Type-Options: nosniff`, `Referrer-Policy: sam
 host's `ws:`/`wss:` origin for the SignalR circuit, `style-src 'self' 'unsafe-inline'`, `object-src 'none'`,
 `frame-ancestors 'none'`, `form-action 'self'`. Login and logout redirect only to local return URLs.
 
-**Demo users.** `IdentitySeedContributor` (order 10, before the case seed) creates both roles and
-`caseworker@example.test` / `supervisor@example.test` (reserved `.test` TLD) with stable IDs and the
-`Seed:DemoPassword` password. Re-seeding adds only what is missing and never resets a password.
+**Demo users.** `IdentitySeedContributor` (order 10, before the case seed) creates every role and one
+user per role, `auditor@`, `intake@`, `caseworker@`, `supervisor@` and `qa@example.test` (reserved `.test` TLD), with
+stable IDs and the `Seed:DemoPassword` password. The sign-in page lists them whenever `Seed:DemoPassword` is configured
+(docker compose and `dotnet run`), so a deployment without demo seeding reveals no account names. Re-seeding adds only what is missing and never resets a password.
 
 ## Alternatives considered
 

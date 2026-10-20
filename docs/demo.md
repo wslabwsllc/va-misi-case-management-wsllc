@@ -8,6 +8,8 @@ application (no scripted screens). Start from a clean state with `docker compose
 
 | Account | Password | Role | Use it to show |
 |---|---|---|---|
+| `auditor@example.test` | `Demo-Passw0rd!` | Auditor | read-only: cases, audit trails, downloads; no New case, edit, status change or upload |
+| `intake@example.test` | `Demo-Passw0rd!` | IntakeClerk | open cases, lookup, upload; no edit or status change |
 | `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker | intake, edit, lookup, attachments, start/resolve; cannot triage, close or reopen |
 | `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor | everything, including triage, close and reopen |
 | `qa@example.test` | `Demo-Passw0rd!` | QualityAnalyst | read cases; test results and evidence (Administration > Quality assurance) |
@@ -44,7 +46,9 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; a
 7. **Role difference**: sign out, sign in as the case worker. A New case shows "No status changes available" (no triage),
    a Resolved case offers neither Close nor Reopen; Triaged and In Progress cases offer Start/Resolve. Sign in as
    `qa@example.test`: no New case, but Administration > Quality assurance; opening `/cases/new` shows Access denied
-   with a link back to the case list.
+   with a link back to the case list. Sign in as `intake@example.test`: New case and Upload are offered, but a case has
+   no Edit and no status buttons. Sign in as `auditor@example.test`: cases and the audit trail are readable and
+   downloads work, but nothing can be changed and `/cases/new` shows Access denied.
 8. **Lookup**: shown in step 3 against the real `veteran-lookup` container (`POST /veterans/lookup`).
 9. **Upload and download**: on an open case choose a `.txt` file and Upload ("File uploaded" is announced and the row
    appears); upload an `.exe` to see the rejection. Use **Download** on the row; the file is identical.

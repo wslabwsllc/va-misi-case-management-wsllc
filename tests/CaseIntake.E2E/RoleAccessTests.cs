@@ -28,7 +28,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         await SignInAsync(s, DemoAccounts.CaseWorker);
         await s.StepAsync("Header and navigation for the CaseWorker", async () =>
         {
-            await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("CaseWorker");
+            await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("Case worker");
             var nav = page.GetByTestId("side-nav");
             await Expect(nav.GetByRole(AriaRole.Link, new() { Name = "New case" })).ToBeVisibleAsync();
             await Expect(nav.GetByText("Administration")).ToHaveCountAsync(0);
@@ -62,7 +62,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
             await page.GotoAsync("/test-results");
             await Expect(page.Locator("h1")).ToHaveTextAsync("Access denied");
             await Expect(page.GetByRole(AriaRole.Link, new() { Name = "Back to the case list" })).ToHaveAttributeAsync("href", "cases");
-            await Expect(page.GetByTestId("access-denied")).ToContainTextAsync("CaseWorker");
+            await Expect(page.GetByTestId("access-denied")).ToContainTextAsync("Case worker");
         });
         await s.AxeAsync("Access denied");
         s.Complete();
@@ -102,7 +102,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
             await Expect(nav.GetByText("Administration")).ToBeVisibleAsync();
             await Expect(nav.GetByRole(AriaRole.Link, new() { Name = "Quality assurance" })).ToBeVisibleAsync();
             await Expect(nav.GetByRole(AriaRole.Link, new() { Name = "New case" })).ToHaveCountAsync(0);
-            await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("QualityAnalyst");
+            await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("Quality analyst");
         });
         await s.StepAsync("In-app navigation to New case shows Access denied and focuses its h1", async () =>
         {
@@ -119,6 +119,61 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
             var csv = await s.Context.APIRequest.GetAsync("/exports/cases.csv");
             Assert.Equal(200, csv.Status);
             Assert.StartsWith("Id,Title,Status", (await csv.TextAsync()).TrimStart((char)0xFEFF), StringComparison.Ordinal);
+        });
+        s.Complete();
+    }
+
+    [Fact]
+    public async Task Auditor_reads_cases_and_audit_trail_but_changes_nothing()
+    {
+        await using var s = await StartAsync(Meta("Auditor read-only access", "E3-S2", ["R-4.2-11"],
+            expected: "No New case; case detail shows the audit trail with no edit, status change or upload; /cases/new is denied"));
+        var page = s.Page;
+        await SignInAsync(s, DemoAccounts.Auditor);
+        await s.StepAsync("Header and navigation for the Auditor", async () =>
+        {
+            await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("Auditor");
+            await Expect(page.GetByTestId("side-nav").GetByRole(AriaRole.Link, new() { Name = "New case" })).ToHaveCountAsync(0);
+        });
+        await s.StepAsync("A Triaged case is read-only for the Auditor", async () =>
+        {
+            await GotoAsync(page, $"/cases/{await FirstCaseInStatusAsync(page, "Triaged")}");
+            await Expect(page.GetByTestId("audit-list")).ToBeVisibleAsync();
+            await Expect(page.GetByTestId("no-transitions")).ToHaveTextAsync("No status changes available");
+            await Expect(page.GetByTestId("edit-case")).ToHaveCountAsync(0);
+            await Expect(page.GetByTestId("upload-form")).ToHaveCountAsync(0);
+        });
+        s.ExpectErrorResponse("/account/access-denied");
+        await s.StepAsync("Opening New case directly shows Access denied", async () =>
+        {
+            await page.GotoAsync("/cases/new");
+            await Expect(page.Locator("h1")).ToHaveTextAsync("Access denied");
+            await Expect(page.GetByTestId("access-denied")).ToContainTextAsync("Auditor");
+        });
+        await s.AxeAsync("Access denied (auditor)");
+        s.Complete();
+    }
+
+    [Fact]
+    public async Task IntakeClerk_opens_cases_but_cannot_edit_or_move_them()
+    {
+        await using var s = await StartAsync(Meta("IntakeClerk intake-only access", "E3-S2", ["R-4.2-11"],
+            expected: "New case visible and opens; case detail offers upload but no edit or status change"));
+        var page = s.Page;
+        await SignInAsync(s, DemoAccounts.IntakeClerk);
+        await s.StepAsync("Header and New case for the IntakeClerk", async () =>
+        {
+            await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("Intake clerk");
+            await Expect(page.GetByTestId("side-nav").GetByRole(AriaRole.Link, new() { Name = "New case" })).ToBeVisibleAsync();
+            await GotoAsync(page, "/cases/new");
+            await Expect(page.Locator("h1")).ToHaveTextAsync("New case");
+        });
+        await s.StepAsync("A Triaged case offers upload but no edit or status change", async () =>
+        {
+            await GotoAsync(page, $"/cases/{await FirstCaseInStatusAsync(page, "Triaged")}");
+            await Expect(page.GetByTestId("upload-form")).ToBeVisibleAsync();
+            await Expect(page.GetByTestId("edit-case")).ToHaveCountAsync(0);
+            await Expect(page.GetByTestId("no-transitions")).ToHaveTextAsync("No status changes available");
         });
         s.Complete();
     }

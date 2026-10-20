@@ -33,6 +33,8 @@ public static class DemoAccounts
     public const string CaseWorker = "caseworker@example.test";
     public const string Supervisor = "supervisor@example.test";
     public const string QualityAnalyst = "qa@example.test";
+    public const string IntakeClerk = "intake@example.test";
+    public const string Auditor = "auditor@example.test";
 }
 
 /// <summary>Viewports required by the responsive tests.</summary>

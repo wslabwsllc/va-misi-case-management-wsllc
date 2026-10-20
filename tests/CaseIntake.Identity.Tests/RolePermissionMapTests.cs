@@ -5,40 +5,48 @@ namespace CaseIntake.Identity.Tests;
 
 /// <summary>
 /// Golden test of the adopted matrix (plan E3-S2 / ADR 0007, QualityAnalyst added by the E5 test results module, ADR
-/// 0012). Any change to who may do what must change this table deliberately.
+/// 0012; Auditor and IntakeClerk added below CaseWorker). Any change to who may do what must change this table deliberately.
 /// </summary>
 public class RolePermissionMapTests
 {
     private const bool Yes = true, No = false;
 
-    public static TheoryData<string, bool, bool, bool> Matrix => new()
+    /// <summary>Column order of the golden table.</summary>
+    private static readonly string[] Columns =
+        [AppRoles.Auditor, AppRoles.IntakeClerk, AppRoles.CaseWorker, AppRoles.Supervisor, AppRoles.QualityAnalyst];
+
+    /// <summary>The case roles, each granting everything the one before it does.</summary>
+    private static readonly string[] CaseChain = [AppRoles.Auditor, AppRoles.IntakeClerk, AppRoles.CaseWorker, AppRoles.Supervisor];
+
+    public static TheoryData<string, bool, bool, bool, bool, bool> Matrix => new()
     {
-        // permission                                                         CaseWorker  Supervisor  QualityAnalyst
-        { Permissions.CasesView,                                               Yes,        Yes,        Yes },
-        { Permissions.CasesCreate,                                             Yes,        Yes,        No },
-        { Permissions.CasesEdit,                                               Yes,        Yes,        No },
-        { Permissions.VeteranLookup,                                           Yes,        Yes,        No },
-        { Permissions.AttachmentsUpload,                                       Yes,        Yes,        No },
-        { Permissions.AttachmentsDownload,                                     Yes,        Yes,        No },
-        { Permissions.Transition(CaseStatus.New, CaseStatus.Triaged),          No,         Yes,        No },
-        { Permissions.Transition(CaseStatus.Triaged, CaseStatus.InProgress),   Yes,        Yes,        No },
-        { Permissions.Transition(CaseStatus.InProgress, CaseStatus.Resolved),  Yes,        Yes,        No },
-        { Permissions.Transition(CaseStatus.Resolved, CaseStatus.Closed),      No,         Yes,        No },
-        { Permissions.Transition(CaseStatus.Resolved, CaseStatus.InProgress),  No,         Yes,        No },
-        { Permissions.TestResultsView,                                         No,         No,         Yes },
-        { Permissions.TestResultsManage,                                       No,         No,         Yes },
+        // permission                                                         Auditor  Intake  CaseWorker  Supervisor  QA
+        { Permissions.CasesView,                                               Yes,     Yes,    Yes,        Yes,        Yes },
+        { Permissions.AttachmentsDownload,                                     Yes,     Yes,    Yes,        Yes,        No },
+        { Permissions.CasesCreate,                                             No,      Yes,    Yes,        Yes,        No },
+        { Permissions.VeteranLookup,                                           No,      Yes,    Yes,        Yes,        No },
+        { Permissions.AttachmentsUpload,                                       No,      Yes,    Yes,        Yes,        No },
+        { Permissions.CasesEdit,                                               No,      No,     Yes,        Yes,        No },
+        { Permissions.Transition(CaseStatus.Triaged, CaseStatus.InProgress),   No,      No,     Yes,        Yes,        No },
+        { Permissions.Transition(CaseStatus.InProgress, CaseStatus.Resolved),  No,      No,     Yes,        Yes,        No },
+        { Permissions.Transition(CaseStatus.New, CaseStatus.Triaged),          No,      No,     No,         Yes,        No },
+        { Permissions.Transition(CaseStatus.Resolved, CaseStatus.Closed),      No,      No,     No,         Yes,        No },
+        { Permissions.Transition(CaseStatus.Resolved, CaseStatus.InProgress),  No,      No,     No,         Yes,        No },
+        { Permissions.TestResultsView,                                         No,      No,     No,         No,         Yes },
+        { Permissions.TestResultsManage,                                       No,      No,     No,         No,         Yes },
     };
 
     [Theory]
     [MemberData(nameof(Matrix))]
-    public void Each_role_gets_exactly_its_listed_permissions(string permission, bool caseWorker, bool supervisor, bool qualityAnalyst)
+    public void Each_role_gets_exactly_its_listed_permissions(
+        string permission, bool auditor, bool intakeClerk, bool caseWorker, bool supervisor, bool qualityAnalyst)
     {
-        Assert.Equal(caseWorker, RolePermissionMap.PermissionsFor([AppRoles.CaseWorker]).Contains(permission));
-        Assert.Equal(supervisor, RolePermissionMap.PermissionsFor([AppRoles.Supervisor]).Contains(permission));
-        Assert.Equal(qualityAnalyst, RolePermissionMap.PermissionsFor([AppRoles.QualityAnalyst]).Contains(permission));
-        Assert.Equal(caseWorker, RolePermissionMap.Grants([AppRoles.CaseWorker], permission));
-        Assert.Equal(supervisor, RolePermissionMap.Grants([AppRoles.Supervisor], permission));
-        Assert.Equal(qualityAnalyst, RolePermissionMap.Grants([AppRoles.QualityAnalyst], permission));
+        bool[] expected = [auditor, intakeClerk, caseWorker, supervisor, qualityAnalyst];
+        for (var i = 0; i < Columns.Length; i++)
+        {
+            Assert.Equal(expected[i], RolePermissionMap.PermissionsFor([Columns[i]]).Contains(permission));
+            Assert.Equal(expected[i], RolePermissionMap.Grants([Columns[i]], permission));
+        }
     }
 
     [Fact]
@@ -48,12 +56,34 @@ public class RolePermissionMapTests
 
         Assert.Equal(13, RolePermissionMap.AllPermissions.Length);
         Assert.Equal(rows.Order(), RolePermissionMap.AllPermissions.Order());
-        Assert.Subset(rows, RolePermissionMap.PermissionsFor([AppRoles.CaseWorker]));
-        Assert.Subset(rows, RolePermissionMap.PermissionsFor([AppRoles.Supervisor]));
-        Assert.Subset(rows, RolePermissionMap.PermissionsFor([AppRoles.QualityAnalyst]));
-        Assert.Equal(8, RolePermissionMap.PermissionsFor([AppRoles.CaseWorker]).Count);
-        Assert.Equal(11, RolePermissionMap.PermissionsFor([AppRoles.Supervisor]).Count);
-        Assert.Equal(3, RolePermissionMap.PermissionsFor([AppRoles.QualityAnalyst]).Count);
+        Assert.All(Columns, role => Assert.Subset(rows, RolePermissionMap.PermissionsFor([role])));
+        Assert.Equal([2, 5, 8, 11, 3], Columns.Select(role => RolePermissionMap.PermissionsFor([role]).Count).ToArray());
+    }
+
+    [Fact]
+    public void Each_case_role_adds_to_the_one_before_it()
+    {
+        for (var i = 1; i < CaseChain.Length; i++)
+        {
+            Assert.ProperSubset(
+                RolePermissionMap.PermissionsFor([CaseChain[i]]).ToHashSet(),
+                RolePermissionMap.PermissionsFor([CaseChain[i - 1]]).ToHashSet());
+        }
+    }
+
+    [Fact]
+    public void Supervisor_has_every_case_permission_and_quality_analyst_sits_outside_the_case_chain()
+    {
+        var supervisor = RolePermissionMap.PermissionsFor([AppRoles.Supervisor]);
+        var qa = RolePermissionMap.PermissionsFor([AppRoles.QualityAnalyst]);
+
+        Assert.Equal(RolePermissionMap.AllPermissions.Except(RolePermissionMap.TestResultsPermissions).Order(), supervisor.Order());
+        Assert.All(CaseChain, role =>
+        {
+            var caseRole = RolePermissionMap.PermissionsFor([role]);
+            Assert.False(qa.IsSubsetOf(caseRole), $"{role} must not hold every QualityAnalyst permission");
+            Assert.False(caseRole.IsSubsetOf(qa), $"QualityAnalyst must not hold every {role} permission");
+        });
     }
 
     [Fact]
@@ -66,11 +96,28 @@ public class RolePermissionMapTests
     }
 
     [Fact]
-    public void The_roles_differ()
+    public void Roles_lists_the_five_application_roles()
     {
-        Assert.NotEqual(RolePermissionMap.PermissionsFor([AppRoles.CaseWorker]), RolePermissionMap.PermissionsFor([AppRoles.Supervisor]));
-        Assert.NotEqual(RolePermissionMap.PermissionsFor([AppRoles.Supervisor]), RolePermissionMap.PermissionsFor([AppRoles.QualityAnalyst]));
-        Assert.Equal([AppRoles.CaseWorker, AppRoles.Supervisor, AppRoles.QualityAnalyst], RolePermissionMap.Roles.ToArray());
+        Assert.Equal(Columns, RolePermissionMap.Roles.ToArray());
+    }
+
+    [Theory]
+    [InlineData(AppRoles.Auditor, "Auditor")]
+    [InlineData(AppRoles.IntakeClerk, "Intake clerk")]
+    [InlineData(AppRoles.CaseWorker, "Case worker")]
+    [InlineData(AppRoles.Supervisor, "Supervisor")]
+    [InlineData(AppRoles.QualityAnalyst, "Quality analyst")]
+    [InlineData("Unknown", "Unknown")]
+    public void Display_names_are_readable(string role, string expected)
+    {
+        Assert.Equal(expected, AppRoles.DisplayName(role));
+    }
+
+    [Fact]
+    public void Describe_lists_display_names_in_a_stable_order_or_no_role()
+    {
+        Assert.Equal("no role", AppRoles.Describe([]));
+        Assert.Equal("Case worker, Supervisor", AppRoles.Describe([AppRoles.Supervisor, AppRoles.CaseWorker]));
     }
 
     [Fact]
@@ -79,6 +126,7 @@ public class RolePermissionMapTests
         var union = RolePermissionMap.PermissionsFor([AppRoles.CaseWorker, AppRoles.Supervisor, "Unknown"]);
 
         Assert.Equal(RolePermissionMap.PermissionsFor([AppRoles.Supervisor]), union);
+        Assert.Equal(RolePermissionMap.PermissionsFor([AppRoles.IntakeClerk]), RolePermissionMap.PermissionsFor([AppRoles.Auditor, AppRoles.IntakeClerk]));
         Assert.Equal(RolePermissionMap.AllPermissions.Order(), RolePermissionMap.PermissionsFor([AppRoles.Supervisor, AppRoles.QualityAnalyst]).Order());
     }
 

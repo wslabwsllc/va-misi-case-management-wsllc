@@ -50,7 +50,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         var html = await home.Content.ReadAsStringAsync();
         Assert.Equal(HttpStatusCode.OK, home.StatusCode);
         Assert.Contains($"data-testid=\"user-name\">{userName}<", html);
-        Assert.Contains($"data-testid=\"user-roles\">{role}<", html);
+        Assert.Contains($"data-testid=\"user-roles\">{AppRoles.DisplayName(role)}<", html);
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3001 && Equals(r.GetStructuredStateValue("UserId"),
             userName == "caseworker@example.test" ? DemoUsers.CaseWorker.Id : DemoUsers.Supervisor.Id));
     }

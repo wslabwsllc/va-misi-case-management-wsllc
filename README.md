@@ -152,11 +152,14 @@ first, which deletes all existing data.**
 <details>
 <summary><b>Demo accounts</b></summary>
 
-Synthetic, seeded by the migrator. Sign in at `/account/login`.
+Synthetic, seeded by the migrator. Sign in at `/account/login` (the sign-in page lists these accounts).
+The four case roles build on each other (Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor); QualityAnalyst is separate.
 
 | Email | Password | Role |
 |---|---|---|
-| `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker: view, create and edit cases, lookup, attachments; start and resolve cases |
+| `auditor@example.test` | `Demo-Passw0rd!` | Auditor: read-only; view cases, audit trails and documents, export the case list |
+| `intake@example.test` | `Demo-Passw0rd!` | IntakeClerk: view and open new cases, veteran lookup, upload attachments; no editing or status changes |
+| `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker: everything an intake clerk can do, plus edit cases and start and resolve them |
 | `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor: everything a case worker can do, plus triage, close and reopen |
 | `qa@example.test` | `Demo-Passw0rd!` | QualityAnalyst: read cases; view and import test results (Administration > Quality assurance) |
 
