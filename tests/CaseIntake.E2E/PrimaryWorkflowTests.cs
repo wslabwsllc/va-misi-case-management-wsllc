@@ -313,6 +313,9 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
             await PressAsync(page.GetByTestId("create-case"));
             await Expect(page).ToHaveURLAsync(CaseUrl());
             id = long.Parse(CaseUrl().Match(page.Url).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+            // FocusOnNavigation moves focus to the new page's h1 after its first render. Wait for it, or it can take focus
+            // back from the Edit button focused in the next step (seen under amd64 emulation).
+            await E2ESession.ExpectFocusedAsync(page.Locator("h1"));
         });
         await s.StepAsync("Start editing in this session", async () =>
         {

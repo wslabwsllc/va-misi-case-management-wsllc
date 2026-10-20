@@ -58,6 +58,7 @@ public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture
                 await PressAsync(page.GetByTestId("create-case"));
                 await Expect(page).ToHaveURLAsync(CaseUrl());
                 caseId = long.Parse(CaseUrl().Match(page.Url).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
+                await E2ESession.ExpectFocusedAsync(page.Locator("h1"));   // after-navigation focus first, then Assign (next step)
                 await Expect(page.GetByTestId("summary-owner")).ToHaveTextAsync("Unassigned");
             }, expected: "Case created");
             await s.StepAsync("The supervisor assigns it to the case worker with the Assign dialog (keyboard)", async () =>
@@ -116,18 +117,23 @@ public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture
                 await Expect(page.GetByTestId("status-history")).ToContainTextAsync("Current status");
             });
 
-            await s.StepAsync("Dashboard: hovering a bar shows its value; the bar opens the matching case list", async () =>
+            await s.StepAsync("Dashboard: hovering a bar shows its value, Escape hides it; the bar opens the matching case list", async () =>
             {
                 await GotoAsync(page, "/");
                 var triaged = page.GetByTestId("chart-status").Locator("a.chart__point").Nth(1);
                 await triaged.Locator(".chart__hit").HoverAsync(new() { Force = true });   // the bar scales on hover, so skip the stability wait
-                await Expect(triaged.Locator(".chart__tip")).ToHaveCSSAsync("opacity", "1");
-                await Expect(triaged.Locator(".chart__tip")).ToContainTextAsync("Triaged:");
+                // The tooltip is in the chart's top layer (named by data-tip), shown by js/app.js; Escape hides it (WCAG 1.4.13).
+                var tip = page.Locator($"#{await triaged.GetAttributeAsync("data-tip")}");
+                await Expect(tip).ToHaveCSSAsync("opacity", "1");
+                await Expect(tip).ToContainTextAsync("Triaged:");
+                await Expect(page.GetByTestId("chart-status").Locator(".chart__tip.is-shown")).ToHaveCountAsync(1);
+                await page.Keyboard.PressAsync("Escape");
+                await Expect(tip).ToHaveCSSAsync("opacity", "0");
                 await PressAsync(triaged);
                 await Expect(page).ToHaveURLAsync(new Regex("cases\\?status=Triaged$"));
                 await Expect(page.Locator("h1")).ToHaveTextAsync("Cases");
                 await Expect(page.GetByTestId("case-table").Locator("tbody [data-status]:not([data-status=Triaged])")).ToHaveCountAsync(0);
-            }, expected: "Tooltip visible; Cases page filtered to Triaged");
+            }, expected: "Tooltip visible, hidden by Escape; Cases page filtered to Triaged");
             await s.StepAsync("The Overdue card opens the overdue list sorted by due date", async () =>
             {
                 await GotoAsync(page, "/");

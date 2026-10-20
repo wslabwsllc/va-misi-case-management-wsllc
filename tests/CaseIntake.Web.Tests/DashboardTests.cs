@@ -168,12 +168,12 @@ public class DashboardTests : WebTestContext
         Assert.Equal(5, links.Length);
         Assert.Equal("cases?status=Triaged", links[1].GetAttribute("href"));
         Assert.Equal("Triaged: 1 case. Open the list.", links[1].GetAttribute("aria-label"));
-        Assert.Equal("Triaged: 1 case", links[1].QuerySelector("title")!.TextContent);
+        Assert.Equal("Triaged: 1 case", status.QuerySelector($"#{links[1].GetAttribute("data-tip")}")!.TextContent);
 
         var volume = cut.Find("[data-testid=chart-volume]");
         var october = volume.QuerySelectorAll("svg a.chart__point").Last();
         Assert.Equal("cases?createdFrom=2026-10-01&createdTo=2026-10-31&sort=CreatedAt&dir=desc", october.GetAttribute("href"));
-        Assert.Contains("Oct 2026: 6 cases", october.QuerySelector(".chart__tip")!.TextContent);
+        Assert.Contains("Oct 2026: 6 cases", volume.QuerySelector($"#{october.GetAttribute("data-tip")}")!.TextContent);
         Assert.Equal("cases?createdFrom=2026-10-01&createdTo=2026-10-31&sort=CreatedAt&dir=desc",
             volume.QuerySelector("details table tbody tr:last-child a")!.GetAttribute("href"));
 
@@ -258,11 +258,59 @@ public class DashboardTests : WebTestContext
         Assert.Equal(["Passed", "Failed"], cut.FindAll(".chart-legend li").Select(li => li.TextContent));
         Assert.Equal(2, cut.FindAll("svg circle.chart__marker").Count);
         Assert.Equal(2, cut.FindAll("svg rect.chart__marker").Count);
-        // Hover or focus shows the point's values in a tooltip (and the native SVG title).
-        Assert.Equal(["Mon: Passed 3, Failed 1", "Tue: Passed 4, Failed 0"], cut.FindAll(".chart__point > title").Select(t => t.TextContent));
-        Assert.Equal(2, cut.FindAll(".chart__point .chart__tip").Count);
+        // Hover or focus shows the point's values in its tooltip (js/app.js).
+        Assert.Equal(["Mon: Passed 3, Failed 1", "Tue: Passed 4, Failed 0"], cut.FindAll(".chart__tips > .chart__tip").Select(t => t.TextContent));
         Assert.Equal("img", cut.Find("svg.chart__svg").GetAttribute("role"));   // no links: one image with a text summary
         Assert.Contains("Mon: Passed 3, Failed 1; Tue: Passed 4, Failed 0.", cut.Find("desc").TextContent);
+    }
+
+    // A per-point <title> made the browser show a second, native tooltip, and a tooltip inside its point was painted over
+    // by every later point. Tooltips are now one layer after all points, each named by its point's data-tip.
+    [Theory]
+    [InlineData(ChartKind.Column)]
+    [InlineData(ChartKind.Line)]
+    [InlineData(ChartKind.Bar)]
+    public void Tooltips_are_drawn_after_every_point_with_no_native_title(ChartKind kind)
+    {
+        var cut = Render<Chart>(p => p.Add(c => c.Id, "c").Add(c => c.Title, "Cases by status").Add(c => c.Kind, kind)
+            .Add(c => c.Categories, ["New", "Triaged", "In Progress"]).Add(c => c.Series, [new ChartSeries("Cases", [12, 12, 24])])
+            .Add(c => c.Links, ["cases?status=New", "cases?status=Triaged", "cases?status=InProgress"]).Add(c => c.ValueNoun, "cases"));
+
+        var svg = cut.Find("svg.chart__svg");
+        Assert.Empty(svg.QuerySelectorAll("title"));
+        Assert.Equal("c-caption c-svg-desc", svg.GetAttribute("aria-labelledby"));   // named by the visible caption
+        var layer = svg.Children.Last();
+        Assert.Equal("chart__tips", layer.GetAttribute("class"));
+        Assert.Equal("true", layer.GetAttribute("aria-hidden"));
+        Assert.Empty(svg.QuerySelectorAll(".chart__point .chart__tip"));
+
+        var points = svg.QuerySelectorAll("a.chart__point");
+        Assert.Equal(["New: 12 cases", "Triaged: 12 cases", "In Progress: 24 cases"],
+            points.Select(point => layer.QuerySelector($"#{point.GetAttribute("data-tip")}")!.TextContent));
+    }
+
+    [Fact]
+    public void Bar_tooltips_stay_inside_their_own_row()
+    {
+        const double width = 420;
+        string[] categories = ["New", "Triaged", "In Progress", "Resolved", "A very long category name for a bar"];
+        var cut = Render<Chart>(p => p.Add(c => c.Id, "c").Add(c => c.Title, "Cases by status").Add(c => c.Kind, ChartKind.Bar)
+            .Add(c => c.Categories, categories).Add(c => c.Series, [new ChartSeries("Cases", [12, 12, 24, 1, 12])])
+            .Add(c => c.ValueNoun, "cases").Add(c => c.Width, width));
+
+        var points = cut.FindAll(".chart__point");
+        Assert.Equal(categories.Length, points.Count);
+        foreach (var point in points)
+        {
+            var row = point.QuerySelector(".chart__hit")!;
+            var tip = cut.Find($"#{point.GetAttribute("data-tip")} rect");
+            double Attr(AngleSharp.Dom.IElement e, string name) => double.Parse(e.GetAttribute(name)!, System.Globalization.CultureInfo.InvariantCulture);
+            var (rowTop, rowBottom) = (Attr(row, "y"), Attr(row, "y") + Attr(row, "height"));
+            Assert.InRange(Attr(tip, "y"), rowTop, rowBottom);
+            Assert.InRange(Attr(tip, "y") + Attr(tip, "height"), rowTop, rowBottom);
+            Assert.InRange(Attr(tip, "x"), 0, width);
+            Assert.InRange(Attr(tip, "x") + Attr(tip, "width"), 0, width);
+        }
     }
 
     [Theory]

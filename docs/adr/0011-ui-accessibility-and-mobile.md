@@ -47,7 +47,9 @@ which the user holds a transition permission (domain workflow edges plus E3 perm
 the status buttons); *Recent cases* = New cases created in the last `Dashboard:NewCasesDays` (7) days; monthly
 resolution uses a case's last update; the priority and category charts count open cases. Charts are server-rendered
 SVG (no chart library, nothing to dispose) with a caption, a text summary, value labels, legends, distinct marker shapes
-and a data table. Issue #21 added: hover and keyboard-focus tooltips (CSS only, plus the SVG `title`); drill-through,
+and a data table. Issue #21 added: hover and keyboard-focus tooltips, drawn in one layer above every point (a bar's inside its own row), shown by a
+small delegated script in `js/app.js` that also dismisses them with Escape (WCAG 1.4.13), with no SVG `title` so the
+browser adds no second tooltip (amended after #29, which had CSS-only tooltips that later points painted over); drill-through,
 where each column or bar is a named link to the case list with the same filter (the SVG is then `role="group"` of links
 instead of one `role="img"`); a grow-in animation that `prefers-reduced-motion` removes; an Expand button that opens a
 larger copy in the modal dialog; and month axis labels that show the year once and thin out so they never overlap.
