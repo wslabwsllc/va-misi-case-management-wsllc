@@ -201,7 +201,7 @@ keystrokes, test timing, mid-animation contrast scan, a test typing before focus
 
 E2E coverage: framework script delivery and interactivity (WebSocket circuit, button, navigation after reload, no
 console errors), PWA manifest and worker policy, the primary keyboard workflow (37 recorded steps incl. all five
-transitions, lookup outcomes, validation focus, upload/download byte check, sign-out), edit conflict, CaseWorker /
+transitions, lookup outcomes, validation focus, upload/download byte check, sign-out), edit conflict, Auditor / IntakeClerk / CaseWorker /
 Supervisor / QualityAnalyst differences, access denied (HTTP and in-app with h1 focus), Not Found, anonymous 401s,
 390x844, 375x812, 768x1024 and 1440x900 layouts (no horizontal overflow, 44 px bottom-bar targets), test results import,
 failure evidence, screenshot preview and zoom, exports, phone dashboard. axe (WCAG 2.0/2.1/2.2 A and AA tags) found no

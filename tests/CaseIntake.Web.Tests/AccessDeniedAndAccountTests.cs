@@ -24,7 +24,7 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.Equal("Access denied", h1.TextContent);
         Assert.Equal("-1", h1.GetAttribute("tabindex"));
         Assert.Contains("You don't have permission", cut.Markup);
-        Assert.Contains("QualityAnalyst", cut.Find("[data-testid=access-denied]").TextContent);
+        Assert.Contains("Quality analyst", cut.Find("[data-testid=access-denied]").TextContent);
         var back = cut.FindAll("a").Single(a => a.TextContent == "Back to the case list");
         Assert.Equal("cases", back.GetAttribute("href"));
     }
@@ -55,6 +55,19 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.Equal("username", cut.Find("#login-email").GetAttribute("autocomplete"));
         Assert.Equal("current-password", cut.Find("#login-password").GetAttribute("autocomplete"));
         Assert.Equal("Input.Email", cut.Find("#login-email").GetAttribute("name"));
+    }
+
+    [Fact]
+    public void Sign_in_page_lists_the_demo_accounts_only_while_demo_seeding_is_configured()
+    {
+        Assert.Empty(Render<Login>().FindAll("[data-testid=demo-accounts]"));
+
+        Configuration["Seed:DemoPassword"] = "Demo-Passw0rd!";
+        var accounts = Render<Login>().Find("[data-testid=demo-accounts]");
+
+        Assert.Equal(5, accounts.QuerySelectorAll("li").Length);
+        Assert.Contains("auditor@example.test", accounts.TextContent);
+        Assert.Contains("Intake clerk", accounts.TextContent);
     }
 
     [Fact]

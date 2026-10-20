@@ -25,12 +25,5 @@
 </div>
 
 @code {
-    private string RoleText
-    {
-        get
-        {
-            var roles = OperationActorFactory.FromPrincipal(User).Roles.Order(StringComparer.Ordinal).ToList();
-            return roles.Count == 0 ? "no role" : string.Join(", ", roles);
-        }
-    }
+    private string RoleText => AppRoles.Describe(OperationActorFactory.FromPrincipal(User).Roles);
 }

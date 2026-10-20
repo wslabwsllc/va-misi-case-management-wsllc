@@ -17,7 +17,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
 {
     // E5 adds the error and Not Found pages (an anonymous visitor can hit either). Static asset endpoints (MapStaticAssets:
     // CSS, framework and app scripts, icons) are anonymous by design and are checked separately below.
-    private static readonly string[] AnonymousByDesign = ["/account/login", "/account/access-denied", "/account/logout", "/health/live", "/health/ready", "/error", "/not-found"];
+    private static readonly string[] AnonymousByDesign = ["/account/login", "/account/access-denied", "/account/logout", "/health", "/health/live", "/health/ready", "/error", "/not-found"];
 
     private static bool IsStaticAsset(Endpoint e) => e.Metadata.GetMetadata<Microsoft.AspNetCore.StaticAssets.StaticAssetDescriptor>() is not null;
 

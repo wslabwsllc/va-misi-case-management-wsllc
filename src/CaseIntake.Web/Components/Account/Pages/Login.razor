@@ -1,11 +1,13 @@
 @page "/account/login"
 @using System.ComponentModel.DataAnnotations
 @using CaseIntake.Identity.Account
+@using CaseIntake.Identity.Seeding
 @attribute [AllowAnonymous]
 @attribute [ExcludeFromInteractiveRouting]
 @layout CaseIntake.Web.Components.Layout.AccountLayout
 @inject AccountSignIn AccountSignIn
 @inject NavigationManager Navigation
+@inject IConfiguration Configuration
 
 @* Static SSR (E3-S1): a plain HTTP form post with an antiforgery token; no circuit is needed to sign in. Styled with the
    E5 kit (E5-S8). The existing Identity sign-in flow is unchanged. *@
@@ -48,12 +50,37 @@ else if (IsReturnToProtectedPage)
     </div>
 </EditForm>
 
+@* Listed only while demo accounts are seeded (Seed:DemoPassword set, as in docker compose and dotnet run); a deployment
+   without demo seeding reveals no account names. *@
+@if (!string.IsNullOrEmpty(Configuration[DemoUsers.PasswordKey]))
+{
+    <section class="demo-accounts" aria-labelledby="demo-accounts-heading" data-testid="demo-accounts">
+        <h2 id="demo-accounts-heading">Demo accounts</h2>
+        <ul>
+            @foreach (var demo in DemoUsers.All)
+            {
+                <li><span class="mono">@demo.UserName</span> &ndash; @AppRoles.DisplayName(demo.Role): @RoleSummary(demo.Role)</li>
+            }
+        </ul>
+    </section>
+}
+
 @code {
     /// <summary>One message for every failure (unknown account, wrong password, lockout), so accounts cannot be enumerated.</summary>
     internal const string FailureMessage =
         "Sign-in failed. Check your email and password and try again. After five failed attempts, sign-in is blocked for five minutes.";
 
     private string? errorMessage;
+
+    private static string RoleSummary(string role) => role switch
+    {
+        AppRoles.Auditor => "read-only review of cases, audit trails and documents",
+        AppRoles.IntakeClerk => "opens new cases, looks up veterans and attaches documents",
+        AppRoles.CaseWorker => "edits cases, starts and resolves them",
+        AppRoles.Supervisor => "everything, including triage, close and reopen",
+        AppRoles.QualityAnalyst => "reads cases; views and imports test results",
+        _ => "",
+    };
 
     [SupplyParameterFromForm]
     private InputModel Input { get; set; } = default!;

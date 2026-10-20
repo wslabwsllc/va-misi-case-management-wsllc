@@ -1,10 +1,14 @@
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using CaseIntake.TestKit;
 
 namespace CaseIntake.IntegrationTests.Docs;
 
-/// <summary>Keeps docs/versions.md, global.json, Directory.Packages.props and the banned-API setup from drifting.</summary>
-public partial class VersionConsistencyTests
+/// <summary>
+/// Keeps docs/versions.md, global.json, Directory.Packages.props, the lock files, the image digests, the apt snapshot and
+/// the banned-API setup from drifting, so a later rebuild cannot pick up a new upstream release.
+/// </summary>
+public class VersionConsistencyTests
 {
     private static string VersionsDoc => File.ReadAllText(RepositoryRoot.File("docs", "versions.md"));
 
@@ -50,6 +54,90 @@ public partial class VersionConsistencyTests
     }
 
     [Fact]
+    public void Every_container_image_is_pinned_by_tag_and_digest_and_listed_in_versions_md()
+    {
+        var images = Dockerfiles.SelectMany(BaseImages)
+            .Concat(Regex.Matches(File.ReadAllText(RepositoryRoot.File("docker-compose.yml")), @"^\s*image:\s*(\S+)", RegexOptions.Multiline)
+                .Select(m => m.Groups[1].Value)
+                .Where(image => !image.StartsWith("caseintake-", StringComparison.Ordinal)))   // built locally from the Dockerfile
+            .Distinct().ToList();
+        Assert.NotEmpty(images);
+
+        foreach (var image in images)
+        {
+            Assert.Matches(@"^[^@\s]+:[^@\s]+@sha256:[0-9a-f]{64}$", image);
+            Assert.Contains($"`{image}`", VersionsDoc);
+        }
+    }
+
+    [Fact]
+    public void Testcontainers_uses_the_same_postgres_image_as_compose()
+    {
+        Assert.Contains($"image: {PostgresDatabaseFixture.PostgresImage}", File.ReadAllText(RepositoryRoot.File("docker-compose.yml")));
+    }
+
+    [Fact]
+    public void Every_project_commits_a_lock_file_and_docker_restores_in_locked_mode()
+    {
+        Assert.Contains("<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>", File.ReadAllText(RepositoryRoot.File("Directory.Build.props")));
+        foreach (var csproj in ProjectFiles())
+        {
+            Assert.True(File.Exists(Path.Combine(Path.GetDirectoryName(csproj)!, "packages.lock.json")), $"{csproj} has no packages.lock.json");
+        }
+
+        var restores = Dockerfiles.SelectMany(Instructions).Where(i => i.Contains("dotnet restore", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(restores);
+        Assert.All(restores, restore => Assert.Contains("--locked-mode", restore));
+    }
+
+    [Fact]
+    public void Apt_reads_the_dated_snapshot_listed_in_versions_md()
+    {
+        var dockerfile = File.ReadAllText(RepositoryRoot.File("Dockerfile"));
+        var snapshot = Regex.Match(dockerfile, @"^ARG APT_SNAPSHOT=(\d{8}T\d{6}Z)$", RegexOptions.Multiline);
+        Assert.True(snapshot.Success, "Dockerfile has no ARG APT_SNAPSHOT=<yyyyMMddTHHmmssZ>");
+        Assert.Contains($"| {snapshot.Groups[1].Value} |", VersionsDoc);
+
+        // Every step that installs OS packages (apt directly, or Playwright's --with-deps) sets the snapshot first.
+        var installs = Dockerfiles.SelectMany(Instructions)
+            .Where(i => i.Contains("apt-get", StringComparison.Ordinal) || i.Contains("--with-deps", StringComparison.Ordinal)).ToList();
+        Assert.NotEmpty(installs);
+        Assert.All(installs, install => Assert.Contains("APT::Snapshot", install));
+    }
+
+    private static IEnumerable<string> Dockerfiles =>
+        [RepositoryRoot.File("Dockerfile"), RepositoryRoot.File("src", "CaseIntake.VeteranLookup.Mock", "Dockerfile")];
+
+    private static IEnumerable<string> ProjectFiles() =>
+        Directory.EnumerateFiles(RepositoryRoot.File("src"), "*.csproj", SearchOption.AllDirectories)
+            .Concat(Directory.EnumerateFiles(RepositoryRoot.File("tests"), "*.csproj", SearchOption.AllDirectories));
+
+    /// <summary>Dockerfile instructions with backslash continuations joined and comments dropped.</summary>
+    private static IEnumerable<string> Instructions(string dockerfile) =>
+        Regex.Replace(File.ReadAllText(dockerfile).ReplaceLineEndings("\n"), @"\\\n", " ")
+            .Split('\n')
+            .Where(line => line.Length > 0 && !line.TrimStart().StartsWith('#'));
+
+    /// <summary>External images of FROM lines; references to earlier build stages are skipped.</summary>
+    private static IEnumerable<string> BaseImages(string dockerfile)
+    {
+        var stages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var from in Instructions(dockerfile).Where(i => i.StartsWith("FROM ", StringComparison.OrdinalIgnoreCase)))
+        {
+            var words = from.Split(' ', StringSplitOptions.RemoveEmptyEntries).Skip(1).Where(w => !w.StartsWith("--", StringComparison.Ordinal)).ToList();
+            if (!stages.Contains(words[0]))
+            {
+                yield return words[0];
+            }
+
+            if (words.Count == 3 && words[1].Equals("AS", StringComparison.OrdinalIgnoreCase))
+            {
+                stages.Add(words[2]);
+            }
+        }
+    }
+
+    [Fact]
     public void Banned_api_analyzer_is_wired_into_every_project()
     {
         var props = File.ReadAllText(RepositoryRoot.File("Directory.Build.props"));
@@ -67,45 +155,20 @@ public partial class VersionConsistencyTests
     public void Every_project_targets_net10_through_Directory_Build_props_only()
     {
         Assert.Contains("<TargetFramework>net10.0</TargetFramework>", File.ReadAllText(RepositoryRoot.File("Directory.Build.props")));
-        foreach (var csproj in Directory.EnumerateFiles(RepositoryRoot.File("src"), "*.csproj", SearchOption.AllDirectories)
-                     .Concat(Directory.EnumerateFiles(RepositoryRoot.File("tests"), "*.csproj", SearchOption.AllDirectories)))
+        foreach (var csproj in ProjectFiles())
         {
             Assert.DoesNotContain("<TargetFramework>", File.ReadAllText(csproj));
-        }
-    }
-
-    // FROM [--platform=...] <image> in Dockerfiles, and image: <image> in Compose. Stage names have no ':' and are skipped.
-    [GeneratedRegex(@"^\s*(?:FROM\s+(?:--platform=\S+\s+)?|image:\s*)(?<image>\S+:\S+)", RegexOptions.Multiline)]
-    private static partial Regex ImageReference();
-
-    private static List<string> ContainerImages() =>
-    [
-        .. Directory.EnumerateFiles(RepositoryRoot.Path, "Dockerfile", SearchOption.AllDirectories)
-            .Where(f => !f.Split(Path.DirectorySeparatorChar).Any(d => d is "bin" or "obj" or ".git" or "node_modules"))
-            .Append(RepositoryRoot.File("docker-compose.yml"))
-            .SelectMany(f => ImageReference().Matches(File.ReadAllText(f)).Select(m => m.Groups["image"].Value))
-            .Where(image => !image.StartsWith("caseintake-", StringComparison.Ordinal))   // built locally from this repository
-            .Distinct(),
-    ];
-
-    [Fact]
-    public void Every_container_image_used_by_a_Dockerfile_or_Compose_is_listed_in_versions_md()
-    {
-        var images = ContainerImages();
-        Assert.Contains(images, i => i.StartsWith("mcr.microsoft.com/dotnet/aspnet:", StringComparison.Ordinal));
-        Assert.Contains(images, i => i.StartsWith("postgres:", StringComparison.Ordinal));
-
-        foreach (var image in images)
-        {
-            Assert.True(VersionsDoc.Contains($"`{image}`", StringComparison.Ordinal), $"docs/versions.md does not list the image {image}");
         }
     }
 
     [Fact]
     public void Runtime_image_tag_matches_the_runtime_versions_in_versions_md()
     {
-        var tags = ContainerImages().Where(i => i.StartsWith("mcr.microsoft.com/dotnet/aspnet:", StringComparison.Ordinal))
-            .Select(i => i.Split(':')[1].Split('-')[0]).Distinct().ToList();
+        const string runtimeImage = "mcr.microsoft.com/dotnet/aspnet:";
+        var tags = Dockerfiles.SelectMany(BaseImages)
+            .Where(image => image.StartsWith(runtimeImage, StringComparison.Ordinal))
+            .Select(image => image[runtimeImage.Length..].Split('-', '@')[0])
+            .Distinct().ToList();
         var runtime = Assert.Single(tags);   // one runtime version across the app and the lookup mock
 
         foreach (var framework in new[] { "Microsoft.NETCore.App", "Microsoft.AspNetCore.App" })

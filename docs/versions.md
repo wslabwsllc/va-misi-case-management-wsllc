@@ -1,9 +1,11 @@
 # Exact versions
 
-`global.json` pins the SDK, `Directory.Packages.props` pins every NuGet package (Central Package Management),
-`dotnet-tools.json` pins `dotnet-ef`, and the Dockerfiles pin the .NET image tags. The database image follows the
-PostgreSQL 18 major-version tag (not yet pinned to a patch release). A test (`VersionConsistencyTests`) fails if the
-tables below drift from those files, including any container image that is used but not listed here.
+Every runtime, tooling, image and OS package version is pinned, so a rebuild weeks after the demo produces the same
+build even after new upstream releases. `global.json` pins the SDK, `Directory.Packages.props` pins every NuGet
+package (Central Package Management), each project's `packages.lock.json` locks the whole package graph with content
+hashes (the Docker builds restore with `--locked-mode`), `dotnet-tools.json` pins `dotnet-ef`, every container image
+is pinned by tag and digest, and apt reads a dated Ubuntu snapshot. A test (`VersionConsistencyTests`) fails if the
+tables below drift from those files.
 
 ## SDK and runtime
 
@@ -12,17 +14,31 @@ tables below drift from those files, including any container image that is used 
 | .NET SDK | 10.0.402 |
 | .NET runtime (`Microsoft.NETCore.App`) | 10.0.13 |
 | ASP.NET Core and Blazor shared framework (`Microsoft.AspNetCore.App`) | 10.0.13 |
-| Entity Framework Core (`Microsoft.EntityFrameworkCore`) | 10.0.13 |
+| PostgreSQL | 18.6 |
 
-| Container image | Used by |
+The runtime and ASP.NET Core / Blazor shared-framework versions come from the pinned images below. The exact
+inventory is recorded from the built image in [verification.md](verification.md) (output of `dotnet --list-runtimes`).
+
+## Container images
+
+Pinned by tag (readable) and digest (immutable). The digest is the multi-platform index, so the SDK build stages can
+run natively on the build machine while the final images are linux/amd64.
+
+| Use | Image |
 |---|---|
-| `mcr.microsoft.com/dotnet/sdk:10.0.402-noble` | every compile step, and the `tests` service image (Ubuntu 24.04) |
-| `mcr.microsoft.com/dotnet/aspnet:10.0.13-noble` | the running app: `web`, `migrator`, their e2e copies, and `veteran-lookup` (Ubuntu 24.04) |
-| `postgres:18` | `db` |
+| SDK build stages and test image | `mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa` |
+| App and lookup mock runtime | `mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac` |
+| Database (Compose `db`, Testcontainers) | `postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336` |
 
-All containers run as linux/amd64. Blazor ships in the ASP.NET Core shared framework, so its version is the
-`Microsoft.AspNetCore.App` version above. The runtime versions were read from the built `web` and `veteran-lookup`
-images with `dotnet --list-runtimes` (2026-10-19).
+## OS packages
+
+| Source | Pin |
+|---|---|
+| Ubuntu apt snapshot (`APT_SNAPSHOT` in `Dockerfile`) | 20261016T000000Z |
+
+`libgssapi-krb5-2` (runtime image) and the Chromium dependencies that `playwright install --with-deps` adds to the
+test image come from `snapshot.ubuntu.com` at that timestamp. The Chromium build itself is fixed by
+`Microsoft.Playwright`.
 
 ## NuGet packages (runtime)
 
@@ -60,7 +76,11 @@ Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
 
 ## Updating
 
-1. Change the version in `global.json` / `Directory.Packages.props` / `dotnet-tools.json` / the Dockerfiles
-   (`Dockerfile`, `src/CaseIntake.VeteranLookup.Mock/Dockerfile`) / `docker-compose.yml`.
-2. Update the tables above.
-3. Run `docker compose run --rm tests`; the consistency test fails until the files agree.
+1. Change the version in `global.json` / `Directory.Packages.props` / `dotnet-tools.json`, then run
+   `dotnet restore CaseIntake.sln --force-evaluate` and commit the changed `packages.lock.json` files.
+2. For an image, look up the new digest with `docker buildx imagetools inspect <image>:<tag>` (the `Digest:` line of
+   the index) and update every reference: `Dockerfile`, `src/CaseIntake.VeteranLookup.Mock/Dockerfile`,
+   `docker-compose.yml`, `PostgresDatabaseFixture.PostgresImage` and the README.
+3. For OS patches, move `APT_SNAPSHOT` to a newer timestamp (not older than the base images' build date).
+4. Update the tables above.
+5. Run `docker compose run --rm tests`; the consistency test fails until the files agree.

@@ -37,22 +37,33 @@ public static class RolePermissionMap
     /// </summary>
     public static ImmutableArray<string> AllPermissions { get; } = [.. Common, .. TransitionPermissions, .. TestResultsPermissions];
 
+    // The case roles build on each other: Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor.
+    private static readonly string[] ReadOnly = [Permissions.CasesView, Permissions.AttachmentsDownload];
+
+    private static readonly string[] Intake =
+        [.. ReadOnly, Permissions.CasesCreate, Permissions.VeteranLookup, Permissions.AttachmentsUpload];
+
+    private static readonly string[] Casework =
+    [
+        .. Intake, Permissions.CasesEdit,
+        Permissions.Transition(CaseStatus.Triaged, CaseStatus.InProgress),
+        Permissions.Transition(CaseStatus.InProgress, CaseStatus.Resolved),
+    ];
+
     private static readonly FrozenDictionary<string, ImmutableHashSet<string>> ByRole =
         new Dictionary<string, ImmutableHashSet<string>>(StringComparer.Ordinal)
         {
-            [AppRoles.CaseWorker] =
-            [
-                .. Common,
-                Permissions.Transition(CaseStatus.Triaged, CaseStatus.InProgress),
-                Permissions.Transition(CaseStatus.InProgress, CaseStatus.Resolved),
-            ],
+            [AppRoles.Auditor] = [.. ReadOnly],
+            [AppRoles.IntakeClerk] = [.. Intake],
+            [AppRoles.CaseWorker] = [.. Casework],
             [AppRoles.Supervisor] = [.. Common, .. TransitionPermissions],
             // QA reads cases (to follow evidence back to the application) and owns test evidence; it cannot change cases.
             [AppRoles.QualityAnalyst] = [Permissions.CasesView, .. TestResultsPermissions],
         }.ToFrozenDictionary(StringComparer.Ordinal);
 
     /// <summary>The roles the matrix defines.</summary>
-    public static ImmutableArray<string> Roles { get; } = [AppRoles.CaseWorker, AppRoles.Supervisor, AppRoles.QualityAnalyst];
+    public static ImmutableArray<string> Roles { get; } =
+        [AppRoles.Auditor, AppRoles.IntakeClerk, AppRoles.CaseWorker, AppRoles.Supervisor, AppRoles.QualityAnalyst];
 
     /// <summary>Union of the permissions of <paramref name="roles"/>; unknown roles contribute nothing. Role names are case-sensitive.</summary>
     public static ImmutableHashSet<string> PermissionsFor(IEnumerable<string> roles)

@@ -118,10 +118,29 @@ the migrator to succeed and the lookup to be healthy.
 
 ```bash
 docker compose ps                                # web: running (healthy); migrator: exited (0)
-curl -fsS http://localhost:8080/health/live      # Healthy (process up)
-curl -fsS http://localhost:8080/health/ready     # Healthy (database and veteran lookup reachable)
+curl -fsS http://localhost:8080/health/live      # {"status":"Healthy",...} (process up; runs no checks)
+curl -fsS http://localhost:8080/health/ready     # JSON per component: database, veteran-lookup, attachment-storage
+curl -sS  http://localhost:8080/health           # every registered check, same JSON shape
 scripts/smoke-docker.sh                          # expects "SMOKE: PASS" (framework JS and static assets)
 ```
+
+The health endpoints answer JSON. The top-level `status` is the worst component status. Any `Unhealthy` component
+makes the response 503, so the app never reports healthy while one of its dependencies is down:
+
+```json
+{
+  "status": "Unhealthy",
+  "totalDurationMs": 1012.4,
+  "components": {
+    "database": { "status": "Unhealthy", "durationMs": 1004.9, "description": "Database is unreachable.", "data": { "errorType": "NpgsqlException" } },
+    "veteran-lookup": { "status": "Healthy", "durationMs": 8.2 },
+    "attachment-storage": { "status": "Healthy", "durationMs": 0.6 }
+  }
+}
+```
+
+Exception messages are never included, because they can contain connection strings. Each check times out after 5
+seconds.
 
 `scripts/verify-clean-start.sh` checks a completely fresh install from empty volumes. **It runs `docker compose down -v`
 first, which deletes all existing data.**
@@ -133,11 +152,14 @@ first, which deletes all existing data.**
 <details>
 <summary><b>Demo accounts</b></summary>
 
-Synthetic, seeded by the migrator. Sign in at `/account/login`.
+Synthetic, seeded by the migrator. Sign in at `/account/login` (the sign-in page lists these accounts).
+The four case roles build on each other (Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor); QualityAnalyst is separate.
 
 | Email | Password | Role |
 |---|---|---|
-| `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker: view, create and edit cases, lookup, attachments; start and resolve cases |
+| `auditor@example.test` | `Demo-Passw0rd!` | Auditor: read-only; view cases, audit trails and documents, export the case list |
+| `intake@example.test` | `Demo-Passw0rd!` | IntakeClerk: view and open new cases, veteran lookup, upload attachments; no editing or status changes |
+| `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker: everything an intake clerk can do, plus edit cases and start and resolve them |
 | `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor: everything a case worker can do, plus triage, close and reopen |
 | `qa@example.test` | `Demo-Passw0rd!` | QualityAnalyst: read cases; view and import test results (Administration > Quality assurance) |
 
@@ -232,7 +254,7 @@ dotnet build
 # 2. PostgreSQL 18 on localhost:5432 (a standalone container, separate from the Compose database)
 docker run -d --name caseintake-pg -p 5432:5432 \
   -e POSTGRES_USER=caseintake -e POSTGRES_PASSWORD=caseintake_local_only -e POSTGRES_DB=caseintake \
-  postgres:18
+  postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
 
 # 3. Schema and seed data (safe to rerun; run again after pulling new migrations)
 dotnet run --project src/CaseIntake.MigrationService
