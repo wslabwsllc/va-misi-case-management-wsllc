@@ -30,17 +30,17 @@ else if (_runs is { } runs)
     var labels = runs.Select(TestResultsText.ChartLabel).ToList();
     <div class="grid grid--3">
         <section class="card">
-            <Chart Id="history-passrate" Title="Pass rate" Description="Passed share of executed tests, per run." Kind="ChartKind.Line" CategoryHeader="Run (UTC)"
+            <Chart Id="history-passrate" Title="Pass rate" Description="Passed share of executed tests, per run." Kind="ChartKind.Line" CategoryHeader="Run (ET)"
                    Format="ChartFormat.Percent" TestId="history-chart-passrate" Categories="labels"
                    Series="@([new ChartSeries("Pass rate (%)", [.. runs.Select(r => Math.Round((r.Counts.PassRate ?? 0) * 100, 1))], "--series-3")])" />
         </section>
         <section class="card">
-            <Chart Id="history-failures" Title="Failed and not executed" Description="Tests per run that failed or did not run." CategoryHeader="Run (UTC)"
+            <Chart Id="history-failures" Title="Failed and not executed" Description="Tests per run that failed or did not run." CategoryHeader="Run (ET)"
                    TestId="history-chart-failures" Categories="labels" EmptyText="No failed or not-executed tests in these runs."
                    Series="@([new ChartSeries("Failed", [.. runs.Select(r => (double)r.Counts.Failed)], "--series-2"), new ChartSeries("Not executed", [.. runs.Select(r => (double)r.Counts.NotExecuted)], "--series-4")])" />
         </section>
         <section class="card">
-            <Chart Id="history-duration" Title="Run duration" Description="Whole-run duration in seconds." CategoryHeader="Run (UTC)"
+            <Chart Id="history-duration" Title="Run duration" Description="Whole-run duration in seconds." CategoryHeader="Run (ET)"
                    TestId="history-chart-duration" Categories="labels"
                    Series="@([new ChartSeries("Duration (s)", [.. runs.Select(r => Math.Round(r.Duration.TotalSeconds))], "--series-1")])" />
         </section>

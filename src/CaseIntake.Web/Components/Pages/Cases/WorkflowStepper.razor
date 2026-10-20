@@ -19,7 +19,7 @@
             <span class="stepper__text">
                 <span class="stepper__name">@UiText.Status(stage)</span>
                 <span class="stepper__meta">
-                    <span class="visually-hidden">, </span>@StateText(state)@(EnteredAt(stage) is { } at ? $" · {UiText.Utc(at)}" : null)
+                    <span class="visually-hidden">, </span>@StateText(state)@(EnteredAt(stage) is { } at ? $" · {UiText.Time(at)}" : null)
                 </span>
             </span>
         </li>

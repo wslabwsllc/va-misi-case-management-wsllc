@@ -2,7 +2,7 @@
 @using CaseIntake.Contracts.Cases
 @using CaseIntake.Web.Services
 
-@* Append-only audit trail (E2-S4) as an ordered list, newest first: when (UTC), who, what. Paged (issue #22), with the
+@* Append-only audit trail (E2-S4) as an ordered list, newest first: when (ET), who, what. Paged (issue #22), with the
    range announced politely when the page changes. *@
 <section class="card" aria-labelledby="audit-heading" data-testid="audit-section">
     <div class="card__header">
@@ -31,7 +31,7 @@
             {
                 <li>
                     <div class="timeline__head">@Describe(entry)</div>
-                    <div class="timeline__meta">@UiText.Utc(entry.OccurredAtUtc) · @entry.Actor</div>
+                    <div class="timeline__meta">@UiText.Time(entry.OccurredAtUtc) · @entry.Actor</div>
                     @if (!string.IsNullOrEmpty(entry.Details))
                     {
                         <div class="timeline__meta">@entry.Details</div>

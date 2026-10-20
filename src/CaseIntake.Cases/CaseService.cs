@@ -6,6 +6,7 @@ using CaseIntake.Persistence;
 using CaseIntake.Persistence.Auditing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using CaseIntake.Domain;
 
 namespace CaseIntake.Cases;
 
@@ -251,7 +252,7 @@ public sealed class CaseService(
         }
 
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        var today = DateOnly.FromDateTime(timeProvider.GetUtcNow().UtcDateTime);
+        var today = EasternTime.Date(timeProvider.GetUtcNow());
         var filtered = CaseListQueryBuilder.Filter(db.Cases.AsNoTracking(), query, today);
         var total = await filtered.CountAsync(ct);
         var items = await CaseListQueryBuilder.Sort(filtered, query.SortBy, query.Direction)

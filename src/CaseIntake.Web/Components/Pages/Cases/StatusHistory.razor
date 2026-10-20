@@ -26,7 +26,7 @@
                             <span class="badge">Reopened</span>
                         }
                     </div>
-                    <div class="timeline__meta">@UiText.Utc(step.At) · @step.Actor</div>
+                    <div class="timeline__meta">@UiText.Time(step.At) · @step.Actor</div>
                     <div class="timeline__meta">@(step.Until is { } until ? $"{Duration(until - step.At)} in this status" : "Current status")</div>
                 </li>
             }

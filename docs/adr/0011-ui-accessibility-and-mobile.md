@@ -41,7 +41,7 @@ Hiding is a convenience: pages carry `[Authorize(Policy = ...)]` and services an
 
 **Dashboard definitions.** Figures come only from `ICaseService.ListAsync`, so its authorization applies; nothing is
 hard-coded. *Open* = New, Triaged or In Progress; *Pending review* = Resolved (waiting to be closed); *Resolved cases* =
-Resolved or Closed; *Overdue* = open and its due date is before today (UTC), the same rule as the case list's Overdue
+Resolved or Closed; *Overdue* = open and its due date is before today (Eastern calendar), the same rule as the case list's Overdue
 filter (`CaseTriageRules.IsOverdue`); *Assigned to me* = open cases the user owns; *My tasks* = cases in a status from
 which the user holds a transition permission (domain workflow edges plus E3 permissions, the same rule that produces
 the status buttons); *Recent cases* = New cases created in the last `Dashboard:NewCasesDays` (7) days; monthly

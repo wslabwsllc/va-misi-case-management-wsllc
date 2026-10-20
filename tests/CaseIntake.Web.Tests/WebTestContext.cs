@@ -49,6 +49,8 @@ public abstract class WebTestContext : BunitContext
         Services.AddSingleton<CaseActivitySignal>();
         Services.AddScoped<PageActivity>();
         Services.AddSingleton<FakeTestResultsService>();
+        Services.AddSingleton<FakeUserAdministrationService>();
+        Services.AddSingleton<IUserAdministrationService>(sp => sp.GetRequiredService<FakeUserAdministrationService>());
         Services.AddSingleton<Contracts.TestResults.ITestResultsService>(sp => sp.GetRequiredService<FakeTestResultsService>());
         // The sign-in page injects AccountSignIn; presentation tests never submit, so an uninitialized instance suffices.
         Services.AddScoped(_ => (Identity.Account.AccountSignIn)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Identity.Account.AccountSignIn)));
@@ -75,6 +77,7 @@ public abstract class WebTestContext : BunitContext
     protected ScriptedCaseService CaseService => Services.GetRequiredService<ScriptedCaseService>();
     protected FakeCaseNotificationService NotificationFeed => Services.GetRequiredService<FakeCaseNotificationService>();
     protected FakeTestResultsService TestResults => Services.GetRequiredService<FakeTestResultsService>();
+    protected FakeUserAdministrationService UserAdmin => Services.GetRequiredService<FakeUserAdministrationService>();
     protected StatusAnnouncer Announcer => Services.GetRequiredService<StatusAnnouncer>();
     protected NavigationManager Navigation => Services.GetRequiredService<NavigationManager>();
 

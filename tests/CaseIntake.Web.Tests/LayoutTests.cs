@@ -91,15 +91,25 @@ public class LayoutTests : WebTestContext
         Assert.Single(cut.FindAll("[data-testid=fab-new-case]"));
     }
 
-    [Theory]
-    [InlineData(AppRoles.CaseWorker)]
-    [InlineData(AppRoles.Supervisor)]
-    public void Administration_is_hidden_without_test_results_permission(string role)
+    [Fact]
+    public void Administration_is_hidden_without_test_results_or_user_permission()
     {
-        SignInAs(role);
+        SignInAs(AppRoles.CaseWorker);
         var cut = RenderLayout();
 
         Assert.DoesNotContain(cut.FindAll("nav#app-nav .app-nav__group-label"), l => l.TextContent == "Administration");
+        Assert.DoesNotContain(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href")?.StartsWith("test-results", StringComparison.Ordinal) == true);
+        Assert.DoesNotContain(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/users");
+    }
+
+    [Fact]
+    public void Supervisors_see_users_under_administration_but_not_test_results()
+    {
+        SignInAs(AppRoles.Supervisor);
+        var cut = RenderLayout();
+
+        Assert.Contains(cut.FindAll("nav#app-nav .app-nav__group-label"), l => l.TextContent == "Administration");
+        Assert.Contains(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/users");
         Assert.DoesNotContain(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href")?.StartsWith("test-results", StringComparison.Ordinal) == true);
     }
 
@@ -111,6 +121,7 @@ public class LayoutTests : WebTestContext
 
         Assert.Contains(cut.FindAll("nav#app-nav .app-nav__group-label"), l => l.TextContent == "Administration");
         Assert.Contains(cut.FindAll("nav#app-nav a"), a => a.TextContent.Contains("Test results"));
+        Assert.DoesNotContain(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/users");
     }
 
     [Fact]

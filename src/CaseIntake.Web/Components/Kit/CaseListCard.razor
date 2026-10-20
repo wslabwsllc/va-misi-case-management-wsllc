@@ -44,15 +44,15 @@
     [Parameter] public string Empty { get; set; } = "Nothing to show.";
     [Parameter] public CaseListMeta Meta { get; set; } = CaseListMeta.Created;
 
-    /// <summary>Today's UTC date, for <see cref="CaseListMeta.Due"/>.</summary>
-    [Parameter] public DateOnly TodayUtc { get; set; }
+    /// <summary>Today's Eastern date, for <see cref="CaseListMeta.Due"/>.</summary>
+    [Parameter] public DateOnly Today { get; set; }
     [Parameter] public string? Class { get; set; }
 
     private string MetaText(CaseSummaryDto c) => Meta switch
     {
-        CaseListMeta.Updated => "Updated " + UiText.Utc(c.UpdatedAtUtc),
-        CaseListMeta.Due => $"Due {UiText.DueDate(c.DueOn)}" + (UiText.DueState(c.Status, c.DueOn, TodayUtc) is { } state ? $" ({state.ToLowerInvariant()})" : string.Empty)
+        CaseListMeta.Updated => "Updated " + UiText.Time(c.UpdatedAtUtc),
+        CaseListMeta.Due => $"Due {UiText.DueDate(c.DueOn)}" + (UiText.DueState(c.Status, c.DueOn, Today) is { } state ? $" ({state.ToLowerInvariant()})" : string.Empty)
             + $" · {UiText.Priority(c.Priority)}",
-        _ => "Created " + UiText.Utc(c.CreatedAtUtc),
+        _ => "Created " + UiText.Time(c.CreatedAtUtc),
     };
 }

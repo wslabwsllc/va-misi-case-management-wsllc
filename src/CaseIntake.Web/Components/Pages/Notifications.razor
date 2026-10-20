@@ -63,7 +63,7 @@ else if (_feed is { } feed)
                     <p class="notification__text">@Describe(n)</p>
                     <div class="record-card__meta">
                         <span>Case @n.CaseId</span>
-                        <span>@UiText.Utc(n.OccurredAtUtc)</span>
+                        <span>@UiText.Time(n.OccurredAtUtc)</span>
                         @if (n.AssignedToYou)
                         {
                             <span class="badge badge--new" data-testid="assigned-to-you">Assigned to you</span>
@@ -86,7 +86,7 @@ else if (_feed is { } feed)
     private bool _busy;
 
     private string Subtitle => _feed?.LastReadAtUtc is { } read
-        ? $"Changes by other people in the last two weeks. Last marked as read {UiText.Utc(read)}."
+        ? $"Changes by other people in the last two weeks. Last marked as read {UiText.Time(read)}."
         : "Changes by other people in the last two weeks, newest first.";
 
     protected override async Task OnInitializedAsync()

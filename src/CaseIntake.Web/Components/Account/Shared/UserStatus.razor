@@ -15,6 +15,9 @@
                     <span class="user-status__roles"><span class="visually-hidden">Role: </span><span data-testid="user-roles">@RoleText(context.User)</span></span>
                 </span>
             </div>
+            @* Icon-only so the header fits at tablet width; the profile sheet on phones shows the text. *@
+            <a class="btn btn--subtle btn--icon" href="account/change-password" aria-label="Change password" title="Change password"
+               data-testid="change-password-link"><Icon Name="lock" Small="true" /></a>
             <form method="post" action="account/logout">
                 <AntiforgeryToken />
                 <button type="submit" class="btn" data-testid="sign-out"><Icon Name="signout" Small="true" /> Sign out</button>

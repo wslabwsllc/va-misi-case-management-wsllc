@@ -35,6 +35,7 @@ public class RolePermissionMapTests
         { Permissions.Transition(CaseStatus.Resolved, CaseStatus.InProgress),  No,      No,     No,         Yes,        No },
         { Permissions.TestResultsView,                                         No,      No,     No,         No,         Yes },
         { Permissions.TestResultsManage,                                       No,      No,     No,         No,         Yes },
+        { Permissions.UsersManage,                                             No,      No,     No,         Yes,        No },
     };
 
     [Theory]
@@ -55,10 +56,10 @@ public class RolePermissionMapTests
     {
         var rows = Matrix.Select(r => (string)r[0]).ToHashSet();
 
-        Assert.Equal(14, RolePermissionMap.AllPermissions.Length);
+        Assert.Equal(15, RolePermissionMap.AllPermissions.Length);
         Assert.Equal(rows.Order(), RolePermissionMap.AllPermissions.Order());
         Assert.All(Columns, role => Assert.Subset(rows, RolePermissionMap.PermissionsFor([role])));
-        Assert.Equal([2, 5, 8, 12, 3], Columns.Select(role => RolePermissionMap.PermissionsFor([role]).Count).ToArray());
+        Assert.Equal([2, 5, 8, 13, 3], Columns.Select(role => RolePermissionMap.PermissionsFor([role]).Count).ToArray());
     }
 
     [Fact]

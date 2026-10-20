@@ -217,8 +217,8 @@
                                         <span class="cell-sub">@dueState</span>
                                     }
                                 </td>
-                                <td class="nowrap">@UiText.Utc(c.CreatedAtUtc)</td>
-                                <td class="nowrap">@UiText.Utc(c.UpdatedAtUtc)</td>
+                                <td class="nowrap">@UiText.Time(c.CreatedAtUtc)</td>
+                                <td class="nowrap">@UiText.Time(c.UpdatedAtUtc)</td>
                                 <td class="cell-actions">
                                     @* Row menu: a disclosure of links (no script), each a separate destination on the case. *@
                                     <details class="row-menu" data-testid="row-menu">
@@ -278,8 +278,8 @@
         new(CaseSortField.Category, "Category"),
         new(CaseSortField.Owner, "Owner"),
         new(CaseSortField.DueOn, "Due date"),
-        new(CaseSortField.CreatedAt, "Created (UTC)"),
-        new(CaseSortField.UpdatedAt, "Updated (UTC)"),
+        new(CaseSortField.CreatedAt, "Created (ET)"),
+        new(CaseSortField.UpdatedAt, "Updated (ET)"),
         new(null, "Actions"),
     ];
 
@@ -414,7 +414,7 @@
         using var busy = Activity.Begin();
         _loading = true;
         _error = null;
-        _today = UiText.TodayUtc(Time);
+        _today = UiText.Today(Time);
         try
         {
             var result = await Cases.ListAsync(_state.ToQuery(), _cts.Token);

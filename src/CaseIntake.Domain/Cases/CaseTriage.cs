@@ -52,13 +52,14 @@ public static class CaseTriageRules
         _ => 10,
     };
 
-    /// <summary>The default due date for a case created at <paramref name="createdUtc"/> with <paramref name="priority"/>.</summary>
+    /// <summary>The default due date for a case created at <paramref name="createdUtc"/> with <paramref name="priority"/>,
+    /// counted from the Eastern calendar day of creation.</summary>
     public static DateOnly DefaultDueOn(CasePriority priority, DateTimeOffset createdUtc) =>
-        DateOnly.FromDateTime(createdUtc.UtcDateTime).AddDays(TargetDays(priority));
+        EasternTime.Date(createdUtc).AddDays(TargetDays(priority));
 
-    /// <summary>Open (New, Triaged or In Progress) and past its due date on <paramref name="todayUtc"/>.</summary>
-    public static bool IsOverdue(CaseStatus status, DateOnly? dueOn, DateOnly todayUtc) =>
-        dueOn is { } due && due < todayUtc && status is CaseStatus.New or CaseStatus.Triaged or CaseStatus.InProgress;
+    /// <summary>Open (New, Triaged or In Progress) and past its due date on <paramref name="today"/> (an Eastern calendar day).</summary>
+    public static bool IsOverdue(CaseStatus status, DateOnly? dueOn, DateOnly today) =>
+        dueOn is { } due && due < today && status is CaseStatus.New or CaseStatus.Triaged or CaseStatus.InProgress;
 
     /// <summary>A normalized owner: trimmed, empty → null.</summary>
     public static string? NormalizeAssignee(string? userName) =>

@@ -8,7 +8,7 @@
 @inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<TestRuns> Logger
 
-@* Imported test runs, newest first, filtered by run key/branch/commit/build, status, environment and UTC dates. *@
+@* Imported test runs, newest first, filtered by run key/branch/commit/build, status, environment and Eastern dates. *@
 <PageShell Title="Test runs" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Quality assurance", "test-results")])" />
 <TestResultsTabs Current="runs" />
 
@@ -39,11 +39,11 @@
             </select>
         </div>
         <div class="field">
-            <label class="field__label" for="run-from">From (UTC date)</label>
+            <label class="field__label" for="run-from">From (ET date)</label>
             <input id="run-from" type="date" @bind="_from" />
         </div>
         <div class="field">
-            <label class="field__label" for="run-to">To (UTC date)</label>
+            <label class="field__label" for="run-to">To (ET date)</label>
             <input id="run-to" type="date" @bind="_to" />
         </div>
         <button type="submit" class="btn btn--primary" data-testid="apply-run-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
@@ -67,7 +67,7 @@
                 <thead>
                     <tr>
                         <th scope="col">Run</th>
-                        <th scope="col">Started (UTC)</th>
+                        <th scope="col">Started (ET)</th>
                         <th scope="col">Result</th>
                         <th scope="col" class="num">Total</th>
                         <th scope="col" class="num">Passed</th>
@@ -83,7 +83,7 @@
                     {
                         <tr>
                             <td><a href="@TestResultsText.RunHref(run.Id)">@run.RunKey</a></td>
-                            <td class="nowrap">@UiText.Utc(run.StartedAtUtc)</td>
+                            <td class="nowrap">@UiText.Time(run.StartedAtUtc)</td>
                             <td><RunResultPill Run="run" /></td>
                             <td class="num">@UiText.Number(run.Counts.Total)</td>
                             <td class="num">@UiText.Number(run.Counts.Passed)</td>
@@ -106,7 +106,7 @@
                         <RunResultPill Run="run" />
                     </div>
                     <div class="record-card__meta">
-                        <span>@UiText.Utc(run.StartedAtUtc)</span>
+                        <span>@UiText.Time(run.StartedAtUtc)</span>
                         <span>@run.Counts.Passed passed · @run.Counts.Failed failed · @run.Counts.NotExecuted not executed</span>
                         <span>@UiText.Duration(run.Duration)</span>
                     </div>

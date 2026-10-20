@@ -20,7 +20,7 @@ long-lived SignalR circuits, where `HttpContext` is absent or stale.
 `AppUser`/`AppRole` live in Persistence so `AppDbContext` does not depend on the Identity feature project. Users sign
 in with their email as user name on a static SSR page (`/account/login`); sign-out is `POST /account/logout`. Both
 are plain HTTP form posts protected by antiforgery tokens. There is no self-registration, password reset or external
-login (OQ-18). Data Protection keys persist on the `dataprotection` volume, so cookies survive container recreation.
+login (OQ-18); accounts are added by supervisors and users change their own password (below). Data Protection keys persist on the `dataprotection` volume, so cookies survive container recreation.
 
 **Roles and the adopted permission matrix (assumption recorded under OQ-3).** Four case roles that build on each
 other, `Auditor` ⊂ `IntakeClerk` ⊂ `CaseWorker` ⊂ `Supervisor`, plus the separate `QualityAnalyst` added by the test
@@ -41,6 +41,7 @@ The spec requires at least two roles; the extra two separate read-only oversight
 | `cases.transition.Resolved.Closed` | – | – | – | ✔ | – |
 | `cases.transition.Resolved.InProgress` (reopen) | – | – | – | ✔ | – |
 | `testresults.view` / `testresults.manage` | – | – | – | – | ✔ |
+| `users.manage` (list users, add a user of any role) | – | – | – | ✔ | – |
 
 The UI shows roles by display name (`AppRoles.DisplayName`: "Intake clerk", "Case worker", "Quality analyst").
 
@@ -88,6 +89,17 @@ host's `ws:`/`wss:` origin for the SignalR circuit, `style-src 'self' 'unsafe-in
 user per role, `auditor@`, `intake@`, `caseworker@`, `supervisor@` and `qa@example.test` (reserved `.test` TLD), with
 stable IDs and the `Seed:DemoPassword` password. The sign-in page lists them whenever `Seed:DemoPassword` is configured
 (docker compose and `dotnet run`), so a deployment without demo seeding reveals no account names. Re-seeding adds only what is missing and never resets a password.
+
+**User administration and password changes.** Supervisors (`users.manage`) list users and add one with an email,
+one of the five roles and an initial password on `/admin/users` (Administration > Users). `IUserAdministrationService`
+runs in the circuit, so it resolves `UserManager` in a fresh DI scope per call instead of holding it; new accounts are
+confirmed and lockout-enabled like the demo users, and a failed role assignment deletes the new account. Every user
+changes their own password on the static SSR page `/account/change-password` (header and profile sheet). The current
+password is checked with lockout, like sign-in; success changes the security stamp, so the user's other sessions end
+within the revalidation interval, and refreshes the cookie of the browser that changed it. Events: `UserCreated`
+(3011), `PasswordChanged` (3012), `PasswordChangeFailed` (3013), with user IDs only. There is no forced change at
+first sign-in: the supervisor knows the initial password until the user changes it. Editing roles, disabling or
+deleting users and reset by email are not provided.
 
 ## Alternatives considered
 

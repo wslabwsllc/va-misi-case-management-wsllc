@@ -518,6 +518,9 @@ pre.log { background: #1f1f1f; color: #f0f0f0; padding: var(--space-3); border-r
 .demo-accounts ul { margin: 0; padding-left: var(--space-4); display: grid; gap: var(--space-1); }
 .demo-accounts .mono { color: var(--text); overflow-wrap: anywhere; }
 .account-footer { padding: var(--space-4) var(--space-8); font-size: 12px; color: var(--text-secondary); }
+.landing-features { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-4); }
+.landing-features li { display: flex; gap: var(--space-3); align-items: flex-start; color: var(--text-secondary); }
+.landing-features strong { display: block; color: var(--text); }
 .account-art {
   position: relative; overflow: hidden; background: #0c4f8f url("images/case-flow.svg") center / cover no-repeat;
   border-left: 1px solid var(--border-subtle);
@@ -579,8 +582,9 @@ pre.log { background: #1f1f1f; color: #f0f0f0; padding: var(--space-3); border-r
   .nav-link { min-height: var(--touch); }
   .btn, .command, input[type="text"], input[type="email"], input[type="password"], input[type="search"], select { min-height: var(--touch); }
   .data-grid th, .data-grid td { height: 48px; }
-  .user-status__name { max-width: 150px; }
-  .user-status__text { max-width: 170px; }
+  .user-status { gap: var(--space-2); }
+  .user-status__name { max-width: 130px; }
+  .user-status__text { max-width: 130px; }
 }
 
 /* Phone: below 768 px. Native-app shell: compact sticky header, bottom navigation, cards, floating action. */

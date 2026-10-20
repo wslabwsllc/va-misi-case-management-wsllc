@@ -116,7 +116,7 @@ cd va-misi-case-management-wsllc
 docker compose up --build --wait       # runs in the background, returns once web is healthy
 ```
 
-Open <http://localhost:8080> and sign in. The first build takes several minutes. No `.env` file or secrets are needed:
+Open <http://localhost:8080>: the landing page links to sign-in. The first build takes several minutes. No `.env` file or secrets are needed:
 every setting, including the synthetic local database credentials, is in `docker-compose.yml`.
 
 Startup order: `db` (PostgreSQL 18) → `migrator` (migrates, seeds, exits 0) → `veteran-lookup` → `web`. `web` waits for
@@ -173,11 +173,13 @@ The four case roles build on each other (Auditor ⊂ IntakeClerk ⊂ CaseWorker 
 | `auditor@example.test` | `Demo-Passw0rd!` | Auditor: read-only; view cases, audit trails and documents, export the case list |
 | `intake@example.test` | `Demo-Passw0rd!` | IntakeClerk: view and open new cases, veteran lookup, upload attachments; no editing or status changes |
 | `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker: everything an intake clerk can do, plus edit cases and start and resolve them |
-| `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor: everything a case worker can do, plus triage, close and reopen |
+| `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor: everything a case worker can do, plus triage, close and reopen, and add users (Administration > Users) |
 | `qa@example.test` | `Demo-Passw0rd!` | QualityAnalyst: read cases; view and import test results (Administration > Quality assurance) |
 
 The password (`Seed:DemoPassword`) is applied only when an account is first created; re-seeding never resets it. Five
-wrong passwords lock an account for five minutes. There is no self-registration or password reset. Roles and
+wrong passwords lock an account for five minutes. Supervisors add users of any role with an initial password; every user
+changes their own password from the header (Change password). There is no self-registration or password reset by
+email. Roles and
 permissions: [ADR 0007](docs/adr/0007-roles-and-permissions.md). Guided tour: [docs/demo.md](docs/demo.md).
 
 </details>

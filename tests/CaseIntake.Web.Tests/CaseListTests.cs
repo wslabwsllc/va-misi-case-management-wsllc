@@ -32,7 +32,7 @@ public class CaseListTests : WebTestContext
 
         cut.WaitForAssertion(() => Assert.Equal(25, cut.FindAll("[data-testid=case-table] tbody tr").Count));
         Assert.StartsWith("Cases", cut.Find("[data-testid=case-table] caption").TextContent.Trim(), StringComparison.Ordinal);
-        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date", "Created (UTC)", "Updated (UTC)", "Actions"],
+        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date", "Created (ET)", "Updated (ET)", "Actions"],
             cut.FindAll("[data-testid=case-table] thead th").Select(th => th.TextContent.Trim().Trim('▲', '▼', '⇅').Trim()));
         // Every data column sorts; the row menu column does not.
         Assert.Equal(9, cut.FindAll("[data-testid=case-table] thead th button.sort-button").Count);
@@ -202,8 +202,9 @@ public class CaseListTests : WebTestContext
         Assert.Equal([CasePriority.Urgent], query.Priorities);
         Assert.Equal([CaseCategory.Claims], query.Categories);
         Assert.Equal("caseworker@example.test", query.AssignedTo);
-        Assert.Equal(new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), query.CreatedFromUtc);
-        Assert.Equal(new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.Zero).AddTicks(9_999_999), query.CreatedToUtc);
+        // Whole Eastern days: October 1 starts at 04:00 UTC (EDT); October 31 ends just before November 1 04:00 UTC.
+        Assert.Equal(new DateTimeOffset(2026, 10, 1, 4, 0, 0, TimeSpan.Zero), query.CreatedFromUtc);
+        Assert.Equal(new DateTimeOffset(2026, 11, 1, 4, 0, 0, TimeSpan.Zero).AddTicks(-1), query.CreatedToUtc);
         Assert.Equal(CaseSortField.DueOn, query.SortBy);
         Assert.Contains("Urgent claim", cut.Find("[data-testid=case-table]").TextContent);
         Assert.Contains("Urgent", cut.Find("[data-testid=case-table] tbody [data-priority]").TextContent);

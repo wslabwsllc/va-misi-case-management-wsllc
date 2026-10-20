@@ -32,7 +32,9 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal(created.Id.ToString(System.Globalization.CultureInfo.InvariantCulture), cut.Find("[data-testid=case-id]").TextContent);
         Assert.Contains("(read-only)", cut.Find("[data-testid=details-section]").TextContent);
         Assert.Equal("Line one\nLine two", cut.Find("[data-testid=case-description]").TextContent);
-        Assert.Contains("UTC", cut.Find("[data-testid=record-header]").TextContent);
+        // Times are Eastern: the label carries the zone, the value does not.
+        Assert.Contains("Modified (ET)", cut.Find("[data-testid=record-header]").TextContent);
+        Assert.DoesNotContain("UTC", cut.Find("[data-testid=record-header]").TextContent);
         Assert.Contains("Created", cut.Find("[data-testid=audit-list]").TextContent);
         Assert.Empty(cut.Find("[data-testid=audit-error]").TextContent.Trim());
         Assert.Empty(cut.Find("[data-testid=detail-error]").TextContent.Trim());

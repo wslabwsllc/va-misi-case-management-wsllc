@@ -72,7 +72,7 @@ else if (_data is { Latest: { } latest } d)
         <KpiTile Label="Not executed" Value="@UiText.Number(c.NotExecuted)" Hint="Suite did not run" Variant="warning" TestId="tr-kpi-notexecuted" />
         <KpiTile Label="Pass rate" Value="@TestResultsText.PassRate(c)" Hint="Passed of executed tests" Variant="success" TestId="tr-kpi-passrate" />
         <KpiTile Label="Duration" Value="@UiText.Duration(latest.Duration)" Hint="Whole run" Variant="neutral" TestId="tr-kpi-duration" />
-        <KpiTile Label="Latest run" Value="@resultText" Hint="@($"{TestResultsText.RunStatus(latest.Status)} · {UiText.Utc(latest.StartedAtUtc)}")"
+        <KpiTile Label="Latest run" Value="@resultText" Hint="@($"{TestResultsText.RunStatus(latest.Status)} · {UiText.Time(latest.StartedAtUtc)}")"
                  Variant="@(c.Failed > 0 || latest.Status != TestRunStatus.Completed ? "danger" : "success")" TestId="tr-kpi-status" />
         <KpiTile Label="Known test cases" Value="@UiText.Number(d.KnownTestCases)" Hint="Across all runs" Href="test-results/cases" Variant="neutral" TestId="tr-kpi-known" />
         <KpiTile Label="Newly failed" Value="@UiText.Number(d.Comparison?.NewlyFailed.Count ?? 0)" Hint="Passed in the previous run" Variant="danger" TestId="tr-kpi-newly-failed" />
@@ -82,7 +82,7 @@ else if (_data is { Latest: { } latest } d)
     <div class="grid grid--3">
         <section class="card">
             <Chart Id="tr-trend" Title="Pass vs. fail trend" Description="Recent runs, oldest to newest." Kind="ChartKind.Line"
-                   Categories="_trendLabels" CategoryHeader="Run (UTC)" TestId="tr-chart-trend"
+                   Categories="_trendLabels" CategoryHeader="Run (ET)" TestId="tr-chart-trend"
                    Series="@([new ChartSeries("Passed", [.. _trend.Select(r => (double)r.Counts.Passed)], "--series-3"), new ChartSeries("Failed", [.. _trend.Select(r => (double)r.Counts.Failed)], "--series-2")])" />
         </section>
         <section class="card">
@@ -97,7 +97,7 @@ else if (_data is { Latest: { } latest } d)
                    Series="@([new ChartSeries("Failed", [.. d.FailuresByModule.Select(m => (double)m.Count)], "--series-2")])" />
         </section>
         <section class="card">
-            <Chart Id="tr-duration" Title="Execution duration trend" Description="Whole-run duration in seconds." CategoryHeader="Run (UTC)" TestId="tr-chart-duration"
+            <Chart Id="tr-duration" Title="Execution duration trend" Description="Whole-run duration in seconds." CategoryHeader="Run (ET)" TestId="tr-chart-duration"
                    Categories="_trendLabels"
                    Series="@([new ChartSeries("Duration (s)", [.. _trend.Select(r => Math.Round(r.Duration.TotalSeconds))], "--series-4")])" />
         </section>
@@ -166,7 +166,7 @@ else if (_data is { Latest: { } latest } d)
                             <RunResultPill Run="run" />
                         </div>
                         <div class="record-card__meta">
-                            <span>@UiText.Utc(run.StartedAtUtc)</span>
+                            <span>@UiText.Time(run.StartedAtUtc)</span>
                             <span>@run.Counts.Passed passed · @run.Counts.Failed failed · @run.Counts.NotExecuted not executed</span>
                             <span>@(run.GitBranch ?? "unknown branch") @@ @TestResultsText.ShortCommit(run.GitCommit)</span>
                         </div>

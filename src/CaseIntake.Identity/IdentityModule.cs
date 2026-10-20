@@ -1,5 +1,6 @@
 using CaseIntake.Contracts.Security;
 using CaseIntake.Identity.Account;
+using CaseIntake.Identity.Administration;
 using CaseIntake.Identity.Authorization;
 using CaseIntake.Identity.CurrentUser;
 using CaseIntake.Identity.Seeding;
@@ -11,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace CaseIntake.Identity;
 
@@ -31,8 +33,6 @@ public static class IdentityModule
         ArgumentNullException.ThrowIfNull(configuration);
         var section = configuration.GetSection(IdentityModuleOptions.SectionName);
         services.AddOptions<IdentityModuleOptions>().Bind(section);
-        var revalidationInterval = section.GetValue<TimeSpan?>(nameof(IdentityModuleOptions.RevalidationInterval))
-            ?? new IdentityModuleOptions().RevalidationInterval;
 
         services.AddAuthentication(options =>
             {
@@ -53,9 +53,20 @@ public static class IdentityModule
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
             options.SlidingExpiration = true;
+            // A visitor opening the site root sees the landing page; deep links still go to sign-in with a return URL.
+            var redirectToLogin = options.Events.OnRedirectToLogin;
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (context.Request.Path == "/")
+                {
+                    context.RedirectUri = context.Request.PathBase + AccountRoutes.Welcome;
+                }
+                return redirectToLogin(context);
+            };
         });
         // Cookie-authenticated HTTP requests re-check the security stamp as often as circuits do.
-        services.Configure<SecurityStampValidatorOptions>(options => options.ValidationInterval = revalidationInterval);
+        services.AddOptions<SecurityStampValidatorOptions>().Configure<IOptions<IdentityModuleOptions>>(
+            (options, module) => options.ValidationInterval = module.Value.RevalidationInterval);
 
         services.AddIdentityCore<AppUser>(ConfigureIdentity)
             .AddRoles<AppRole>()
@@ -81,6 +92,8 @@ public static class IdentityModule
         services.AddScoped<ICurrentUser, CircuitCurrentUser>();
         services.AddKeyedScoped<ICurrentUser, HttpCurrentUser>(CurrentUserSources.Http);
         services.AddScoped<AccountSignIn>();
+        services.AddScoped<AccountPasswordChange>();
+        services.AddScoped<IUserAdministrationService, UserAdministrationService>();
         return services;
     }
 
@@ -95,6 +108,10 @@ public static class IdentityModule
             .AddEntityFrameworkStores<AppDbContext>();
         return services.AddSeedContributor<IdentitySeedContributor>();
     }
+
+    /// <summary>Identity's default password rules, which <see cref="ConfigureIdentity"/> leaves unchanged; shown as a form hint.</summary>
+    public const string PasswordHint =
+        "At least 6 characters, with an uppercase letter, a lowercase letter, a number and a symbol.";
 
     internal static void ConfigureIdentity(IdentityOptions options)
     {

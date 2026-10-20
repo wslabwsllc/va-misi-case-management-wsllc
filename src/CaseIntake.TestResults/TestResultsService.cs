@@ -8,6 +8,7 @@ using CaseIntake.TestResults.Reports;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using CaseIntake.Domain;
 
 namespace CaseIntake.TestResults;
 
@@ -92,12 +93,12 @@ internal sealed class TestResultsService(
         }
         if (query.FromDate is { } from)
         {
-            var start = new DateTimeOffset(from.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            var start = EasternTime.StartOfDay(from);
             runs = runs.Where(r => r.StartedAtUtc >= start);
         }
         if (query.ToDate is { } to)
         {
-            var end = new DateTimeOffset(to.AddDays(1).ToDateTime(TimeOnly.MinValue), TimeSpan.Zero);
+            var end = EasternTime.StartOfDay(to.AddDays(1));
             runs = runs.Where(r => r.StartedAtUtc < end);
         }
         var total = await runs.CountAsync(ct);
