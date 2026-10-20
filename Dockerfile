@@ -11,9 +11,11 @@
 # emitted. PlaywrightPlatform: copy the node driver for the target architecture, not the build machine's.
 #
 # Reproducible rebuilds (docs/versions.md): every base image is pinned by tag AND digest (a re-pushed tag cannot change
-# the build), NuGet restores in locked mode against the committed packages.lock.json files, and apt (including the OS
-# packages Playwright installs for Chromium) reads a dated snapshot.ubuntu.com archive instead of the live mirror.
-ARG APT_SNAPSHOT=20261016T000000Z
+# the build) and NuGet restores in locked mode against the committed packages.lock.json files. apt (including the OS
+# packages Playwright installs for Chromium) reads the live Ubuntu mirror by default, with retries: snapshot.ubuntu.com
+# proved unreliable (502/503 for hours), which broke every uncached build on Windows, macOS and CI alike. For
+# bit-for-bit OS packages, opt in: docker compose build --build-arg APT_SNAPSHOT=20261016T000000Z
+ARG APT_SNAPSHOT=
 
 # ---- Project files only, so the restore layer below is reused until a project or package pin changes. ----
 FROM --platform=$BUILDPLATFORM mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa AS projects
@@ -48,7 +50,8 @@ ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 DOTNET_NOLOGO=1 \
 # libgssapi-krb5-2: Npgsql probes for GSSAPI on connect and logs an error without it (the SDK image ships it).
 # The mount points exist and belong to the app user, so new named volumes start out writable by it.
 ARG APT_SNAPSHOT
-RUN echo "APT::Snapshot \"${APT_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot \
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80retries \
+ && if [ -n "${APT_SNAPSHOT}" ]; then echo "APT::Snapshot \"${APT_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot; fi \
  && apt-get update && apt-get install -y --no-install-recommends libgssapi-krb5-2 && rm -rf /var/lib/apt/lists/* \
  && useradd --uid 10001 --create-home --shell /bin/bash caseintake \
  && mkdir -p /attachments /attachments-e2e /dataprotection /test-results /e2e-fixtures \
@@ -82,9 +85,10 @@ RUN useradd --uid 10001 --create-home --shell /bin/bash caseintake \
 COPY --from=build --chown=caseintake:caseintake /src /src
 COPY --from=build --chown=caseintake:caseintake /home/caseintake/.nuget/packages /home/caseintake/.nuget/packages
 # Chromium for the browser tests, with its OS packages (needs root and network at build time only). The browser build
-# is fixed by the Microsoft.Playwright version; its apt dependencies come from the same dated snapshot as the runtime.
+# is fixed by the Microsoft.Playwright version; its apt dependencies come from the same source as the runtime (live mirror, or APT_SNAPSHOT).
 ARG APT_SNAPSHOT
-RUN echo "APT::Snapshot \"${APT_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot \
+RUN echo 'Acquire::Retries "5";' > /etc/apt/apt.conf.d/80retries \
+ && if [ -n "${APT_SNAPSHOT}" ]; then echo "APT::Snapshot \"${APT_SNAPSHOT}\";" > /etc/apt/apt.conf.d/50snapshot; fi \
  && /src/tests/CaseIntake.E2E/bin/Release/net10.0/.playwright/node/linux-*/node \
       /src/tests/CaseIntake.E2E/bin/Release/net10.0/.playwright/package/cli.js install --with-deps chromium \
  && rm -rf /var/lib/apt/lists/* \
