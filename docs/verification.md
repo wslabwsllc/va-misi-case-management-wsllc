@@ -217,8 +217,8 @@ violations on the 16 scanned views.
 
 # Verification record (US-4.1 / R12: Government lookup contract)
 
-Base revision: `fe79b43` plus the US-4.1 changes (uncommitted on `fix/openapi-spec-conformance`; commits by the
-engineer). Host: macOS arm64, Docker 29.1.3, .NET SDK 10.0.402. Docker checks used an isolated Compose project
+Base revision: `fe79b43` plus the US-4.1 changes, run before they were committed; the tested content was then
+committed unchanged as `55c3397`, `8aa90b6`, `2955952`, `6e93939` and `9310def` on `fix/openapi-spec-conformance`. Host: macOS arm64, Docker 29.1.3, .NET SDK 10.0.402. Docker checks used an isolated Compose project
 (`-p caseintake-r12`), removed afterwards with `down -v`; demo volumes were not touched. Date: 2026-10-20.
 
 ## Commands and results
@@ -237,16 +237,57 @@ engineer). Host: macOS arm64, Docker 29.1.3, .NET SDK 10.0.402. Docker checks us
 | `dotnet test tests/CaseIntake.VeteranLookup.Tests -c Release` in the pinned SDK image on the Compose network with `VeteranLookup__BaseUrl=http://veteran-lookup:8081` | 107 passed, 0 failed (86 in-process + 21 against the container, including served bytes, spec-shaped 200/404 and the client's wire request) |
 | SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
 
-## Not verified / blocked
+## Not verified / blocked (first pass, before merging main)
 
-- **Full `docker compose run --rm tests` with a rebuilt test image: blocked.** Rebuilding `caseintake-eval` failed in
-  the Playwright dependency step because `snapshot.ubuntu.com` (the pinned apt snapshot `20261016T000000Z`) answered
-  `503 Service Unavailable`. External outage; no repository change involved. Rerun when the snapshot service is back.
-- `docker compose run --rm tests` does **not** rebuild the `tests` image (profile `tests`; `up --build` skips it). A
-  run against a stale local `caseintake-eval:local` passes or fails on old code. Rebuild first with
-  `scripts/run-all-tests.sh` or `docker compose run --build --rm tests`. A fresh clone has no image and builds it.
-- The stale-image run showed one timing failure in an unchanged test,
-  `VeteranLookupClientTests.A_hanging_service_is_Unavailable_within_the_total_budget_after_one_retry`, under amd64
-  emulation; it passes on the host and in the SDK-container run above.
-- `SyntheticSsnGuardTests` is not on this branch yet; the single-value exemption for the verbatim file is added when
-  that guard reaches this branch (assumption D16).
+- Full `docker compose run --rm tests` with a rebuilt test image was blocked: `snapshot.ubuntu.com` (apt snapshot
+  `20261016T000000Z`) answered `503 Service Unavailable`. Resolved on main by PR #15/#26 (the snapshot is now opt-in;
+  builds use the live mirror). See the post-merge run below.
+- `docker compose run --rm tests` did not rebuild the `tests` image at the time. PR #15 added `pull_policy: build`, so
+  it now always rebuilds; the post-merge run below used a freshly built image.
+- A stale-image run showed one timing failure in an unchanged test
+  (`VeteranLookupClientTests.A_hanging_service_is_Unavailable_within_the_total_budget_after_one_retry`); it passed in
+  every run since, including the post-merge run.
+
+## After merging main (PR #15 synthetic-SSN guard, PR #26 multi-platform Docker)
+
+Branch `fix/openapi-spec-conformance` at merge `8b3ca02` plus the first version of the guard exemption (uncommitted at
+the time of the run; it was then reworked after review, see the next section).
+Isolated Compose project `-p caseintake-r12`, removed afterwards with `down -v`.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln -c Release` | 0 warnings, 0 errors |
+| `dotnet test tests/CaseIntake.VeteranLookup.Tests -c Release` (host) | 86 passed, 0 failed |
+| `dotnet test tests/CaseIntake.IntegrationTests -c Release` (host) | 333 passed, 1 failed of 334 (`Apt_reads_the_dated_snapshot_listed_in_versions_md`, see below); `SyntheticSsnGuardTests` passes with the exemption |
+| `docker compose -p caseintake-r12 up --build -d --wait` | `db`, `veteran-lookup`, `web` healthy |
+| `docker compose -p caseintake-r12 run --rm tests` (test image rebuilt), run `20261020T164309Z-09b03931` | Attachments 86/0, Cases 112/0, E2E 18/0, Identity 113/0, IntegrationTests 333/1 (334 total), VeteranLookup 109/0 (86 in-process + 23 against the container), Web.Tests 122/0; `RESULT: FAIL` only because of the test below |
+| Q&A hash command from [demo.md](demo.md) against the container | `bbd95fc2…0f26`, identical to the committed file |
+| SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
+
+**Open, owned outside US-4.1:** `VersionConsistencyTests.Apt_reads_the_dated_snapshot_listed_in_versions_md` fails on
+`origin/main` itself: PR #26 changed the Dockerfile to `ARG APT_SNAPSHOT=` (opt-in), while the test still requires a
+dated default. `Dockerfile` and the test are identical to `origin/main` on this branch. A fix is in progress on main
+(with a Playwright timeout fix); this branch merges main again once it lands and is rerun before the PR.
+
+## After review (guard exemption reworked; review fixes)
+
+The pre-commit `/code-review`, `/security-review` and `/simplify` passes (2026-10-20) found no security issues. After
+review the guard exemption is keyed on the file's exact SHA-256 instead of its area number and count: the Government
+file is skipped only while its bytes equal the pinned hash, and any edit puts the whole file back under the guard.
+New tests: `The_Government_contract_exemption_matches_the_committed_file_and_is_still_needed`,
+`The_Government_contract_is_exempt_only_with_its_exact_bytes_at_its_own_path`, and
+`MockServiceTests.The_spec_example_SSN_is_not_in_the_synthetic_dataset` (D16).
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln -c Release` | 0 warnings, 0 errors |
+| `dotnet test tests/CaseIntake.VeteranLookup.Tests -c Release` (host) | 87 passed, 0 failed |
+| `dotnet test tests/CaseIntake.IntegrationTests -c Release` (host) | 329 passed, 1 failed of 330 (the same `Apt_reads_the_dated_snapshot_listed_in_versions_md`); the guard and its two new tests pass |
+
+| `docker compose -p caseintake-r12 up --build -d --wait` | `db`, `veteran-lookup`, `web` healthy |
+| `docker compose -p caseintake-r12 run --rm tests` (test image rebuilt), run `20261020T171344Z-6af86209` | Attachments 86/0, Cases 112/0, E2E 18/0, Identity 113/0, IntegrationTests 329/1 (330 total), VeteranLookup 111/0 (87 in-process + 24 against the container), Web.Tests 122/0; `RESULT: FAIL` only because of the apt-snapshot test owned by main |
+| Q&A hash command from [demo.md](demo.md) against the container | `bbd95fc2…0f26`, identical to the committed file |
+| SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
+
+Remaining before the demo baseline: merge main once its fix for the apt-snapshot test lands, then rerun for a fully
+green result.
