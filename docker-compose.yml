@@ -140,6 +140,9 @@ services:
   web-e2e:
     <<: *app-image
     profiles: ["tests"]
+    # Rebuilt on every test run (one build serves migrator-e2e too, which shares the image), so the browser suite never
+    # tests a stale app image.
+    pull_policy: build
     command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
     working_dir: /app/web
     environment:
@@ -163,6 +166,9 @@ services:
   tests:
     <<: *eval-image
     profiles: ["tests"]
+    # Always rebuild before running (layers are cached): `docker compose run` otherwise reuses any existing
+    # caseintake-eval:local image, and `up --build` does not build this one, so an old image could report PASS for old code.
+    pull_policy: build
     command: ["/src/scripts/run-tests.sh"]
     environment:
       TESTKIT_POSTGRES_ADMIN: "Host=db;Port=5432;Database=postgres;Username=caseintake;Password=caseintake_local_only"

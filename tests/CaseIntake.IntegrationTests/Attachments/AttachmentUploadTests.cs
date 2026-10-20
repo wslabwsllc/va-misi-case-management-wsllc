@@ -472,9 +472,9 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         using var h = new AttachmentTestHarness(database);
         var c = await h.CreateCaseAsync();
 
-        var dto = await h.UploadAsync(c.Id, [1, 2, 3], "Veteran 123-45-6789 secret.txt");
+        var dto = await h.UploadAsync(c.Id, [1, 2, 3], "Veteran 900-45-6789 secret.txt");
 
-        Assert.Equal("Veteran 123-45-6789 secret.txt", dto.FileName);   // the display name is kept as metadata only
+        Assert.Equal("Veteran 900-45-6789 secret.txt", dto.FileName);   // the display name is kept as metadata only
         foreach (var record in h.Logs.Collector.GetSnapshot())
         {
             var text = record.Message + " " + string.Join(" ", record.StructuredState?.Select(kv => kv.Value) ?? []);

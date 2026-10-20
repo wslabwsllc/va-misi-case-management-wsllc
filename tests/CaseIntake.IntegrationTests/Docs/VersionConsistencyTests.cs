@@ -160,4 +160,22 @@ public class VersionConsistencyTests
             Assert.DoesNotContain("<TargetFramework>", File.ReadAllText(csproj));
         }
     }
+
+    [Fact]
+    public void Runtime_image_tag_matches_the_runtime_versions_in_versions_md()
+    {
+        const string runtimeImage = "mcr.microsoft.com/dotnet/aspnet:";
+        var tags = Dockerfiles.SelectMany(BaseImages)
+            .Where(image => image.StartsWith(runtimeImage, StringComparison.Ordinal))
+            .Select(image => image[runtimeImage.Length..].Split('-', '@')[0])
+            .Distinct().ToList();
+        var runtime = Assert.Single(tags);   // one runtime version across the app and the lookup mock
+
+        foreach (var framework in new[] { "Microsoft.NETCore.App", "Microsoft.AspNetCore.App" })
+        {
+            var row = Regex.Match(VersionsDoc, $@"\(`{Regex.Escape(framework)}`\)\s*\|\s*([^|\s]+)\s*\|");
+            Assert.True(row.Success, $"docs/versions.md has no row for {framework}");
+            Assert.Equal(runtime, row.Groups[1].Value);
+        }
+    }
 }

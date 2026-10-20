@@ -12,7 +12,8 @@ tables below drift from those files.
 | Component | Version |
 |---|---|
 | .NET SDK | 10.0.402 |
-| ASP.NET Core runtime | 10.0.13 |
+| .NET runtime (`Microsoft.NETCore.App`) | 10.0.13 |
+| ASP.NET Core and Blazor shared framework (`Microsoft.AspNetCore.App`) | 10.0.13 |
 | PostgreSQL | 18.6 |
 
 The runtime and ASP.NET Core / Blazor shared-framework versions come from the pinned images below. The exact

@@ -53,12 +53,12 @@ public class LoggingTests
     {
         var lines = await CaptureAsync(logger =>
         {
-            using var scope = logger.BeginScope(new Dictionary<string, object> { ["Leak"] = "scope 123-45-6789" });
-            logger.LogWarning(new EventId(1235), "value {Ssn} and {Plain}", "123-45-6789", "987654321");
+            using var scope = logger.BeginScope(new Dictionary<string, object> { ["Leak"] = "scope 900-45-6789" });
+            logger.LogWarning(new EventId(1235), "value {Ssn} and {Plain}", "900-45-6789", "987654321");
         });
 
         var text = lines.Single(l => l.RootElement.GetProperty("EventId").GetInt32() == 1235).RootElement.GetRawText();
-        Assert.DoesNotContain("123-45-6789", text);
+        Assert.DoesNotContain("900-45-6789", text);
         Assert.DoesNotContain("987654321", text);
         Assert.Contains(SsnRedaction.Replacement, text);
     }
@@ -67,7 +67,7 @@ public class LoggingTests
     public async Task Exception_messages_are_never_written_only_the_type()
     {
         var lines = await CaptureAsync(logger =>
-            logger.LogError(new EventId(1236), new InvalidOperationException("secret value 555-44-3333 in provider text"), "Operation failed"));
+            logger.LogError(new EventId(1236), new InvalidOperationException("secret value 666-44-3333 in provider text"), "Operation failed"));
 
         var root = lines.Single(l => l.RootElement.GetProperty("EventId").GetInt32() == 1236).RootElement;
         Assert.Equal("System.InvalidOperationException", root.GetProperty("ExceptionType").GetString());
@@ -75,9 +75,9 @@ public class LoggingTests
     }
 
     [Theory]
-    [InlineData("123-45-6789", true)]
-    [InlineData("123456789", true)]
-    [InlineData("ssn=123456789.", true)]
+    [InlineData("900-45-6789", true)]
+    [InlineData("900456789", true)]
+    [InlineData("ssn=900456789.", true)]
     [InlineData("1234567890", false)]
     [InlineData("12-345-6789", false)]
     [InlineData("case 42", false)]
