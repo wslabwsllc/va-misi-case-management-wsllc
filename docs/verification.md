@@ -214,3 +214,39 @@ violations on the 16 scanned views.
 - iOS Safari / Android Chrome: only Chromium device emulation in automation.
 - The clean-clone and offline (no egress) checks of G3 were not rerun for this change.
 - Runs imported before the `run-tests.sh` status fix are labelled Partial although every suite ran.
+
+# Verification record (US-4.1 / R12: Government lookup contract)
+
+Base revision: `fe79b43` plus the US-4.1 changes (uncommitted on `fix/openapi-spec-conformance`; commits by the
+engineer). Host: macOS arm64, Docker 29.1.3, .NET SDK 10.0.402. Docker checks used an isolated Compose project
+(`-p caseintake-r12`), removed afterwards with `down -v`; demo volumes were not touched. Date: 2026-10-20.
+
+## Commands and results
+
+| Command | Result |
+|---|---|
+| `shasum -a 256 docs/contracts/veteran-lookup.spec.openapi.yaml` | `bbd95fc2a187220e9bfc1860c84fbf148bfc8b10282ae82f13c05bbb84730f26` (35 lines, UTF-8, LF), identical to the text of specification 4.6 in the Technical Build Specification |
+| `dotnet restore tests/CaseIntake.VeteranLookup.Tests --force-evaluate` | only `tests/CaseIntake.VeteranLookup.Tests/packages.lock.json` changed (adds `Microsoft.OpenApi.YamlReader` 2.12.2, `SharpYaml` 2.1.5); no audit warnings |
+| `dotnet build CaseIntake.sln -c Release` | 0 warnings, 0 errors |
+| `dotnet test tests/CaseIntake.VeteranLookup.Tests -c Release` (host, in-process target) | 86 passed, 0 failed |
+| Negative check: mock's 200 description changed to "OK" and its summary removed, then restored | `The_implementation_conforms_to_the_Government_contract` failed, listing `missing …/post/summary` and `differs …/responses/200/description`; passes again after restore |
+| `dotnet test tests/CaseIntake.IntegrationTests -c Release` (host, Testcontainers) | 316 passed, 0 failed |
+| `scripts/update-contract-snapshots.sh` | dataset snapshot unchanged; `docs/contracts/` untouched |
+| `docker compose -p caseintake-r12 up --build -d --wait` | `db`, `veteran-lookup`, `web` healthy; `migrator` exit 0 |
+| Q&A hash command from [demo.md](demo.md) against the running `veteran-lookup` container | `bbd95fc2…0f26`, the same as the committed file; `/openapi/v1.yaml` is served as `application/yaml` |
+| `dotnet test tests/CaseIntake.VeteranLookup.Tests -c Release` in the pinned SDK image on the Compose network with `VeteranLookup__BaseUrl=http://veteran-lookup:8081` | 107 passed, 0 failed (86 in-process + 21 against the container, including served bytes, spec-shaped 200/404 and the client's wire request) |
+| SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
+
+## Not verified / blocked
+
+- **Full `docker compose run --rm tests` with a rebuilt test image: blocked.** Rebuilding `caseintake-eval` failed in
+  the Playwright dependency step because `snapshot.ubuntu.com` (the pinned apt snapshot `20261016T000000Z`) answered
+  `503 Service Unavailable`. External outage; no repository change involved. Rerun when the snapshot service is back.
+- `docker compose run --rm tests` does **not** rebuild the `tests` image (profile `tests`; `up --build` skips it). A
+  run against a stale local `caseintake-eval:local` passes or fails on old code. Rebuild first with
+  `scripts/run-all-tests.sh` or `docker compose run --build --rm tests`. A fresh clone has no image and builds it.
+- The stale-image run showed one timing failure in an unchanged test,
+  `VeteranLookupClientTests.A_hanging_service_is_Unavailable_within_the_total_budget_after_one_retry`, under amd64
+  emulation; it passes on the host and in the SDK-container run above.
+- `SyntheticSsnGuardTests` is not on this branch yet; the single-value exemption for the verbatim file is added when
+  that guard reaches this branch (assumption D16).
