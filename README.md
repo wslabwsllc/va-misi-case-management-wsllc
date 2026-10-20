@@ -399,57 +399,12 @@ Phones and tablets: the app adapts below 1024 px and 768 px and is installable a
 
 </details>
 
-## Architecture
+---
 
-A modular monolith: one Blazor Web App (Interactive Server; the Identity account pages are static SSR) hosts the case,
-attachment, identity and test-results modules, which call each other only through `CaseIntake.Contracts`
-(architecture tests enforce this). Docker Compose runs:
+<details>
+<summary><b>Documents</b></summary>
 
-```text
-browser ──HTTP :8080──> web (Blazor host + modules) ──EF Core/Npgsql──> db (PostgreSQL 18)
-                          │                         └─────────────────> attachments volume
-                          └──HTTP──> veteran-lookup (mock of the Government definition, spec 4.6)
-migrator: one-shot; applies migrations and seeds synthetic data, then web starts
-tests (profile): runs every suite, including Playwright + axe against its own web-e2e copy of the app
-```
-
-Decisions, alternatives and tradeoffs: [ADRs](docs/adr/README.md).
-
-## Exact versions
-
-| Component | Version |
-|---|---|
-| .NET SDK | 10.0.402 |
-| .NET runtime (`Microsoft.NETCore.App`) | 10.0.13 |
-| ASP.NET Core and Blazor (`Microsoft.AspNetCore.App`) | 10.0.13 |
-| EF Core (`Microsoft.EntityFrameworkCore`) | 10.0.13 |
-| Npgsql EF Core provider | 10.0.3 |
-| PostgreSQL | 18.6 |
-
-Every other package, image digest and tool: [docs/versions.md](docs/versions.md).
-
-## Known limitations
-
-Local evaluation build, not a production deployment. In short (full list:
-[docs/assumptions-and-limitations.md](docs/assumptions-and-limitations.md#limitations-out-of-scope-per-specification-47-and-plan-07)):
-
-- **Identity:** local ASP.NET Core Identity with seeded synthetic users; no SSO/PIV, password reset, self-registration
-  or 2FA. Sign-out does not revoke a previously captured cookie (valid up to 8 hours); role changes reach open
-  sessions within one minute.
-- **Transport:** plain HTTP on `localhost:8080`, so no `Secure` cookie, no HSTS, and the PWA works only on localhost.
-- **Data:** all data is synthetic; the veteran lookup is a mock of the Government definition (spec 4.6), and a real
-  service may differ on errors it does not define.
-- **Attachments:** no malware scanning (leading-byte checks only), no deletion, no per-case count limit.
-- **Operations:** logs to stdout only; no metrics, tracing, alerting, backup, disaster recovery or high availability.
-- **Audit:** the trail is append-only for application operations, not against a database administrator.
-- **Platform:** containers are `linux/amd64`; Apple Silicon runs them under emulation, which is slower.
-- **Accessibility:** WCAG 2.2 AA is the yardstick; automated axe and keyboard tests pass, but the manual review is
-  still open ([docs/accessibility-review.md](docs/accessibility-review.md)).
-
-## Documents
-
-- [Epic plan](docs/Epic_Plan.md)
-- [Implementation prompt](docs/implementation-prompt.md)
+- [Architecture](docs/architecture.md)
 - [ADRs](docs/adr/README.md)
 - [Versions](docs/versions.md)
 - [Assumptions and limitations](docs/assumptions-and-limitations.md)
@@ -457,7 +412,22 @@ Local evaluation build, not a production deployment. In short (full list:
 - [Demo walkthrough](docs/demo.md)
 - [Testing](docs/testing.md)
 - [Docker troubleshooting](docs/docker-troubleshooting.md)
-- [Accessibility review](docs/accessibility-review.md)
-- [Dependency vulnerability scan](docs/security-scan.md)
-- [Contributor declaration](docs/contributor-declaration.md)
-- [Change-implementation record](docs/change-implementation-record.md)
+- [Accessibility review](docs/accessibility-review.md).
+- [Epic plan](docs/Epic_Plan.md)
+- [Implementation prompt](docs/implementation-prompt.md)
+Traceability and the requirement-change note are produced at G3/G4.
+
+</details>
+
+---
+
+<details>
+<summary><b>Contributors</b></summary>
+
+- Dr. Janar Senthurpandi
+- Alhagie Bai Cham
+- Kabir Shaikh
+- Rikhin Bhuta
+- Antony Pon Jeyakumar Selvaraj
+
+</details>
