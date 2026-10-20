@@ -73,6 +73,11 @@ uncached build. The Chromium build itself is fixed by
 | `bunit` | 2.11.3 |
 | `Microsoft.Playwright` | 1.63.0 |
 | `Deque.AxeCore.Playwright` | 4.13.0 |
+| `Microsoft.OpenApi.YamlReader` | 2.12.2 |
+
+`Microsoft.OpenApi.YamlReader` is used only by `CaseIntake.VeteranLookup.Tests` to parse the Government lookup contract
+(TBS 4.6); it brings `SharpYaml` 2.1.5 (MIT) transitively, recorded in that project's lock file. Neither ships in an
+application image (assumption D13).
 
 Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
 

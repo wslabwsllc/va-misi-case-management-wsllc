@@ -3,9 +3,10 @@
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
   </PropertyGroup>
-  <!-- E4 lookup tests: the mock service, the generated OpenAPI contract and its committed snapshot, the dataset, and the
-       resilient client. Runs against the in-process mock always and also against the Compose veteran-lookup service
-       when VeteranLookup__BaseUrl is set (the tests service sets it). No TestKit: that would pull in the web app. -->
+  <!-- E4 lookup tests: the mock service, conformance to the Government contract (specification 4.6, parsed with
+       Microsoft.OpenApi.YamlReader, tests only), spec-driven behaviour, the dataset, and the resilient client. Runs
+       against the in-process mock always and also against the Compose veteran-lookup service when
+       VeteranLookup__BaseUrl is set (the tests service sets it). No TestKit: that would pull in the web app. -->
   <ItemGroup>
     <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Mock\CaseIntake.VeteranLookup.Mock.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Client\CaseIntake.VeteranLookup.Client.csproj" />
@@ -16,6 +17,7 @@
     <PackageReference Include="xunit.runner.visualstudio" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
+    <PackageReference Include="Microsoft.OpenApi.YamlReader" />
   </ItemGroup>
   <ItemGroup>
     <FrameworkReference Include="Microsoft.AspNetCore.App" />

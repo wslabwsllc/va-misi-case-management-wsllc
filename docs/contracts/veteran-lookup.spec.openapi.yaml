@@ -1,0 +1,35 @@
+openapi: 3.0.3
+info:
+  title: Veteran Lookup Service
+  version: 1.0.0
+paths:
+  /veterans/lookup:
+    post:
+      summary: Look up a veteran by SSN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ssn]
+              properties:
+                ssn:
+                  type: string
+                  example: '123-45-6789'
+      responses:
+        '200':
+          description: Veteran found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name:
+                    type: string
+                    example: John Q Public
+                  address:
+                    type: string
+                    example: 810 Vermont Ave NW, Washington, DC 20420
+        '404':
+          description: Not found

@@ -32,5 +32,7 @@
     <PackageVersion Include="bunit" Version="2.11.3" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.63.0" />
     <PackageVersion Include="Deque.AxeCore.Playwright" Version="4.13.0" />
+    <!-- Tests only: parses the Government OpenAPI definition (TBS 4.6) for the lookup conformance test. -->
+    <PackageVersion Include="Microsoft.OpenApi.YamlReader" Version="2.12.2" />
   </ItemGroup>
 </Project>

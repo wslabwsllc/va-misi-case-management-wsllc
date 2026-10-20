@@ -74,7 +74,8 @@ services:
     restart: "no"
 
   # Owned by E4: src/CaseIntake.VeteranLookup.Mock/Dockerfile builds the synthetic lookup mock (POST /veterans/lookup,
-  # /health, /openapi/v1.yaml). Not published to the host; web and tests reach it on the Compose network.
+  # /health, /openapi/v1.yaml = the Government contract, verbatim). Not published to the host; web and tests reach it
+  # on the Compose network.
   # The probe is inline (same logic as scripts/healthcheck.sh) so it needs only bash, which the Debian/Ubuntu
   # mcr.microsoft.com/dotnet/aspnet images ship; it does not depend on files from the eval image.
   veteran-lookup:

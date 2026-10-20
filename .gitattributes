@@ -3,3 +3,6 @@
 *.sh text eol=lf
 Dockerfile text eol=lf
 *.yml text eol=lf
+# YAML too: docs/contracts/veteran-lookup.spec.openapi.yaml is the Government's definition (TBS 4.6), pinned by SHA-256
+# and served byte for byte by the lookup mock, so a CRLF checkout must not change its bytes.
+*.yaml text eol=lf

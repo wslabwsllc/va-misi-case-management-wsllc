@@ -62,6 +62,56 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
+    // Specification 4.6: the service conforms to the Government definition. These requests are built only from the
+    // definition (path, method, content type, required property) and the responses are checked against its schemas.
+    [Theory]
+    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    public async Task A_request_shaped_by_the_spec_for_a_known_SSN_gets_the_spec_200_shape(string target)
+    {
+        var spec = await GovernmentSpec.GetAsync();
+        using var client = LookupTarget.CreateClient(target, factory);
+
+        using var request = spec.CreateLookupRequest(VeteranDatasetGenerator.KnownFoundSsn);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Contains("200", spec.ResponseStatuses);
+        Assert.Equal(spec.ResponseContentType("200"), response.Content.Headers.ContentType?.MediaType);
+        using var body = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        GovernmentSpec.AssertConforms(body.RootElement, spec.ResponseSchema("200"));
+    }
+
+    [Theory]
+    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    public async Task A_request_shaped_by_the_spec_for_an_unknown_SSN_gets_the_spec_404(string target)
+    {
+        var spec = await GovernmentSpec.GetAsync();
+        using var client = LookupTarget.CreateClient(target, factory);
+
+        using var request = spec.CreateLookupRequest(VeteranDatasetGenerator.KnownAbsentSsn);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.Contains("404", spec.ResponseStatuses);
+    }
+
+    // D16: the definition's own example SSN is illustrative and not in the synthetic dataset (every dataset SSN is
+    // 900-999, VeteranDatasetTests). The value is read from the definition, so no issuable SSN is written in this file.
+    [Theory]
+    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    public async Task The_spec_example_SSN_is_not_in_the_synthetic_dataset(string target)
+    {
+        var spec = await GovernmentSpec.GetAsync();
+        var required = spec.RequestSchema.GetProperty("required")[0].GetString()!;
+        var example = spec.RequestSchema.GetProperty("properties").GetProperty(required).GetProperty("example").GetString()!;
+        using var client = LookupTarget.CreateClient(target, factory);
+
+        using var request = spec.CreateLookupRequest(example);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     public static TheoryData<string, string> InvalidBodies()
     {
         var data = new TheoryData<string, string>();

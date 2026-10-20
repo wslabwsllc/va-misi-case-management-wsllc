@@ -22,7 +22,7 @@ folder), so browser tests never change the demo data. Nothing is downloaded at r
 
 | Project | Type | What it covers |
 |---|---|---|
-| `CaseIntake.Cases.Tests`, `Identity.Tests`, `Attachments.Tests`, `VeteranLookup.Tests` | Unit | domain rules, permission matrix, adapters, storage, lookup client and mock |
+| `CaseIntake.Cases.Tests`, `Identity.Tests`, `Attachments.Tests`, `VeteranLookup.Tests` | Unit | domain rules, permission matrix, adapters, storage, lookup client and mock, conformance to the Government lookup contract (spec 4.6) |
 | `CaseIntake.Web.Tests` | Component (bUnit) | layout landmarks, form kit attributes and focus, pages per role (bUnit authorization context), dashboard data/empty/error, test results pages |
 | `CaseIntake.IntegrationTests` | Integration (PostgreSQL) | services, migrations, identity and authorization, endpoints, static asset delivery, test results import/redaction/retention |
 | `CaseIntake.E2E` | End-to-end (Playwright Chromium headless + axe-core) | framework JS in Docker, primary keyboard workflow, roles, access denied, Not Found, 390x844 / 375x812 / 768x1024 / 1440x900 layouts, test results module |

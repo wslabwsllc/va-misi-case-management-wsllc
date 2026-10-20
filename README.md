@@ -189,9 +189,11 @@ permissions: [ADR 0007](docs/adr/0007-roles-and-permissions.md). Guided tour: [d
 
 **Veteran lookup** is a synthetic mock (`veteran-lookup`), reachable only inside the Compose network at
 `http://veteran-lookup:8081`. The app accepts `NNN-NN-NNNN` or nine digits. All 50 records are synthetic (SSN area
-numbers 900-999 are never issued); see `src/CaseIntake.VeteranLookup.Mock/Data/veterans.json`. Contract:
-[docs/contracts/veteran-lookup.openapi.yaml](docs/contracts/veteran-lookup.openapi.yaml)
-([ADR 0008](docs/adr/0008-veteran-lookup-mock-and-client.md)).
+numbers 900-999 are never issued); see `src/CaseIntake.VeteranLookup.Mock/Data/veterans.json`. Contract: the
+Government's definition from specification 4.6, committed verbatim as
+[docs/contracts/veteran-lookup.spec.openapi.yaml](docs/contracts/veteran-lookup.spec.openapi.yaml) and served unchanged
+by the mock at `/openapi/v1.yaml`. `OpenApiConformanceTests` prove the implementation conforms to it; the 400/415
+responses are documented extensions ([ADR 0008](docs/adr/0008-veteran-lookup-mock-and-client.md), assumptions D1, D11-D16).
 
 | SSN | Result |
 |---|---|
@@ -288,7 +290,7 @@ To use your own PostgreSQL server, change `ConnectionStrings:CaseIntake`. Outsid
 ```bash
 dotnet test                                      # starts a disposable PostgreSQL via Testcontainers (Docker must run)
 dotnet ef migrations add <Epic>_<Change> -p src/CaseIntake.Persistence -s src/CaseIntake.Persistence -o Migrations
-scripts/update-contract-snapshots.sh             # after changing the lookup mock: regenerates the OpenAPI YAML and dataset
+scripts/update-contract-snapshots.sh             # regenerates the synthetic lookup dataset (never the Government contract)
 ```
 
 Set `TESTKIT_POSTGRES_ADMIN` to an admin connection string to run tests against an existing server. The browser suite
@@ -373,7 +375,7 @@ Out of scope here (see [docs/assumptions-and-limitations.md](docs/assumptions-an
 | `src/CaseIntake.Cases` | `ICaseService` (intake, detail, edit, list, status workflow, audit trail) and the case seed |
 | `src/CaseIntake.Attachments` | `IAttachmentService` (upload, list, open), filesystem store, startup storage reconciler |
 | `src/CaseIntake.VeteranLookup.Client` | Typed, resilient `IVeteranLookupClient` |
-| `src/CaseIntake.VeteranLookup.Mock` | Standalone synthetic lookup service; source of the OpenAPI contract |
+| `src/CaseIntake.VeteranLookup.Mock` | Standalone synthetic lookup service; serves the Government contract (spec 4.6) verbatim |
 | `src/CaseIntake.Identity` | Identity and cookies, permission policies, `ICurrentUser`, security headers, demo-user seed |
 | `src/CaseIntake.Persistence` | `AppDbContext`, Identity types, migrations, seeding runner, UTC conventions |
 | `src/CaseIntake.ServiceDefaults` | JSON logging with SSN scrubbing, operation scopes, health checks |
@@ -384,7 +386,7 @@ Out of scope here (see [docs/assumptions-and-limitations.md](docs/assumptions-an
 | `tests/CaseIntake.Cases.Tests` | Workflow (all 25 pairs), text rules, change detection, permissions |
 | `tests/CaseIntake.Identity.Tests` | Permission matrix, actor snapshots, `ICurrentUser`, policies, CSP, return URLs |
 | `tests/CaseIntake.Attachments.Tests` | File-name sanitizing, type allowlist, filesystem store |
-| `tests/CaseIntake.VeteranLookup.Tests` | Mock behaviour, OpenAPI contract and snapshot, dataset, client retries and timeouts |
+| `tests/CaseIntake.VeteranLookup.Tests` | Conformance to the Government contract, spec-driven mock and client behaviour, dataset, client retries and timeouts |
 | `tests/CaseIntake.IntegrationTests` | Architecture, migrations, seeding, logging, health, services, authorization, static assets, exports (PostgreSQL) |
 | `tests/CaseIntake.Web.Tests` | bUnit component tests: layout landmarks, form kit, pages per role, dashboard, test results |
 | `tests/CaseIntake.E2E` | Playwright + axe browser suite against the Docker-hosted app (keyboard, roles, viewports, framework JS) |
