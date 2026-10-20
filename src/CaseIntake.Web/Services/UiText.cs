@@ -1,4 +1,5 @@
 using System.Globalization;
+using CaseIntake.Domain;
 using CaseIntake.Domain.Cases;
 
 namespace CaseIntake.Web.Services;
@@ -40,14 +41,14 @@ public static class UiText
     public static string DueDate(DateOnly? dueOn) =>
         dueOn is { } due ? due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "No due date";
 
-    /// <summary>A short due-date status relative to today (UTC): "Overdue by 3 days", "Due today", "Due in 5 days".</summary>
-    public static string? DueState(CaseStatus status, DateOnly? dueOn, DateOnly todayUtc)
+    /// <summary>A short due-date status relative to today (ET): "Overdue by 3 days", "Due today", "Due in 5 days".</summary>
+    public static string? DueState(CaseStatus status, DateOnly? dueOn, DateOnly today)
     {
         if (dueOn is not { } due || status is CaseStatus.Resolved or CaseStatus.Closed)
         {
             return null;
         }
-        var days = due.DayNumber - todayUtc.DayNumber;
+        var days = due.DayNumber - today.DayNumber;
         return days switch
         {
             < 0 => $"Overdue by {Days(-days)}",
@@ -58,7 +59,8 @@ public static class UiText
 
     private static string Days(int days) => days == 1 ? "1 day" : string.Create(CultureInfo.InvariantCulture, $"{days} days");
 
-    public static DateOnly TodayUtc(TimeProvider time) => DateOnly.FromDateTime(time.GetUtcNow().UtcDateTime);
+    /// <summary>Today's Eastern calendar date.</summary>
+    public static DateOnly Today(TimeProvider time) => EasternTime.Date(time.GetUtcNow());
 
     /// <summary>
     /// The label of a transition button. The available targets come from the server (<c>AllowedNextStatuses</c>);
@@ -67,13 +69,13 @@ public static class UiText
     public static string TransitionLabel(CaseStatus from, CaseStatus to) =>
         CaseWorkflow.IsReopen(from, to) ? $"Reopen (move to {Status(to)})" : $"Move to {Status(to)}";
 
-    /// <summary>All stored times are UTC and shown with an explicit UTC label (OQ-19).</summary>
-    public static string Utc(DateTimeOffset value) =>
-        value.UtcDateTime.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC";
+    /// <summary>
+    /// Stored UTC times are shown in Eastern time without a zone suffix; the column header or field label says "(ET)".
+    /// </summary>
+    public static string Time(DateTimeOffset value) =>
+        EasternTime.From(value).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
 
-    public static string UtcDate(DateTimeOffset value) =>
-        value.UtcDateTime.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-
+    /// <summary>For machine-readable exports (CSV), which stay in UTC.</summary>
     public static string IsoUtc(DateTimeOffset value) =>
         value.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture);
 

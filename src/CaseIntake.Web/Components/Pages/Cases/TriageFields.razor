@@ -55,7 +55,7 @@
         @Error(nameof(ITriageForm.AssignedTo))
     </div>
     <div class="field">
-        <label class="field__label" for="@($"{IdPrefix}-due")">Due date (UTC) <span class="field__required">(optional)</span></label>
+        <label class="field__label" for="@($"{IdPrefix}-due")">Due date (ET) <span class="field__required">(optional)</span></label>
         <input id="@($"{IdPrefix}-due")" type="date" @bind="Model.DueOn" @bind:format="yyyy-MM-dd" @bind:after="OnChangedAsync"
                min="2000-01-01" max="2100-12-31"
                aria-invalid="@Invalid(nameof(ITriageForm.DueOn))" aria-describedby="@Described(nameof(ITriageForm.DueOn), hint: DueHint is not null)" />

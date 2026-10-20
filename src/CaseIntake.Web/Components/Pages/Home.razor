@@ -3,6 +3,7 @@
 @implements IDisposable
 @using System.Globalization
 @using CaseIntake.Contracts.Cases
+@using CaseIntake.Domain
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Components.Pages.Cases
 @using CaseIntake.Web.Services
@@ -78,7 +79,7 @@ else if (_data is { } d)
             <div class="grid grid--3 grid--cards">
                 <section class="card card--chart" aria-labelledby="trend-heading">
                     <h2 id="trend-heading" class="visually-hidden">Case volume trend</h2>
-                    <Chart Id="chart-volume" Title="Case volume trend" Description="Cases created per month (UTC), last 12 months."
+                    <Chart Id="chart-volume" Title="Case volume trend" Description="Cases created per month (ET), last 12 months."
                            Categories="@d.CreatedByMonth.Select(m => m.Label).ToList()" AxisLabels="@MonthAxis(d.CreatedByMonth)"
                            Series="@([new ChartSeries("Cases created", d.CreatedByMonth.Select(m => (double)m.Count).ToList())])"
                            Links="@d.CreatedByMonth.Select(m => (string?)CaseListLinks.CreatedIn(m.StartUtc, m.EndUtc)).ToList()"
@@ -95,7 +96,7 @@ else if (_data is { } d)
                 <section class="card card--chart desktop-only" aria-labelledby="resolution-heading">
                     <h2 id="resolution-heading" class="visually-hidden">Monthly resolution trend</h2>
                     <Chart Id="chart-resolution" Title="Monthly resolution trend"
-                           Description="Resolved or closed cases by the month of their last update (UTC)."
+                           Description="Resolved or closed cases by the month of their last update (ET)."
                            Categories="@d.CompletedByMonth.Select(m => m.Label).ToList()" AxisLabels="@MonthAxis(d.CompletedByMonth)"
                            Series="@([new ChartSeries("Resolved or closed", d.CompletedByMonth.Select(m => (double)m.Count).ToList())])"
                            Links="@d.CompletedByMonth.Select(m => (string?)CaseListLinks.CompletedIn(m.StartUtc, m.EndUtc)).ToList()"
@@ -139,7 +140,7 @@ else if (_data is { } d)
                 <CaseListCard Id="recent-activity" Title="Recent activity" Cases="d.RecentActivity" Meta="CaseListMeta.Updated" MoreHref="notifications"
                               Empty="No recent activity." />
                 <CaseListCard Id="attention" Title="Cases requiring attention" Subtitle="Open and past their due date, most overdue first"
-                              Cases="d.RequiringAttention" Meta="CaseListMeta.Due" TodayUtc="d.TodayUtc" Class="desktop-only"
+                              Cases="d.RequiringAttention" Meta="CaseListMeta.Due" Today="d.Today" Class="desktop-only"
                               MoreHref="cases?overdue=true&sort=DueOn&dir=asc" Empty="No overdue cases." />
                 <CaseListCard Id="recent-cases" Title="Recent cases" Subtitle="@($"New cases created in the last {d.NewCasesDays} days, newest first")"
                               Cases="d.NewCases" Meta="CaseListMeta.Created" Class="desktop-only"
@@ -161,7 +162,7 @@ else if (_data is { } d)
     private string? _error;
 
     private string Subtitle => _data is { } d
-        ? $"Cases you are allowed to see. Updated {d.GeneratedAtUtc.UtcDateTime.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)} UTC."
+        ? $"Cases you are allowed to see. Updated {EasternTime.From(d.GeneratedAtUtc).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}."
         : "Cases you are allowed to see.";
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -197,7 +198,7 @@ else if (_data is { } d)
         if (_error is null && _data is { } d)
         {
             _refreshGeneration++;
-            Announcer.Announce($"Dashboard refreshed at {d.GeneratedAtUtc.UtcDateTime.ToString("HH:mm:ss", CultureInfo.InvariantCulture)} UTC");
+            Announcer.Announce($"Dashboard refreshed at {EasternTime.From(d.GeneratedAtUtc).ToString("HH:mm:ss", CultureInfo.InvariantCulture)}");
         }
     }
 

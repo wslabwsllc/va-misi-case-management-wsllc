@@ -65,9 +65,9 @@ public static class TestResultsText
 
     public static string ShortCommit(string? commit) => commit is null ? "unknown" : commit.Length > 10 ? commit[..10] : commit;
 
-    /// <summary>A short run label for chart axes: the UTC start as MM-dd HH:mm.</summary>
+    /// <summary>A short run label for chart axes: the Eastern start as MM-dd HH:mm.</summary>
     public static string ChartLabel(TestRunSummaryDto run) =>
-        run.StartedAtUtc.UtcDateTime.ToString("MM-dd HH:mm", CultureInfo.InvariantCulture);
+        Domain.EasternTime.From(run.StartedAtUtc).ToString("MM-dd HH:mm", CultureInfo.InvariantCulture);
 
     public static string RunHref(long runId) => $"test-results/runs/{runId}";
 

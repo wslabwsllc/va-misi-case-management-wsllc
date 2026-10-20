@@ -51,7 +51,7 @@ else if (_page is { } page)
                         <div class="record-card__meta">
                             <span>Case @c.Id</span>
                             <span>Next step: @NextStep(c.Status)</span>
-                            <span>Waiting since @UiText.Utc(c.UpdatedAtUtc)</span>
+                            <span>Waiting since @UiText.Time(c.UpdatedAtUtc)</span>
                         </div>
                     </li>
                 }

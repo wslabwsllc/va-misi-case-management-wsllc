@@ -116,7 +116,7 @@ cd va-misi-case-management-wsllc
 docker compose up --build --wait       # runs in the background, returns once web is healthy
 ```
 
-Open <http://localhost:8080> and sign in. The first build takes several minutes. No `.env` file or secrets are needed:
+Open <http://localhost:8080>: the landing page links to sign-in. The first build takes several minutes. No `.env` file or secrets are needed:
 every setting, including the synthetic local database credentials, is in `docker-compose.yml`.
 
 Startup order: `db` (PostgreSQL 18) → `migrator` (migrates, seeds, exits 0) → `veteran-lookup` → `web`. `web` waits for

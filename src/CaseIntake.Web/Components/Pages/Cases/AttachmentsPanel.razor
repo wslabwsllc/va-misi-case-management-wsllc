@@ -86,7 +86,7 @@
                     <tr>
                         <th scope="col">Name</th>
                         <th scope="col" class="num">Size</th>
-                        <th scope="col" class="desktop-only">Uploaded at (UTC)</th>
+                        <th scope="col" class="desktop-only">Uploaded at (ET)</th>
                         <th scope="col" class="desktop-only">By</th>
                         <th scope="col"><span class="visually-hidden">Actions</span></th>
                     </tr>
@@ -97,10 +97,10 @@
                         <tr>
                             <td>
                                 @a.FileName
-                                <div class="compact-list__meta mobile-only">@UiText.Utc(a.UploadedAtUtc) · @a.UploadedBy</div>
+                                <div class="compact-list__meta mobile-only">@UiText.Time(a.UploadedAtUtc) · @a.UploadedBy</div>
                             </td>
                             <td class="num nowrap">@UiText.FileSize(a.SizeBytes)</td>
-                            <td class="nowrap desktop-only">@UiText.Utc(a.UploadedAtUtc)</td>
+                            <td class="nowrap desktop-only">@UiText.Time(a.UploadedAtUtc)</td>
                             <td class="desktop-only">@a.UploadedBy</td>
                             <td>
                                 <AuthorizeView Policy="@Permissions.AttachmentsDownload">

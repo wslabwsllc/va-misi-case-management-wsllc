@@ -3,6 +3,7 @@ using CaseIntake.Contracts.Common;
 using CaseIntake.Contracts.Security;
 using CaseIntake.Domain.Cases;
 using Microsoft.Extensions.Options;
+using CaseIntake.Domain;
 
 namespace CaseIntake.Web.Services;
 
@@ -28,10 +29,10 @@ public sealed record MonthCount(DateOnly Month, int Count)
 {
     public string Label => Month.ToString("MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
 
-    /// <summary>Inclusive UTC bounds of the month, for drill-through links to the case list.</summary>
-    public DateTimeOffset StartUtc => new(Month.Year, Month.Month, 1, 0, 0, 0, TimeSpan.Zero);
+    /// <summary>Inclusive bounds of the Eastern calendar month, for drill-through links to the case list.</summary>
+    public DateTimeOffset StartUtc => EasternTime.StartOfDay(Month);
 
-    public DateTimeOffset EndUtc => StartUtc.AddMonths(1).AddTicks(-1);
+    public DateTimeOffset EndUtc => EasternTime.StartOfDay(Month.AddMonths(1)).AddTicks(-1);
 }
 
 /// <summary>Everything the dashboard shows, computed from one snapshot so the numbers agree with each other.</summary>
@@ -55,7 +56,7 @@ public sealed record CaseDashboard(
     IReadOnlySet<CaseStatus> ActionableStatuses,
     string? CurrentUserName,
     int NewCasesDays,
-    DateOnly TodayUtc,
+    DateOnly Today,
     bool Partial,
     int Scanned,
     DateTimeOffset GeneratedAtUtc);
@@ -66,7 +67,7 @@ public sealed record CaseDashboard(
 /// (ADR 0011, issue #21):
 /// <list type="bullet">
 /// <item>Open: New, Triaged or In Progress. Pending review: Resolved (waiting to be closed). Completed: Resolved or Closed.</item>
-/// <item>Overdue: open and its due date is before today (UTC), the same rule as the case list's Overdue filter.</item>
+/// <item>Overdue: open and its due date is before today (ET), the same rule as the case list's Overdue filter.</item>
 /// <item>Assigned to me: open cases whose owner is the signed-in user.</item>
 /// <item>My pending tasks: cases in a status from which the signed-in user holds a transition permission (the same
 /// rule that produces the status buttons).</item>
@@ -103,7 +104,7 @@ public sealed class CaseDashboardService(
 
         var all = snapshot.Items;
         var now = time.GetUtcNow();
-        var today = DateOnly.FromDateTime(now.UtcDateTime);
+        var today = EasternTime.Date(now);
         var me = UserNameOf(actor);
         var newSince = now.AddDays(-Settings.NewCasesDays);
         var byStatus = Enum.GetValues<CaseStatus>().ToDictionary(s => s, s => all.Count(c => c.Status == s));
@@ -135,7 +136,7 @@ public sealed class CaseDashboardService(
             ActionableStatuses: actionable,
             CurrentUserName: me,
             NewCasesDays: Settings.NewCasesDays,
-            TodayUtc: today,
+            Today: today,
             Partial: snapshot.Items.Count < snapshot.TotalCount,
             Scanned: snapshot.Items.Count,
             GeneratedAtUtc: now));
@@ -181,14 +182,16 @@ public sealed class CaseDashboardService(
 
     private static List<DateOnly> Months(DateTimeOffset now, int count)
     {
-        var current = new DateOnly(now.UtcDateTime.Year, now.UtcDateTime.Month, 1);
+        var today = EasternTime.Date(now);
+        var current = new DateOnly(today.Year, today.Month, 1);
         return [.. Enumerable.Range(0, Math.Max(count, 1)).Select(i => current.AddMonths(i - count + 1))];
     }
 
     private static List<MonthCount> CountByMonth(List<DateOnly> months, IEnumerable<DateTimeOffset> times)
     {
         var counts = times
-            .Select(t => new DateOnly(t.UtcDateTime.Year, t.UtcDateTime.Month, 1))
+            .Select(EasternTime.Date)
+            .Select(d => new DateOnly(d.Year, d.Month, 1))
             .GroupBy(m => m)
             .ToDictionary(g => g.Key, g => g.Count());
         return [.. months.Select(m => new MonthCount(m, counts.GetValueOrDefault(m)))];

@@ -53,6 +53,16 @@ public static class IdentityModule
             options.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
             options.SlidingExpiration = true;
+            // A visitor opening the site root sees the landing page; deep links still go to sign-in with a return URL.
+            var redirectToLogin = options.Events.OnRedirectToLogin;
+            options.Events.OnRedirectToLogin = context =>
+            {
+                if (context.Request.Path == "/")
+                {
+                    context.RedirectUri = context.Request.PathBase + AccountRoutes.Welcome;
+                }
+                return redirectToLogin(context);
+            };
         });
         // Cookie-authenticated HTTP requests re-check the security stamp as often as circuits do.
         services.AddOptions<SecurityStampValidatorOptions>().Configure<IOptions<IdentityModuleOptions>>(

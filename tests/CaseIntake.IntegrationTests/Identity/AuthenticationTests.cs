@@ -24,10 +24,38 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
     {
         using var session = fixture.NewSession();
 
-        using var response = await session.Client.GetAsync("/");
+        using var response = await session.Client.GetAsync("/cases");
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("http://localhost/account/login?ReturnUrl=%2F", response.Headers.Location!.ToString());
+        Assert.Equal("http://localhost/account/login?ReturnUrl=%2Fcases", response.Headers.Location!.ToString());
+    }
+
+    [Fact]
+    public async Task An_anonymous_visitor_at_the_site_root_gets_the_landing_page_with_a_sign_in_link()
+    {
+        using var session = fixture.NewSession();
+
+        using var root = await session.Client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.Redirect, root.StatusCode);
+        Assert.Equal("/welcome", root.Headers.Location!.AbsolutePath);
+
+        using var page = await session.Client.GetAsync("/welcome");
+        Assert.Equal(HttpStatusCode.OK, page.StatusCode);
+        var html = await page.Content.ReadAsStringAsync();
+        Assert.Contains("<h1>Case Intake and Triage</h1>", html);
+        Assert.Contains("href=\"account/login\" data-testid=\"landing-sign-in\"", html);
+    }
+
+    [Fact]
+    public async Task A_signed_in_visitor_on_the_landing_page_is_offered_the_dashboard()
+    {
+        using var session = fixture.NewSession();
+        await session.SignInAsync("auditor@example.test");
+
+        var html = await session.Client.GetStringAsync("/welcome");
+
+        Assert.Contains("data-testid=\"landing-dashboard\"", html);
+        Assert.DoesNotContain("landing-sign-in", html);
     }
 
     [Theory]

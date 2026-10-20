@@ -8,7 +8,7 @@ namespace CaseIntake.Web.Components.Pages.Cases;
 /// The case list view state as it appears in the URL (E5-S3: reload or share the URL to restore the view). Parsing is
 /// lenient: unknown or out-of-range values fall back to the defaults (25 per page, Updated descending, OQ-4) instead of
 /// failing the page; the service validates the final query again. Issue #21/#22 added priority, category, owner,
-/// overdue and created/updated date-range filters (dates are inclusive UTC days, yyyy-MM-dd).
+/// overdue and created/updated date-range filters (dates are inclusive Eastern days, yyyy-MM-dd).
 /// </summary>
 public sealed record CaseListState(
     int Page,
@@ -108,10 +108,10 @@ public sealed record CaseListState(
         UpdatedToUtc: EndOfDay(UpdatedTo));
 
     private static DateTimeOffset? StartOfDay(DateOnly? day) =>
-        day is { } d ? new DateTimeOffset(d.ToDateTime(TimeOnly.MinValue), TimeSpan.Zero) : null;
+        day is { } d ? Domain.EasternTime.StartOfDay(d) : null;
 
     private static DateTimeOffset? EndOfDay(DateOnly? day) =>
-        day is { } d ? new DateTimeOffset(d.ToDateTime(TimeOnly.MaxValue), TimeSpan.Zero) : null;
+        day is { } d ? Domain.EasternTime.EndOfDay(d) : null;
 
     /// <summary>Query-string values for <c>NavigationManager.GetUriWithQueryParameters</c>; defaults are omitted (null).</summary>
     public IReadOnlyDictionary<string, object?> ToQueryParameters() => new Dictionary<string, object?>

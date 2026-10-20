@@ -61,8 +61,8 @@ else
             <div class="card__header"><h2 id="execution-heading">Execution</h2></div>
             <dl class="field-list">
                 <dt>Run ID</dt><dd>@e.Run.Id (@e.Run.RunKey)</dd>
-                <dt>Started (UTC)</dt><dd>@(e.StartedAtUtc is { } s ? UiText.Utc(s) : "Not recorded")</dd>
-                <dt>Finished (UTC)</dt><dd>@(e.FinishedAtUtc is { } f ? UiText.Utc(f) : "Not recorded")</dd>
+                <dt>Started (ET)</dt><dd>@(e.StartedAtUtc is { } s ? UiText.Time(s) : "Not recorded")</dd>
+                <dt>Finished (ET)</dt><dd>@(e.FinishedAtUtc is { } f ? UiText.Time(f) : "Not recorded")</dd>
                 <dt>Duration</dt><dd>@UiText.Duration(e.Duration)</dd>
                 <dt>Test runner</dt><dd>@e.Run.Runner</dd>
                 <dt>Environment</dt><dd>@e.Run.Environment</dd>

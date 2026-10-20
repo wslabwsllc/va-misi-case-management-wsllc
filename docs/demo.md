@@ -41,7 +41,7 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; a
    announced.
 4. **Case detail and audit information**: the summary strip shows status, priority, category, owner, due date (with
    "Due in n days" or "Overdue by n days") and last change; the stepper shows the workflow stage. The tabs (arrow keys
-   move between them) hold the Overview with Created/Updated (UTC) and by, the Workflow status history, the
+   move between them) hold the Overview with Created/Updated (ET) and by, the Workflow status history, the
    Attachments and the History (audit trail, 10 entries per page).
 5. **Edit**: Edit > change the title > Save ("Changes saved"). Edit > Cancel restores the values. To show the conflict
    handling, open the same case in a second browser as the case worker and save there first; saving in the first

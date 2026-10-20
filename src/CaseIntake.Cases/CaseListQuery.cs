@@ -67,8 +67,8 @@ internal static class CaseListQueryBuilder
 {
     private const string LikeEscape = "\\";
 
-    /// <param name="todayUtc">Today's UTC date, for <see cref="CaseListQuery.OverdueOnly"/>.</param>
-    public static IQueryable<Case> Filter(IQueryable<Case> cases, CaseListQuery query, DateOnly todayUtc)
+    /// <param name="today">Today's Eastern calendar date, for <see cref="CaseListQuery.OverdueOnly"/>.</param>
+    public static IQueryable<Case> Filter(IQueryable<Case> cases, CaseListQuery query, DateOnly today)
     {
         if (query.Statuses is { Count: > 0 } statuses)
         {
@@ -94,7 +94,7 @@ internal static class CaseListQueryBuilder
         if (query.OverdueOnly)
         {
             // Same rule as CaseTriageRules.IsOverdue: open and due before today.
-            cases = cases.Where(c => c.DueOn != null && c.DueOn < todayUtc
+            cases = cases.Where(c => c.DueOn != null && c.DueOn < today
                                      && (c.Status == CaseStatus.New || c.Status == CaseStatus.Triaged || c.Status == CaseStatus.InProgress));
         }
         if (query.CreatedFromUtc is { } createdFrom)

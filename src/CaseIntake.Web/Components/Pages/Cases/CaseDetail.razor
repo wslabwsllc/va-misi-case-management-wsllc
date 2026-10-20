@@ -89,7 +89,7 @@ else
             <div><dt>Category</dt><dd data-testid="summary-category">@UiText.Category(c.Category)</dd></div>
             <div><dt>Owner</dt><dd data-testid="summary-owner">@UiText.Owner(c.AssignedTo)</dd></div>
             <div>
-                <dt>Due date (UTC)</dt>
+                <dt>Due date (ET)</dt>
                 <dd data-testid="summary-due" class="@(dueState?.StartsWith("Overdue", StringComparison.Ordinal) == true ? "cell-overdue" : null)">
                     @UiText.DueDate(c.DueOn)
                     @if (dueState is not null)
@@ -98,7 +98,7 @@ else
                     }
                 </dd>
             </div>
-            <div><dt>Modified (UTC)</dt><dd>@UiText.Utc(c.UpdatedAtUtc)<span class="cell-sub">by @c.UpdatedBy</span></dd></div>
+            <div><dt>Modified (ET)</dt><dd>@UiText.Time(c.UpdatedAtUtc)<span class="cell-sub">by @c.UpdatedBy</span></dd></div>
         </dl>
     </section>
 
@@ -183,12 +183,12 @@ else
                             <dd>@UiText.Category(c.Category)</dd>
                             <dt>Owner</dt>
                             <dd>@UiText.Owner(c.AssignedTo)</dd>
-                            <dt>Due date (UTC)</dt>
+                            <dt>Due date (ET)</dt>
                             <dd>@UiText.DueDate(c.DueOn)</dd>
-                            <dt>Created (UTC)</dt>
-                            <dd>@UiText.Utc(c.CreatedAtUtc) by @c.CreatedBy</dd>
-                            <dt>Updated (UTC)</dt>
-                            <dd>@UiText.Utc(c.UpdatedAtUtc) by @c.UpdatedBy</dd>
+                            <dt>Created (ET)</dt>
+                            <dd>@UiText.Time(c.CreatedAtUtc) by @c.CreatedBy</dd>
+                            <dt>Updated (ET)</dt>
+                            <dd>@UiText.Time(c.UpdatedAtUtc) by @c.UpdatedBy</dd>
                         </dl>
                     }
                 </section>
@@ -408,7 +408,7 @@ else
     {
         using var busy = Activity.Begin();
         _loading = true;
-        _today = UiText.TodayUtc(Time);
+        _today = UiText.Today(Time);
         try
         {
             var result = await Cases.GetAsync(Id, _cts.Token);
@@ -699,7 +699,7 @@ else
 
     private async Task RefreshCaseAsync()
     {
-        _today = UiText.TodayUtc(Time);
+        _today = UiText.Today(Time);
         var latest = await Cases.GetAsync(Id, _cts.Token);
         if (latest.IsSuccess)
         {

@@ -1,0 +1,34 @@
+@page "/welcome"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout CaseIntake.Web.Components.Layout.AccountLayout
+
+@* The landing page: what a visitor opening the site root sees before signing in (the cookie handler sends "/" here
+   instead of to the sign-in form). Static SSR and anonymous; it shows no data. A signed-in visitor gets a link to the
+   dashboard instead of Sign in. *@
+<PageTitle>Welcome - Case Intake and Triage</PageTitle>
+
+<h1>Case Intake and Triage</h1>
+<p>Open, triage and resolve cases in one place, with a complete record of who did what.</p>
+
+<ul class="landing-features" data-testid="landing-features">
+    <li><Icon Name="add" /><span><strong>Intake</strong> Open a case, look up the veteran and attach documents.</span></li>
+    <li><Icon Name="tasks" /><span><strong>Triage and assignment</strong> Set priority and due dates, assign owners and move cases through the workflow.</span></li>
+    <li><Icon Name="history" /><span><strong>Oversight</strong> Dashboards, reports and an audit trail that cannot be changed.</span></li>
+</ul>
+
+<div class="form-actions">
+    @if (HttpContext.User.Identity?.IsAuthenticated == true)
+    {
+        <a class="btn btn--primary" href="" data-testid="landing-dashboard">Go to the dashboard</a>
+    }
+    else
+    {
+        <a class="btn btn--primary" href="account/login" data-testid="landing-sign-in">Sign in</a>
+    }
+</div>
+
+@code {
+    [CascadingParameter]
+    private HttpContext HttpContext { get; set; } = default!;
+}
