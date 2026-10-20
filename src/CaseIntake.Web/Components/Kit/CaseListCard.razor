@@ -1,7 +1,7 @@
 @using CaseIntake.Contracts.Cases
 @using CaseIntake.Web.Services
 
-@* A dashboard card listing a few cases (title link, status, time) with a "View all" link. *@
+@* A dashboard card listing a few cases (title link, status, a time or due date) with a "View all" link. *@
 <section class="card @Class" aria-labelledby="@($"{Id}-heading")" data-testid="@Id">
     <div class="card__header">
         <h2 id="@($"{Id}-heading")">@Title</h2>
@@ -26,9 +26,7 @@
                 <li>
                     <div class="compact-list__main">
                         <a href="@($"cases/{c.Id}")">@c.Title</a>
-                        <div class="compact-list__meta">
-                            Case @c.Id · @(ShowUpdated ? "Updated " + UiText.Utc(c.UpdatedAtUtc) : "Created " + UiText.Utc(c.CreatedAtUtc))
-                        </div>
+                        <div class="compact-list__meta">Case @c.Id · @MetaText(c)</div>
                     </div>
                     <StatusPill Status="c.Status" />
                 </li>
@@ -44,6 +42,17 @@
     [Parameter, EditorRequired] public IReadOnlyList<CaseSummaryDto> Cases { get; set; } = [];
     [Parameter] public string? MoreHref { get; set; }
     [Parameter] public string Empty { get; set; } = "Nothing to show.";
-    [Parameter] public bool ShowUpdated { get; set; }
+    [Parameter] public CaseListMeta Meta { get; set; } = CaseListMeta.Created;
+
+    /// <summary>Today's UTC date, for <see cref="CaseListMeta.Due"/>.</summary>
+    [Parameter] public DateOnly TodayUtc { get; set; }
     [Parameter] public string? Class { get; set; }
+
+    private string MetaText(CaseSummaryDto c) => Meta switch
+    {
+        CaseListMeta.Updated => "Updated " + UiText.Utc(c.UpdatedAtUtc),
+        CaseListMeta.Due => $"Due {UiText.DueDate(c.DueOn)}" + (UiText.DueState(c.Status, c.DueOn, TodayUtc) is { } state ? $" ({state.ToLowerInvariant()})" : string.Empty)
+            + $" · {UiText.Priority(c.Priority)}",
+        _ => "Created " + UiText.Utc(c.CreatedAtUtc),
+    };
 }

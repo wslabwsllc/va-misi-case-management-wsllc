@@ -6,14 +6,60 @@
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Services
 @inject ICaseService Cases
+@inject ICaseAssigneeDirectory Assignees
+@inject ICaseAssignmentService Assignment
+@inject ICurrentUser CurrentUser
 @inject StatusAnnouncer Announcer
 @inject NavigationManager Navigation
+@inject PageActivity Activity
+@inject CaseActivitySignal ActivitySignal
+@inject TimeProvider Time
 @inject ILogger<CaseDetail> Logger
 
-@* Case detail and in-place edit (E5-S5), status controls (E5-S6) and attachments (E5-S7). The record's version is
-   kept with the edit form, so a save against a stale version is reported as a conflict and the user's unsaved text
-   is kept visible next to the latest version. *@
-<PageShell Title="@PageTitle" DocumentTitle="@PageTitle" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])" />
+@* Case detail (E5-S5..S7, redesigned for issue #22): a command bar (back, refresh, edit), a summary strip with the
+   triage fields, the workflow stepper with the status controls, and tabs for the overview (details, veteran and the
+   in-place edit form), the workflow history, the attachments and the audit trail. The record's version is kept with
+   the edit form, so a save against a stale version is reported as a conflict and the user's unsaved text is kept
+   visible next to the latest version. Inactive tab panels stay in the page (hidden), so their content keeps its state. *@
+<PageShell Title="@PageTitle" DocumentTitle="@PageTitle" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])">
+    <Actions>
+        @if (_case is { } header)
+        {
+            <div class="command-bar command-bar--inline" role="toolbar" aria-label="Case commands" data-testid="detail-commands">
+                <a class="command" href="cases" data-testid="back-to-cases"><Icon Name="back" /> Back to cases</a>
+                <button type="button" class="command" @onclick="RefreshAsync" disabled="@_refreshing" aria-busy="@(_refreshing ? "true" : "false")" data-testid="detail-refresh">
+                    <Icon Name="refresh" Class="@(_refreshing ? "icon--spin" : null)" /> @(_refreshing ? "Refreshing…" : "Refresh")
+                </button>
+                @switch (AssignRight)
+                {
+                    case AssignmentRight.AssignAnyone:
+                        <button type="button" class="command" @ref="_assignButton" @onclick="OpenAssignAsync" disabled="@_assigning" data-testid="assign-case">
+                            <Icon Name="person" /> @(header.AssignedTo is null ? "Assign" : "Reassign")
+                        </button>
+                        break;
+                    case AssignmentRight.Take:
+                        <button type="button" class="command" @ref="_assignButton" @onclick="TakeAsync" disabled="@_assigning" data-testid="take-case">
+                            <Icon Name="person" /> Take case
+                        </button>
+                        break;
+                    case AssignmentRight.HandBack:
+                        <button type="button" class="command" @ref="_assignButton" @onclick="HandBackAsync" disabled="@_assigning" data-testid="hand-back">
+                            <Icon Name="person" /> Hand back
+                        </button>
+                        break;
+                }
+                @if (!_editing && header.Status != CaseStatus.Closed)
+                {
+                    <AuthorizeView Policy="@Permissions.CasesEdit">
+                        <button type="button" class="command" @ref="_editButton" @onclick="StartEdit" data-testid="edit-case">
+                            <Icon Name="edit" /> Edit<span class="visually-hidden"> case details</span>
+                        </button>
+                    </AuthorizeView>
+                }
+            </div>
+        }
+    </Actions>
+</PageShell>
 
 <ErrorAlert @ref="_pageAlert" Title="@_pageErrorTitle" Message="@_pageError" TestId="detail-error">
     @if (_conflict)
@@ -34,138 +80,216 @@
 else
 {
     var c = _case;
-    <div class="record-header" data-testid="record-header">
-        <div class="record-header__top">
-            <div class="record-header__title">
-                <span class="page-header__subtitle">Case @c.Id</span>
-            </div>
-            <StatusPill Status="c.Status" Large="true" />
-        </div>
-        <ul class="record-header__facts">
-            <li><span class="label">Case ID</span><span data-testid="case-id">@c.Id</span></li>
-            <li><span class="label">Created (UTC)</span><span>@UiText.Utc(c.CreatedAtUtc) by @c.CreatedBy</span></li>
-            <li><span class="label">Updated (UTC)</span><span>@UiText.Utc(c.UpdatedAtUtc) by @c.UpdatedBy</span></li>
-        </ul>
-    </div>
-
-    <div class="grid grid--main-side">
-        <div class="stack">
-            <section class="card" aria-labelledby="details-heading" data-testid="details-section">
-                <div class="card__header">
-                    <h2 id="details-heading">Details</h2>
-                    @if (!_editing && c.Status != CaseStatus.Closed)
+    var dueState = UiText.DueState(c.Status, c.DueOn, _today);
+    <section class="record-summary" aria-label="Case summary" data-testid="record-header">
+        <dl class="summary-strip">
+            <div><dt>Case ID</dt><dd data-testid="case-id">@c.Id</dd></div>
+            <div><dt>Status</dt><dd><StatusPill Status="c.Status" /></dd></div>
+            <div><dt>Priority</dt><dd data-testid="summary-priority"><PriorityBadge Priority="c.Priority" /></dd></div>
+            <div><dt>Category</dt><dd data-testid="summary-category">@UiText.Category(c.Category)</dd></div>
+            <div><dt>Owner</dt><dd data-testid="summary-owner">@UiText.Owner(c.AssignedTo)</dd></div>
+            <div>
+                <dt>Due date (UTC)</dt>
+                <dd data-testid="summary-due" class="@(dueState?.StartsWith("Overdue", StringComparison.Ordinal) == true ? "cell-overdue" : null)">
+                    @UiText.DueDate(c.DueOn)
+                    @if (dueState is not null)
                     {
-                        <AuthorizeView Policy="@Permissions.CasesEdit">
-                            <button type="button" class="btn" @ref="_editButton" @onclick="StartEditAsync" data-testid="edit-case">
-                                <Icon Name="edit" Small="true" /> Edit<span class="visually-hidden"> case details</span>
-                            </button>
-                        </AuthorizeView>
+                        <span class="cell-sub">@dueState</span>
                     }
-                </div>
-                @if (c.Status == CaseStatus.Closed)
-                {
-                    <p class="page-header__subtitle" data-testid="closed-note">Closed cases are read-only.</p>
-                }
+                </dd>
+            </div>
+            <div><dt>Modified (UTC)</dt><dd>@UiText.Utc(c.UpdatedAtUtc)<span class="cell-sub">by @c.UpdatedBy</span></dd></div>
+        </dl>
+    </section>
 
-                @if (_editing)
-                {
-                    <EditForm EditContext="_editContext" OnSubmit="SaveAsync" novalidate class="form" data-testid="edit-form">
-                        <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
-                        <LabeledInputText Id="edit-title" Label="Title" Required="true" @bind-Value="_edit.Title" @ref="_titleInput"
-                                          Hint="@($"{CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
-                                          MaxCharacters="CaseFieldLimits.TitleMaxLength" />
-                        <LabeledTextArea Id="edit-description" Label="Description" @bind-Value="_edit.Description" Rows="8"
-                                         MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
-                        @if (_draft is { } draft)
-                        {
-                            <div class="message message--warning" data-testid="unsaved-draft">
-                                <Icon Name="warning" />
-                                <div class="message__body">
-                                    <p class="message__title">Your unsaved text</p>
-                                    <p>The form now shows the latest saved version. Your earlier changes are below; nothing was lost.</p>
-                                    <p><strong>Title:</strong> <span class="pre-wrap">@draft.Title</span></p>
-                                    <p><strong>Description:</strong> <span class="pre-wrap">@(string.IsNullOrEmpty(draft.Description) ? "(empty)" : draft.Description)</span></p>
-                                    <button type="button" class="btn" @onclick="UseDraftAsync" data-testid="use-draft">Use my text again</button>
+    <section class="card workflow-card" aria-labelledby="workflow-heading" data-testid="workflow-section">
+        <h2 id="workflow-heading" class="visually-hidden">Workflow</h2>
+        <WorkflowStepper Status="c.Status" History="_audit" />
+        <StatusTransitions Case="c" Class="workflow-card__actions" OnChanged="OnStatusChangedAsync" OnFailed="ReloadAfterStatusErrorAsync" />
+    </section>
+
+    <div class="tabs" data-testid="detail-tabs">
+        <div class="tabs__list" role="tablist" aria-label="Case sections">
+            @foreach (var tab in Tabs)
+            {
+                var t = tab;
+                <button type="button" role="tab" id="@($"tab-{t.Key}")" class="tabs__tab" aria-selected="@(_tab == t.Key ? "true" : "false")"
+                        aria-controls="@($"panel-{t.Key}")" tabindex="@(_tab == t.Key ? 0 : -1)" @ref="_tabButtons[t.Key]"
+                        @onclick="() => SelectTab(t.Key)" @onkeydown="e => OnTabKeyAsync(e, t.Key)" data-testid="@($"tab-{t.Key}")">
+                    <Icon Name="@t.Icon" Small="true" /> @t.Text
+                    @if (t.Key == "attachments" && _attachmentCount is { } count)
+                    {
+                        @(" ")<span class="badge" data-testid="attachments-count">@count<span class="visually-hidden">@(count == 1 ? " file" : " files")</span></span>
+                    }
+                </button>
+            }
+        </div>
+
+        <div role="tabpanel" id="panel-overview" aria-labelledby="tab-overview" tabindex="0" hidden="@(_tab != "overview")" class="tabs__panel">
+            <div class="grid grid--main-side">
+                <section class="card" aria-labelledby="details-heading" data-testid="details-section">
+                    <div class="card__header">
+                        <h2 id="details-heading">Details</h2>
+                    </div>
+                    @if (c.Status == CaseStatus.Closed)
+                    {
+                        <p class="page-header__subtitle" data-testid="closed-note">Closed cases are read-only.</p>
+                    }
+
+                    @if (_editing)
+                    {
+                        <EditForm EditContext="_editContext" OnSubmit="SaveAsync" novalidate class="form" data-testid="edit-form">
+                            <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
+                            <LabeledInputText Id="edit-title" Label="Title" Required="true" @bind-Value="_edit.Title" @ref="_titleInput"
+                                              Hint="@($"{CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
+                                              MaxCharacters="CaseFieldLimits.TitleMaxLength" />
+                            <LabeledTextArea Id="edit-description" Label="Description" @bind-Value="_edit.Description" Rows="6"
+                                             MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
+                            <TriageFields IdPrefix="edit" Model="_edit" Assignees="_assignees" CanAssign="false" ReadOnlyOwnerHint="Change the owner with Assign, Take case or Hand back."
+                                          DueHint="Leave empty for no due date. A case past its due date while open counts as overdue." />
+                            @if (_draft is { } draft)
+                            {
+                                <div class="message message--warning" data-testid="unsaved-draft">
+                                    <Icon Name="warning" />
+                                    <div class="message__body">
+                                        <p class="message__title">Your unsaved text</p>
+                                        <p>The form now shows the latest saved version. Your earlier changes are below; nothing was lost.</p>
+                                        <p><strong>Title:</strong> <span class="pre-wrap">@draft.Title</span></p>
+                                        <p><strong>Description:</strong> <span class="pre-wrap">@(string.IsNullOrEmpty(draft.Description) ? "(empty)" : draft.Description)</span></p>
+                                        <button type="button" class="btn" @onclick="UseDraft" data-testid="use-draft">Use my text again</button>
+                                    </div>
                                 </div>
+                            }
+                            <div class="form-actions">
+                                <button type="submit" class="btn btn--primary" disabled="@_saving" aria-busy="@(_saving ? "true" : "false")" data-testid="save-case">
+                                    <Icon Name="save" Small="true" /> @(_saving ? "Saving…" : "Save")
+                                </button>
+                                <button type="button" class="btn" @onclick="CancelEdit" disabled="@_saving" data-testid="cancel-edit">Cancel</button>
                             </div>
-                        }
-                        <div class="form-actions">
-                            <button type="submit" class="btn btn--primary" disabled="@_saving" aria-busy="@(_saving ? "true" : "false")" data-testid="save-case">
-                                <Icon Name="save" Small="true" /> @(_saving ? "Saving…" : "Save")
-                            </button>
-                            <button type="button" class="btn" @onclick="CancelEditAsync" disabled="@_saving" data-testid="cancel-edit">Cancel</button>
-                        </div>
-                    </EditForm>
-                }
-                else
-                {
-                    <dl class="field-list">
-                        <dt>Case ID</dt>
-                        <dd>@c.Id <span class="page-header__subtitle">(read-only)</span></dd>
-                        <dt>Title</dt>
-                        <dd data-testid="case-title">@c.Title</dd>
-                        <dt>Description</dt>
-                        <dd class="pre-wrap" data-testid="case-description">@(string.IsNullOrEmpty(c.Description) ? "No description" : c.Description)</dd>
-                        <dt>Status</dt>
-                        <dd>@UiText.Status(c.Status)</dd>
-                        <dt>Created (UTC)</dt>
-                        <dd>@UiText.Utc(c.CreatedAtUtc) by @c.CreatedBy</dd>
-                        <dt>Updated (UTC)</dt>
-                        <dd>@UiText.Utc(c.UpdatedAtUtc) by @c.UpdatedBy</dd>
-                    </dl>
-                }
-            </section>
+                        </EditForm>
+                    }
+                    else
+                    {
+                        <dl class="field-list">
+                            <dt>Case ID</dt>
+                            <dd>@c.Id <span class="page-header__subtitle">(read-only)</span></dd>
+                            <dt>Title</dt>
+                            <dd data-testid="case-title">@c.Title</dd>
+                            <dt>Description</dt>
+                            <dd class="pre-wrap" data-testid="case-description">@(string.IsNullOrEmpty(c.Description) ? "No description" : c.Description)</dd>
+                            <dt>Priority</dt>
+                            <dd>@UiText.Priority(c.Priority)</dd>
+                            <dt>Category</dt>
+                            <dd>@UiText.Category(c.Category)</dd>
+                            <dt>Owner</dt>
+                            <dd>@UiText.Owner(c.AssignedTo)</dd>
+                            <dt>Due date (UTC)</dt>
+                            <dd>@UiText.DueDate(c.DueOn)</dd>
+                            <dt>Created (UTC)</dt>
+                            <dd>@UiText.Utc(c.CreatedAtUtc) by @c.CreatedBy</dd>
+                            <dt>Updated (UTC)</dt>
+                            <dd>@UiText.Utc(c.UpdatedAtUtc) by @c.UpdatedBy</dd>
+                        </dl>
+                    }
+                </section>
 
-            <AttachmentsPanel CaseId="c.Id" Closed="@(c.Status == CaseStatus.Closed)" OnChanged="ReloadAuditAsync" />
+                <section class="card" aria-labelledby="veteran-heading" data-testid="veteran-section">
+                    <div class="card__header"><h2 id="veteran-heading">Veteran</h2></div>
+                    @if (c.Veteran is { } v)
+                    {
+                        <dl class="field-list">
+                            <dt>Name</dt>
+                            <dd>@v.Name</dd>
+                            <dt>Address</dt>
+                            <dd class="pre-wrap">@v.Address</dd>
+                            <dt>SSN</dt>
+                            <dd data-testid="ssn-last4">Ending @v.SsnLast4</dd>
+                        </dl>
+                    }
+                    else
+                    {
+                        <p class="page-header__subtitle">No veteran was attached at intake.</p>
+                    }
+                </section>
+            </div>
+        </div>
 
+        <div role="tabpanel" id="panel-workflow" aria-labelledby="tab-workflow" tabindex="0" hidden="@(_tab != "workflow")" class="tabs__panel">
+            <StatusHistory Entries="_audit" />
+        </div>
+
+        <div role="tabpanel" id="panel-attachments" aria-labelledby="tab-attachments" tabindex="0" hidden="@(_tab != "attachments")" class="tabs__panel">
+            <AttachmentsPanel @ref="_attachments" CaseId="c.Id" Closed="@(c.Status == CaseStatus.Closed)" OnChanged="OnAttachmentUploadedAsync"
+                              OnCountChanged="count => _attachmentCount = count" />
+        </div>
+
+        <div role="tabpanel" id="panel-history" aria-labelledby="tab-history" tabindex="0" hidden="@(_tab != "history")" class="tabs__panel">
             <AuditTrail Entries="_audit" Error="@_auditError" />
         </div>
-
-        <div class="stack">
-            <StatusTransitions Case="c" OnChanged="OnStatusChangedAsync" OnFailed="ReloadAfterStatusErrorAsync" />
-
-            <section class="card" aria-labelledby="veteran-heading" data-testid="veteran-section">
-                <div class="card__header"><h2 id="veteran-heading">Veteran</h2></div>
-                @if (c.Veteran is { } v)
-                {
-                    <dl class="field-list">
-                        <dt>Name</dt>
-                        <dd>@v.Name</dd>
-                        <dt>Address</dt>
-                        <dd class="pre-wrap">@v.Address</dd>
-                        <dt>SSN</dt>
-                        <dd data-testid="ssn-last4">Ending @v.SsnLast4</dd>
-                    </dl>
-                }
-                else
-                {
-                    <p class="page-header__subtitle">No veteran was attached at intake.</p>
-                }
-            </section>
-        </div>
     </div>
+
+    @* Assign or reassign (supervisors): choose anyone who works cases, or Unassigned. *@
+    <ModalDialog @ref="_assignDialog" Id="assign-case" Title="@($"Assign case {c.Id}")" TestId="assign-dialog"
+                 Description="Choose who owns this case. The new owner is notified, and the change is recorded in the audit trail.">
+        <ChildContent>
+            <div class="field">
+                <label class="field__label" for="assign-owner">Owner</label>
+                <select id="assign-owner" @bind="_assignTarget" data-testid="assign-owner">
+                    <option value="">Unassigned</option>
+                    @foreach (var a in _assignees)
+                    {
+                        <option value="@a.UserName">@a.UserName (@CaseIntake.Contracts.Security.AppRoles.DisplayName(a.Role))</option>
+                    }
+                </select>
+            </div>
+        </ChildContent>
+        <Footer>
+            <button type="button" class="btn" @onclick="() => _assignDialog!.CloseAsync(restoreFocus: true)" data-testid="assign-cancel">Cancel</button>
+            <button type="button" class="btn btn--primary" @onclick="ConfirmAssignAsync" disabled="@_assigning" data-testid="assign-confirm">
+                <Icon Name="person" Small="true" /> Assign
+            </button>
+        </Footer>
+    </ModalDialog>
 }
 
 @code {
-    private sealed class EditModel
+    private sealed class EditModel : ITriageForm
     {
         public string? Title { get; set; }
         public string? Description { get; set; }
+        public CasePriority Priority { get; set; } = CasePriority.Medium;
+        public CaseCategory Category { get; set; } = CaseCategory.General;
+        public string? AssignedTo { get; set; }
+        public DateOnly? DueOn { get; set; }
     }
 
-    private sealed record Draft(string? Title, string? Description);
+    private sealed record Draft(string? Title, string? Description, CaseTriage Triage);
+
+    private sealed record Tab(string Key, string Text, string Icon);
+
+    private static readonly Tab[] Tabs =
+    [
+        new("overview", "Overview", "document"),
+        new("workflow", "Workflow", "status"),
+        new("attachments", "Attachments", "attach"),
+        new("history", "History", "history"),
+    ];
 
     private static readonly IReadOnlyList<KeyValuePair<string, string>> SummaryFields =
     [
         new(CaseFieldNames.Title, "edit-title"),
         new(CaseFieldNames.Description, "edit-description"),
+        .. TriageFormExtensions.SummaryFields("edit"),
     ];
 
     private readonly CancellationTokenSource _cts = new();
+    private readonly Dictionary<string, ElementReference> _tabButtons = [];
     private CaseDetailDto? _case;
     private IReadOnlyList<AuditEntryDto>? _audit;
+    private IReadOnlyList<AssigneeDto> _assignees = [];
     private string? _auditError;
     private bool _loading = true;
+    private bool _refreshing;
     private bool _editing;
     private bool _saving;
     private bool _conflict;
@@ -181,9 +305,88 @@ else
     private LabeledInputText? _titleInput;
     private FormErrorSummary? _summary;
     private ErrorAlert? _pageAlert;
+    private AttachmentsPanel? _attachments;
+    private int? _attachmentCount;
+    private string _tab = "overview";
     private string? _focusAfterRender;
+    private DateOnly _today;
 
     [Parameter] public long Id { get; set; }
+
+    /// <summary>Opens a tab directly, for example <c>?tab=history</c> from a notification.</summary>
+    [SupplyParameterFromQuery(Name = "tab")] private string? QueryTab { get; set; }
+
+    /// <summary><c>?assign=true</c> (the case list's row menu) opens the Assign dialog when the user may assign.</summary>
+    [SupplyParameterFromQuery(Name = "assign")] private bool QueryAssign { get; set; }
+
+    private OperationActor? _actor;
+    private string? _me;
+    private ModalDialog? _assignDialog;
+    private ElementReference _assignButton;
+    private string? _assignTarget;
+    private bool _assigning;
+    private bool _openAssignAfterLoad;
+
+    /// <summary>What this user may do with the owner, by the shared rules the service enforces.</summary>
+    private AssignmentRight AssignRight => _case is { } c && _actor is { } actor
+        ? CaseAssignmentRules.RightFor(actor, _me, c.Status, c.AssignedTo)
+        : AssignmentRight.None;
+
+    private async Task OpenAssignAsync()
+    {
+        await LoadAssigneesAsync();
+        _assignTarget = _case?.AssignedTo;
+        await _assignDialog!.OpenAsync(() => _assignButton.FocusSafeAsync());
+    }
+
+    private Task ConfirmAssignAsync() => AssignAsync(string.IsNullOrEmpty(_assignTarget) ? null : _assignTarget, fromDialog: true);
+
+    private Task TakeAsync() => AssignAsync(_me, fromDialog: false);
+
+    private Task HandBackAsync() => AssignAsync(null, fromDialog: false);
+
+    private async Task AssignAsync(string? owner, bool fromDialog)
+    {
+        if (_assigning || _case is null)
+        {
+            return;
+        }
+        _assigning = true;
+        ClearPageError();
+        using var busy = Activity.Begin();
+        try
+        {
+            var result = await Assignment.AssignAsync(_case.Id, new AssignCaseRequest(owner, _case.Version), _cts.Token);
+            if (fromDialog && _assignDialog is not null)
+            {
+                await _assignDialog.CloseAsync();
+            }
+            if (result.IsSuccess)
+            {
+                _case = result.Value;
+                await ReloadAuditAsync();
+                ActivitySignal.Raise();
+                Announcer.Announce(owner is null ? "The case is now unassigned"
+                    : owner == _me ? "The case is assigned to you" : $"The case is assigned to {owner}");
+                _focusAfterRender = "assign";
+                return;
+            }
+            SetPageError("The owner was not changed", result.Error!.Kind switch
+            {
+                ErrorKind.Conflict => "This case was changed by someone else. The latest version is shown; try again.",
+                ErrorKind.Forbidden => "Your role cannot make this assignment.",
+                _ => result.Error.FieldErrors?.Values.SelectMany(m => m).FirstOrDefault() ?? result.Error.Message,
+            });
+            await RefreshCaseAsync();
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _assigning = false;
+        }
+    }
 
     private string PageTitle => _case is { } c ? $"Case {c.Id}: {c.Title}" : $"Case {Id}";
 
@@ -193,12 +396,19 @@ else
         _draft = null;
         _conflict = false;
         _pageError = null;
+        _attachmentCount = null;
+        _tab = Tabs.Any(t => t.Key == QueryTab) ? QueryTab! : "overview";
+        _actor ??= await CurrentUser.GetAsync(_cts.Token);
+        _me = CaseDashboardService.UserNameOf(_actor);
         await LoadAsync();
+        _openAssignAfterLoad = QueryAssign && AssignRight == AssignmentRight.AssignAnyone;
     }
 
     private async Task LoadAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
+        _today = UiText.TodayUtc(Time);
         try
         {
             var result = await Cases.GetAsync(Id, _cts.Token);
@@ -230,11 +440,73 @@ else
         }
     }
 
+    /// <summary>Refresh command: reloads the case, its audit trail and attachments, and says so.</summary>
+    private async Task RefreshAsync()
+    {
+        if (_refreshing)
+        {
+            return;
+        }
+        _refreshing = true;
+        try
+        {
+            using var busy = Activity.Begin();
+            await Task.WhenAll(RefreshCaseAsync(), Task.Delay(TimeSpan.FromMilliseconds(400), _cts.Token));
+            if (_attachments is not null)
+            {
+                await _attachments.ReloadAsync();
+            }
+            Announcer.Announce("Case refreshed");
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _refreshing = false;
+        }
+    }
+
     private async Task ReloadAuditAsync()
     {
         var audit = await Cases.GetAuditTrailAsync(Id, _cts.Token);
         _audit = audit.IsSuccess ? audit.Value : null;
         _auditError = audit.IsSuccess ? null : audit.Error!.Message;
+    }
+
+    private void SelectTab(string key)
+    {
+        _tab = key;
+    }
+
+    /// <summary>Tabs pattern: arrow keys move between tabs (wrapping), Home and End go to the first and last.</summary>
+    private async Task OnTabKeyAsync(KeyboardEventArgs e, string current)
+    {
+        // Move from the selected tab, not the one that received the key: with fast repeated presses, the next key can
+        // arrive before focus has moved, and events are handled in order, so the selection is always up to date.
+        var index = Array.FindIndex(Tabs, t => t.Key == _tab);
+        if (index < 0)
+        {
+            index = Array.FindIndex(Tabs, t => t.Key == current);
+        }
+        var next = e.Key switch
+        {
+            "ArrowRight" => (index + 1) % Tabs.Length,
+            "ArrowLeft" => (index - 1 + Tabs.Length) % Tabs.Length,
+            "Home" => 0,
+            "End" => Tabs.Length - 1,
+            _ => -1,
+        };
+        if (next < 0)
+        {
+            return;
+        }
+        _tab = Tabs[next].Key;
+        StateHasChanged();
+        if (_tabButtons.TryGetValue(_tab, out var button))
+        {
+            await button.FocusSafeAsync();
+        }
     }
 
     private void SetPageError(string title, string message, bool conflict = false)
@@ -252,24 +524,50 @@ else
         _conflict = false;
     }
 
-    private void StartEditAsync()
+    private async Task StartEdit()
     {
         if (_case is null)
         {
             return;
         }
         ClearPageError();
-        _edit = new EditModel { Title = _case.Title, Description = _case.Description };
-        _editVersion = _case.Version;
-        _editContext = new EditContext(_edit);
-        _messages = new ValidationMessageStore(_editContext);
+        _tab = "overview";
+        LoadForm(_case);
         _showSummary = false;
         _draft = null;
         _editing = true;
         _focusAfterRender = "title";
+        await LoadAssigneesAsync();
     }
 
-    private void CancelEditAsync()
+    private void LoadForm(CaseDetailDto c)
+    {
+        _edit = new EditModel { Title = c.Title, Description = c.Description };
+        _edit.Load(c.Triage);
+        _editVersion = c.Version;
+        _editContext = new EditContext(_edit);
+        _messages = new ValidationMessageStore(_editContext);
+    }
+
+    private async Task LoadAssigneesAsync()
+    {
+        if (_assignees.Count > 0)
+        {
+            return;
+        }
+        try
+        {
+            var result = await Assignees.ListAsync(_cts.Token);
+            _assignees = result.IsSuccess ? result.Value! : [];
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // The owner list keeps the current owner and Unassigned; the server validates any change.
+            Logger.LogWarning(new EventId(5010, "AssigneeListFailed"), "Assignee list failed ({ExceptionType})", ex.GetType().Name);
+        }
+    }
+
+    private void CancelEdit()
     {
         // The view shows the saved values again; nothing from the form is kept.
         _editing = false;
@@ -285,7 +583,7 @@ else
         {
             return;
         }
-        var request = new UpdateCaseRequest(_edit.Title ?? string.Empty, _edit.Description, _editVersion);
+        var request = new UpdateCaseRequest(_edit.Title ?? string.Empty, _edit.Description, _editVersion, _edit.ToTriage());
         if (CaseRequestValidator.Validate(request) is { } invalid)
         {
             ShowValidation(invalid);
@@ -294,6 +592,7 @@ else
 
         _saving = true;
         ClearPageError();
+        using var busy = Activity.Begin();
         try
         {
             var result = await Cases.UpdateAsync(_case.Id, request, _cts.Token);
@@ -304,6 +603,7 @@ else
                 _draft = null;
                 await ReloadAuditAsync();
                 Announcer.Announce("Changes saved");
+                ActivitySignal.Raise();
                 _focusAfterRender = "edit";
                 return;
             }
@@ -347,7 +647,10 @@ else
         _messages!.Clear();
         foreach (var (field, fieldMessages) in error.FieldErrors ?? new Dictionary<string, string[]>())
         {
-            _messages.Add(new FieldIdentifier(_edit, field is CaseFieldNames.Title or CaseFieldNames.Description ? field : CaseFieldNames.Title), fieldMessages);
+            var target = field is CaseFieldNames.Title or CaseFieldNames.Description || TriageFormExtensions.IsTriageField(field)
+                ? field
+                : CaseFieldNames.Title;
+            _messages.Add(new FieldIdentifier(_edit, target), fieldMessages);
         }
         _showSummary = true;
         _focusAfterRender = "summary";
@@ -357,7 +660,7 @@ else
     /// <summary>Conflict recovery: load the latest version into the form and keep the user's text alongside it.</summary>
     private async Task ReloadLatestAsync()
     {
-        var draft = new Draft(_edit.Title, _edit.Description);
+        var draft = new Draft(_edit.Title, _edit.Description, _edit.ToTriage());
         var result = await Cases.GetAsync(Id, _cts.Token);
         if (!result.IsSuccess)
         {
@@ -374,17 +677,14 @@ else
             SetPageError("This case was closed", $"Closed cases cannot be edited. Your unsaved title was: \"{draft.Title}\".");
             return;
         }
-        _edit = new EditModel { Title = _case.Title, Description = _case.Description };
-        _editVersion = _case.Version;
-        _editContext = new EditContext(_edit);
-        _messages = new ValidationMessageStore(_editContext);
+        LoadForm(_case);
         _showSummary = false;
         _draft = draft;
         Announcer.Announce("Latest version loaded. Your unsaved text is shown below the form.");
         _focusAfterRender = "title";
     }
 
-    private void UseDraftAsync()
+    private void UseDraft()
     {
         if (_draft is null)
         {
@@ -392,12 +692,14 @@ else
         }
         _edit.Title = _draft.Title;
         _edit.Description = _draft.Description;
+        _edit.Load(_draft.Triage);
         _draft = null;
         _focusAfterRender = "title";
     }
 
     private async Task RefreshCaseAsync()
     {
+        _today = UiText.TodayUtc(Time);
         var latest = await Cases.GetAsync(Id, _cts.Token);
         if (latest.IsSuccess)
         {
@@ -413,6 +715,13 @@ else
         _draft = null;
         ClearPageError();
         await ReloadAuditAsync();
+        ActivitySignal.Raise();
+    }
+
+    private async Task OnAttachmentUploadedAsync()
+    {
+        await ReloadAuditAsync();
+        ActivitySignal.Raise();
     }
 
     /// <summary>After InvalidTransition, Forbidden or Conflict the displayed status is refreshed (E5-S6).</summary>
@@ -420,10 +729,19 @@ else
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (_openAssignAfterLoad && _assignDialog is not null && RendererInfo.IsInteractive)
+        {
+            _openAssignAfterLoad = false;
+            await OpenAssignAsync();
+        }
         var target = _focusAfterRender;
         _focusAfterRender = null;
         switch (target)
         {
+            case "assign":
+                // Take case becomes Hand back (and the reverse): focus the button that is there now.
+                await _assignButton.FocusSafeAsync();
+                break;
             case "title" when _titleInput is not null:
                 await _titleInput.FocusAsync();
                 break;

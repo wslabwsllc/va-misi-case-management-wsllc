@@ -1,21 +1,26 @@
 @using System.Globalization
-@* Server-rendered SVG chart (no JavaScript, nothing to dispose). Accessible by construction: the figure has a caption,
-   the SVG is role="img" with a generated text summary of every value, bars carry value labels so colour is never the
-   only cue, multi-series charts have a legend, and an expandable data table holds the same numbers. The viewBox
-   scales to the container width, so the same chart works on desktop and phone widths. *@
-<figure class="chart" aria-labelledby="@CaptionId" data-testid="@TestId">
+@* Server-rendered SVG chart (no chart library). Accessible by construction: the figure has a caption, the SVG carries a
+   generated text summary of every value, bars carry value labels so colour is never the only cue, multi-series charts
+   have a legend, and an expandable data table holds the same numbers. The viewBox scales to the container width, so
+   the same chart works on desktop and phone widths.
+   Issue #21: hovering or focusing a column or bar shows its value in a tooltip; with Links each one is a link to the
+   matching records (drill-through, reachable by Tab); columns grow in on first render (not with reduced motion); and
+   Expand opens a larger copy in a dialog. Axis labels are thinned so they never overlap. *@
+<figure class="chart @(ShowExpand ? "chart--expandable" : null)" aria-labelledby="@CaptionId" data-testid="@TestId">
     <figcaption id="@CaptionId">@Title</figcaption>
     @if (!string.IsNullOrEmpty(Description))
     {
         <p class="chart__desc">@Description</p>
     }
-    @if (Categories.Count == 0 || Series.Count == 0 || Series.All(s => s.Values.All(v => v == 0)))
+    @if (!HasData)
     {
         <p class="chart-unavailable" data-testid="chart-empty"><Icon Name="info" /> <span>@EmptyText</span></p>
     }
     else
     {
-        <svg viewBox="0 0 @Width.ToString(CultureInfo.InvariantCulture) @Height.ToString(CultureInfo.InvariantCulture)" role="img" aria-labelledby="@SvgTitleId @SvgDescId" preserveAspectRatio="xMidYMid meet">
+        @* With links the SVG is a group of named links; without, a single image described by its summary. *@
+        <svg viewBox="0 0 @N(Width) @N(Height)" role="@(HasLinks ? "group" : "img")" aria-labelledby="@SvgTitleId @SvgDescId"
+             preserveAspectRatio="xMidYMid meet" class="chart__svg @(Animate ? "chart__svg--animate" : null)">
             <title id="@SvgTitleId">@Title</title>
             <desc id="@SvgDescId">@Summary</desc>
             @if (Kind == ChartKind.Bar)
@@ -27,6 +32,10 @@
                 @RenderColumnsOrLines()
             }
         </svg>
+        @if (HasLinks)
+        {
+            <p class="chart__hint">Select a @(Kind == ChartKind.Bar ? "bar" : "column") to open the matching cases.</p>
+        }
         @if (Series.Count > 1)
         {
             <ul class="chart-legend" aria-label="Legend">
@@ -55,7 +64,16 @@
                         {
                             var index = i;
                             <tr>
-                                <th scope="row">@Categories[index]</th>
+                                <th scope="row">
+                                    @if (LinkAt(index) is { } href)
+                                    {
+                                        <a href="@href">@Categories[index]</a>
+                                    }
+                                    else
+                                    {
+                                        @Categories[index]
+                                    }
+                                </th>
                                 @foreach (var series in Series)
                                 {
                                     <td class="num">@Format(series.Values[index])</td>
@@ -67,10 +85,34 @@
             </div>
         </details>
     }
+    @* Last in the DOM (after the chart and its table), shown in the top-right corner by CSS. *@
+    @if (ShowExpand)
+    {
+        <button type="button" class="btn btn--subtle btn--icon chart__expand" @onclick="ExpandAsync" @ref="_expandButton"
+                title="Expand chart" data-testid="@(TestId is null ? null : TestId + "-expand")">
+            <Icon Name="zoom-in" Small="true" /><span class="visually-hidden">Expand chart: @Title</span>
+        </button>
+    }
 </figure>
 
+@if (ShowExpand)
+{
+    <ModalDialog @ref="_dialog" Id="@($"{Id}-zoom")" Title="@Title" Class="modal--wide" TestId="@(TestId is null ? null : TestId + "-dialog")">
+        @if (_expanded)
+        {
+            <Chart Id="@($"{Id}-zoomed")" Title="@Title" Description="@Description" Categories="Categories" Series="Series"
+                   Kind="Kind" Stacked="Stacked" Format="Format" CategoryHeader="@CategoryHeader" EmptyText="@EmptyText"
+                   Width="860" Links="Links" AxisLabels="AxisLabels" ValueNoun="@ValueNoun" Expandable="false" Animate="false" />
+        }
+    </ModalDialog>
+}
+
 @code {
-    private const double Left = 44, Right = 12, Top = 16, Bottom = 40;
+    private const double Left = 44, Right = 12, Top = 28, Bottom = 46;
+
+    private ModalDialog? _dialog;
+    private ElementReference _expandButton;
+    private bool _expanded;
 
     [Parameter, EditorRequired] public string Id { get; set; } = "chart";
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
@@ -85,11 +127,32 @@
     [Parameter] public double Width { get; set; } = 420;
     [Parameter] public string? TestId { get; set; }
 
+    /// <summary>Optional drill-through target per category (same order); null entries are not links.</summary>
+    [Parameter] public IReadOnlyList<string?>? Links { get; set; }
+
+    /// <summary>
+    /// Optional short axis labels per category (same order); a "\n" starts a second line (for example the year under
+    /// the first month). Defaults to <see cref="Categories"/>, which the tooltip, summary and table always use.
+    /// </summary>
+    [Parameter] public IReadOnlyList<string>? AxisLabels { get; set; }
+
+    /// <summary>What the values count, for tooltips and link names ("12 cases"). Empty: the number only.</summary>
+    [Parameter] public string? ValueNoun { get; set; }
+
+    [Parameter] public bool Expandable { get; set; } = true;
+    [Parameter] public bool Animate { get; set; } = true;
+
     private string CaptionId => $"{Id}-caption";
     private string SvgTitleId => $"{Id}-svg-title";
     private string SvgDescId => $"{Id}-svg-desc";
 
-    private double Height => Kind == ChartKind.Bar ? Top + Bottom / 2 + (Categories.Count * 30) : 240;
+    private bool HasData => Categories.Count > 0 && Series.Count > 0 && !Series.All(s => s.Values.All(v => v == 0));
+
+    private bool ShowExpand => Expandable && HasData && RendererInfo.IsInteractive;
+
+    private bool HasLinks => Links is { Count: > 0 } links && links.Any(l => l is not null);
+
+    private double Height => Kind == ChartKind.Bar ? Top / 2 + 10 + (Categories.Count * 30) : 250;
 
     private string Summary => string.Join("; ", Enumerable.Range(0, Categories.Count).Select(i =>
         Series.Count == 1
@@ -101,6 +164,73 @@
         : Series.SelectMany(s => s.Values).DefaultIfEmpty(0).Max();
 
     private static string N(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private string? LinkAt(int index) => Links is { } links && index < links.Count ? links[index] : null;
+
+    /// <summary>"Mar 2026: 12 cases" or, with several series, "Mar 2026: Passed 10, Failed 2".</summary>
+    private string PointText(int i) => Series.Count == 1
+        ? $"{Categories[i]}: {Format(Series[0].Values[i])}{Noun(Series[0].Values[i])}"
+        : $"{Categories[i]}: " + string.Join(", ", Series.Select(s => $"{s.Name} {Format(s.Values[i])}"));
+
+    private string Noun(double value) => string.IsNullOrEmpty(ValueNoun) ? string.Empty
+        : " " + (value == 1 && ValueNoun.EndsWith('s') ? ValueNoun[..^1] : ValueNoun);
+
+    private async Task ExpandAsync()
+    {
+        _expanded = true;
+        if (_dialog is not null)
+        {
+            await _dialog.OpenAsync(() => _expandButton.FocusAsync());
+        }
+    }
+
+    /// <summary>Every n-th axis label, so the longest label fits its band (estimated at 7 px per character).</summary>
+    private int LabelStep(double band)
+    {
+        var labels = AxisLabels ?? Categories;
+        var longest = labels.Select(l => l.Split('\n').Max(part => part.Length)).DefaultIfEmpty(1).Max();
+        var needed = (longest * 7.0) + 6;
+        return Math.Max(1, (int)Math.Ceiling(needed / band));
+    }
+
+    /// <summary>A tooltip above (x, y) inside the plot: a rounded box with the point's text, shown by CSS on hover/focus.</summary>
+    private void AddTooltip(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, double x, double y, string text)
+    {
+        var width = Math.Min((text.Length * 6.6) + 16, Width - 8);
+        var left = Math.Clamp(x - (width / 2), 4, Width - width - 4);
+        var top = Math.Max(y - 30, 2);
+        builder.OpenElement(seq++, "g");
+        builder.AddAttribute(seq++, "class", "chart__tip");
+        builder.AddAttribute(seq++, "aria-hidden", "true");
+        builder.OpenElement(seq++, "rect");
+        builder.AddAttribute(seq++, "x", N(left)); builder.AddAttribute(seq++, "y", N(top));
+        builder.AddAttribute(seq++, "width", N(width)); builder.AddAttribute(seq++, "height", "22");
+        builder.AddAttribute(seq++, "rx", "4");
+        builder.CloseElement();
+        builder.OpenElement(seq++, "text");
+        builder.AddAttribute(seq++, "x", N(left + (width / 2))); builder.AddAttribute(seq++, "y", N(top + 15));
+        builder.AddAttribute(seq++, "text-anchor", "middle");
+        builder.AddContent(seq++, text);
+        builder.CloseElement();
+        builder.CloseElement();
+    }
+
+    /// <summary>Opens the per-point wrapper: a link when the point has a drill-through target, else a plain group.</summary>
+    private void OpenPoint(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, int index)
+    {
+        var href = LinkAt(index);
+        builder.OpenElement(seq++, href is null ? "g" : "a");
+        builder.AddAttribute(seq++, "class", "chart__point");
+        if (href is not null)
+        {
+            builder.AddAttribute(seq++, "href", href);
+            builder.AddAttribute(seq++, "aria-label", PointText(index) + ". Open the list.");
+        }
+        builder.AddAttribute(seq++, "style", $"--i: {index.ToString(CultureInfo.InvariantCulture)}");
+        builder.OpenElement(seq++, "title");
+        builder.AddContent(seq++, PointText(index));
+        builder.CloseElement();
+    }
 
     private RenderFragment RenderColumnsOrLines() => builder =>
     {
@@ -126,48 +256,72 @@
         }
 
         var band = plotW / Categories.Count;
-        var labelEvery = Math.Max(1, (int)Math.Ceiling(Categories.Count / 12d));
+        var step = LabelStep(band);
+        var labels = AxisLabels ?? Categories;
         for (var i = 0; i < Categories.Count; i++)
         {
             var x0 = Left + (band * i);
-            if (i % labelEvery == 0)
+            if (i % step == 0)
             {
+                var lines = labels[i].Split('\n');
                 builder.OpenElement(seq++, "text");
+                builder.AddAttribute(seq++, "class", "chart__axis-label");
                 builder.AddAttribute(seq++, "x", N(x0 + band / 2)); builder.AddAttribute(seq++, "y", N(Height - Bottom + 16));
                 builder.AddAttribute(seq++, "text-anchor", "middle");
-                builder.AddContent(seq++, Categories[i]);
+                for (var l = 0; l < lines.Length; l++)
+                {
+                    builder.OpenElement(seq++, "tspan");
+                    builder.AddAttribute(seq++, "x", N(x0 + band / 2));
+                    builder.AddAttribute(seq++, "dy", l == 0 ? "0" : "14");
+                    builder.AddContent(seq++, lines[l]);
+                    builder.CloseElement();
+                }
                 builder.CloseElement();
             }
 
-            if (Kind == ChartKind.Column)
+            if (Kind != ChartKind.Column)
             {
-                var groupW = band * 0.7;
-                var barW = Stacked ? groupW : groupW / Series.Count;
-                double stackBase = 0;
-                for (var s = 0; s < Series.Count; s++)
-                {
-                    var value = Series[s].Values[i];
-                    var h = plotH * value / max;
-                    var x = Stacked ? x0 + (band - groupW) / 2 : x0 + (band - groupW) / 2 + (barW * s);
-                    var y = Top + plotH - h - (Stacked ? plotH * stackBase / max : 0);
-                    builder.OpenElement(seq++, "rect");
-                    builder.AddAttribute(seq++, "x", N(x)); builder.AddAttribute(seq++, "y", N(y));
-                    builder.AddAttribute(seq++, "width", N(Math.Max(barW - 2, 1))); builder.AddAttribute(seq++, "height", N(Math.Max(h, 0)));
-                    builder.AddAttribute(seq++, "rx", "2");
-                    builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
-                    builder.CloseElement();
-                    if (value > 0 && !Stacked && Series.Count <= 2 && Categories.Count <= 14)
-                    {
-                        builder.OpenElement(seq++, "text");
-                        builder.AddAttribute(seq++, "class", "chart__value");
-                        builder.AddAttribute(seq++, "x", N(x + (barW - 2) / 2)); builder.AddAttribute(seq++, "y", N(y - 4));
-                        builder.AddAttribute(seq++, "text-anchor", "middle");
-                        builder.AddContent(seq++, Format(value));
-                        builder.CloseElement();
-                    }
-                    stackBase += value;
-                }
+                continue;
             }
+
+            OpenPoint(builder, ref seq, i);
+            // Full-height hit area: hovering anywhere in the column shows its value.
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "class", "chart__hit");
+            builder.AddAttribute(seq++, "x", N(x0)); builder.AddAttribute(seq++, "y", N(Top));
+            builder.AddAttribute(seq++, "width", N(band)); builder.AddAttribute(seq++, "height", N(plotH));
+            builder.CloseElement();
+            var groupW = band * 0.7;
+            var barW = Stacked ? groupW : groupW / Series.Count;
+            double stackBase = 0;
+            double topY = Top + plotH;
+            for (var s = 0; s < Series.Count; s++)
+            {
+                var value = Series[s].Values[i];
+                var h = plotH * value / max;
+                var x = Stacked ? x0 + (band - groupW) / 2 : x0 + (band - groupW) / 2 + (barW * s);
+                var y = Top + plotH - h - (Stacked ? plotH * stackBase / max : 0);
+                topY = Math.Min(topY, y);
+                builder.OpenElement(seq++, "rect");
+                builder.AddAttribute(seq++, "class", "chart__bar");
+                builder.AddAttribute(seq++, "x", N(x)); builder.AddAttribute(seq++, "y", N(y));
+                builder.AddAttribute(seq++, "width", N(Math.Max(barW - 2, 1))); builder.AddAttribute(seq++, "height", N(Math.Max(h, 0)));
+                builder.AddAttribute(seq++, "rx", "2");
+                builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                builder.CloseElement();
+                if (value > 0 && !Stacked && Series.Count <= 2 && Categories.Count <= 14)
+                {
+                    builder.OpenElement(seq++, "text");
+                    builder.AddAttribute(seq++, "class", "chart__value");
+                    builder.AddAttribute(seq++, "x", N(x + (barW - 2) / 2)); builder.AddAttribute(seq++, "y", N(y - 4));
+                    builder.AddAttribute(seq++, "text-anchor", "middle");
+                    builder.AddContent(seq++, Format(value));
+                    builder.CloseElement();
+                }
+                stackBase += value;
+            }
+            AddTooltip(builder, ref seq, x0 + band / 2, topY - 14, PointText(i));
+            builder.CloseElement();
         }
 
         if (Kind == ChartKind.Line)
@@ -177,16 +331,29 @@
                 var points = string.Join(' ', Enumerable.Range(0, Categories.Count).Select(i =>
                     $"{N(Left + (band * i) + band / 2)},{N(Top + plotH - (plotH * Series[s].Values[i] / max))}"));
                 builder.OpenElement(seq++, "polyline");
+                builder.AddAttribute(seq++, "class", "chart__line");
                 builder.AddAttribute(seq++, "points", points);
                 builder.AddAttribute(seq++, "fill", "none");
                 builder.AddAttribute(seq++, "stroke-width", "2.5");
                 builder.AddAttribute(seq++, "style", $"stroke: var({Series[s].ColorVar})");
                 builder.CloseElement();
-                for (var i = 0; i < Categories.Count; i++)
+            }
+            for (var i = 0; i < Categories.Count; i++)
+            {
+                var cx = Left + (band * i) + band / 2;
+                OpenPoint(builder, ref seq, i);
+                builder.OpenElement(seq++, "rect");
+                builder.AddAttribute(seq++, "class", "chart__hit");
+                builder.AddAttribute(seq++, "x", N(Left + (band * i))); builder.AddAttribute(seq++, "y", N(Top));
+                builder.AddAttribute(seq++, "width", N(band)); builder.AddAttribute(seq++, "height", N(plotH));
+                builder.CloseElement();
+                var highest = Top + plotH;
+                for (var s = 0; s < Series.Count; s++)
                 {
-                    builder.OpenElement(seq++, s % 2 == 0 ? "circle" : "rect");
-                    var cx = Left + (band * i) + band / 2;
                     var cy = Top + plotH - (plotH * Series[s].Values[i] / max);
+                    highest = Math.Min(highest, cy);
+                    builder.OpenElement(seq++, s % 2 == 0 ? "circle" : "rect");
+                    builder.AddAttribute(seq++, "class", "chart__marker");
                     if (s % 2 == 0)
                     {
                         builder.AddAttribute(seq++, "cx", N(cx)); builder.AddAttribute(seq++, "cy", N(cy)); builder.AddAttribute(seq++, "r", "4");
@@ -200,6 +367,8 @@
                     builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
                     builder.CloseElement();
                 }
+                AddTooltip(builder, ref seq, cx, highest - 8, PointText(i));
+                builder.CloseElement();
             }
         }
     };
@@ -212,9 +381,16 @@
         var seq = 0;
         for (var i = 0; i < Categories.Count; i++)
         {
-            var y = Top + (i * 30);
+            var y = (Top / 2) + (i * 30);
+            OpenPoint(builder, ref seq, i);
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "class", "chart__hit");
+            builder.AddAttribute(seq++, "x", "0"); builder.AddAttribute(seq++, "y", N(y));
+            builder.AddAttribute(seq++, "width", N(Width)); builder.AddAttribute(seq++, "height", "26");
+            builder.CloseElement();
             builder.OpenElement(seq++, "text");
-            builder.AddAttribute(seq++, "x", N(labelW - 8)); builder.AddAttribute(seq++, "y", N(y + 15));
+            builder.AddAttribute(seq++, "class", "chart__bar-label");
+            builder.AddAttribute(seq++, "x", N(labelW - 8)); builder.AddAttribute(seq++, "y", N(y + 17));
             builder.AddAttribute(seq++, "text-anchor", "end");
             builder.AddContent(seq++, Categories[i].Length > 22 ? Categories[i][..21] + "…" : Categories[i]);
             builder.CloseElement();
@@ -224,7 +400,8 @@
                 var value = Series[s].Values[i];
                 var w = plotW * value / max;
                 builder.OpenElement(seq++, "rect");
-                builder.AddAttribute(seq++, "x", N(labelW + offset)); builder.AddAttribute(seq++, "y", N(y + 3));
+                builder.AddAttribute(seq++, "class", "chart__bar chart__bar--h");
+                builder.AddAttribute(seq++, "x", N(labelW + offset)); builder.AddAttribute(seq++, "y", N(y + 4));
                 builder.AddAttribute(seq++, "width", N(Math.Max(w, 0))); builder.AddAttribute(seq++, "height", "18");
                 builder.AddAttribute(seq++, "rx", "2");
                 builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
@@ -234,8 +411,12 @@
             var total = Stacked ? Series.Sum(s => s.Values[i]) : Series[0].Values[i];
             builder.OpenElement(seq++, "text");
             builder.AddAttribute(seq++, "class", "chart__value");
-            builder.AddAttribute(seq++, "x", N(labelW + (plotW * total / max) + 6)); builder.AddAttribute(seq++, "y", N(y + 16));
+            builder.AddAttribute(seq++, "x", N(labelW + (plotW * total / max) + 6)); builder.AddAttribute(seq++, "y", N(y + 17));
             builder.AddContent(seq++, Format(total));
+            builder.CloseElement();
+            // Tooltip above the end of the bar, like the columns' (the first row's sits below it, inside the chart).
+            var tipX = labelW + Math.Max(plotW * total / max, 40);
+            AddTooltip(builder, ref seq, tipX, i == 0 ? y + 52 : y + 2, PointText(i));
             builder.CloseElement();
         }
     };

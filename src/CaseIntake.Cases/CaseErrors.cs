@@ -29,6 +29,14 @@ public static class CaseErrors
     public static Error InvalidStatus { get; } = new(ErrorKind.Validation, InvalidStatusCode, "The requested status is not valid.",
         new Dictionary<string, string[]> { ["TargetStatus"] = ["Choose a valid status."] });
 
+    /// <summary>The chosen owner is not a user who can work cases.</summary>
+    public static Error InvalidAssignee { get; } = new(ErrorKind.Validation, "Validation", "Some fields need attention.",
+        new Dictionary<string, string[]> { [Domain.Cases.CaseFieldNames.AssignedTo] = ["Choose an owner who can work cases."] });
+
+    /// <summary>The actor may create cases but not choose their owner (owners are set by roles that edit cases).</summary>
+    public static Error AssignNotAllowed { get; } = new(ErrorKind.Validation, "Validation", "Some fields need attention.",
+        new Dictionary<string, string[]> { [Domain.Cases.CaseFieldNames.AssignedTo] = ["Your role cannot choose the owner of a case."] });
+
     public static Error InvalidQuery(IReadOnlyDictionary<string, string[]> fieldErrors) =>
         new(ErrorKind.Validation, InvalidQueryCode, "The list query is not valid.", fieldErrors);
 }

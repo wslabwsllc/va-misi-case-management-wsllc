@@ -1,23 +1,23 @@
 @inherits LayoutComponentBase
 
-@* Layout of the static SSR account pages (sign-in): brand bar and a centred card, no site map (nothing is permitted
-   before sign-in). Uses the same tokens and kit as the app (E5-S8 styling of the E3 pages). *@
+@* Layout of the static SSR account pages (sign-in, access denied): a split screen with the brand, the page and the
+   footer in a white column, and a decorative leaf illustration beside it (aria-hidden; hidden on phones and in forced
+   colours). No site map: nothing is permitted before sign-in. Uses the same tokens and kit as the app. *@
 <div class="account-layout">
-    <a class="skip-link" href="#main">Skip to main content</a>
-    <header class="app-header-wrap">
-        <div class="app-header app-header--account">
-            <span class="brand">
-                <img class="brand__mark" src="@Assets["icons/icon.svg"]" alt="" />
-                <span class="brand__name">Case Management</span>
-            </span>
+    <div class="account-layout__column">
+        <a class="skip-link" href="#main">Skip to main content</a>
+        <header class="account-layout__brand app-header--account">
+            <img class="brand__mark" src="@Assets["icons/icon.svg"]" alt="" />
+            <span class="brand__name">Case Management</span>
             <span class="brand__divider" aria-hidden="true"></span>
             <span class="app-title">Case Intake and Triage</span>
-        </div>
-    </header>
-    <main id="main" class="account-layout__main" tabindex="-1">
-        <div class="account-card">
-            @Body
-        </div>
-    </main>
-    <footer class="account-footer">Synthetic demonstration data only. No Government systems or data are used.</footer>
+        </header>
+        <main id="main" class="account-layout__main" tabindex="-1">
+            <div class="account-card">
+                @Body
+            </div>
+        </main>
+        <footer class="account-footer">Synthetic demonstration data only. No Government systems or data are used.</footer>
+    </div>
+    <div class="account-art" aria-hidden="true" data-testid="account-art"></div>
 </div>

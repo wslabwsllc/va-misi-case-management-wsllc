@@ -175,8 +175,8 @@ public sealed partial class WebUiHostingTests(WebUiFixture fixture) : IClassFixt
         Assert.Equal("no-store", response.Headers.CacheControl!.ToString());
         Assert.Contains("attachment", response.Content.Headers.ContentDisposition!.ToString(), StringComparison.Ordinal);
         var csv = await response.Content.ReadAsStringAsync();
-        Assert.StartsWith("Id,Title,Status,CreatedAtUtc,UpdatedAtUtc", csv.TrimStart((char)0xFEFF), StringComparison.Ordinal);
-        Assert.Contains(",\"'=SUM(1,2) exported title\",New,", csv);
+        Assert.StartsWith("Id,Title,Status,Priority,Category,Owner,DueOn,CreatedAtUtc,UpdatedAtUtc", csv.TrimStart((char)0xFEFF), StringComparison.Ordinal);
+        Assert.Contains(",\"'=SUM(1,2) exported title\",New,Medium,\"General\",,", csv);
     }
 
     [Fact]

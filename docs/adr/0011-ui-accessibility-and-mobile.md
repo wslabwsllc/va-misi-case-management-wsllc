@@ -40,14 +40,46 @@ names an E3 policy and is shown only when `IAuthorizationService` grants it. But
 Hiding is a convenience: pages carry `[Authorize(Policy = ...)]` and services and endpoints authorize again.
 
 **Dashboard definitions.** Figures come only from `ICaseService.ListAsync`, so its authorization applies; nothing is
-hard-coded. The case model has no assignee, priority, category or due date, so: *Open* = New, Triaged or In Progress;
-*Pending review* = Resolved (waiting to be closed); *Resolved cases* = Resolved or Closed; *Overdue* = open and not
-updated for `Dashboard:OverdueAfterDays` (14) days; *Assigned to me / My tasks* = cases in a status from which the
-user holds a transition permission (domain workflow edges plus E3 permissions, the same rule that produces the status
-buttons); *Notifications* = cases updated in the last `Dashboard:RecentActivityDays` (14) days; monthly resolution
-uses a case's last update. The priority and category charts state that the data does not exist instead of inventing
-it. Charts are server-rendered SVG (no chart library, nothing to dispose) with a caption, a text summary, value labels,
-legends, distinct marker shapes and a data table.
+hard-coded. *Open* = New, Triaged or In Progress; *Pending review* = Resolved (waiting to be closed); *Resolved cases* =
+Resolved or Closed; *Overdue* = open and its due date is before today (UTC), the same rule as the case list's Overdue
+filter (`CaseTriageRules.IsOverdue`); *Assigned to me* = open cases the user owns; *My tasks* = cases in a status from
+which the user holds a transition permission (domain workflow edges plus E3 permissions, the same rule that produces
+the status buttons); *Recent cases* = New cases created in the last `Dashboard:NewCasesDays` (7) days; monthly
+resolution uses a case's last update; the priority and category charts count open cases. Charts are server-rendered
+SVG (no chart library, nothing to dispose) with a caption, a text summary, value labels, legends, distinct marker shapes
+and a data table. Issue #21 added: hover and keyboard-focus tooltips (CSS only, plus the SVG `title`); drill-through,
+where each column or bar is a named link to the case list with the same filter (the SVG is then `role="group"` of links
+instead of one `role="img"`); a grow-in animation that `prefers-reduced-motion` removes; an Expand button that opens a
+larger copy in the modal dialog; and month axis labels that show the year once and thin out so they never overlap.
+
+**Triage fields (issue #22).** Cases have a priority (Low, Medium, High, Urgent), a category, an owner (the user name
+of someone whose role grants `cases.edit`, validated by the service against the Identity tables) and an optional due
+date (a UTC calendar date). An empty due date at intake defaults to the priority's target (Urgent 2, High 5, Medium 10,
+Low 30 days). Priority, category and due date changes are audited by field name like the text fields.
+
+**Assignment.** The owner changes only through `ICaseAssignmentService.AssignAsync`, never through Edit, under
+`CaseAssignmentRules` (shared by the service and the UI): a supervisor (`cases.assign`) assigns or reassigns any open
+case to anyone who works cases, or unassigns it; a case worker (`cases.edit` without `cases.assign`) may only **Take**
+an unassigned case or **Hand back** their own; intake clerks, auditors and QA cannot change the owner; Closed cases keep
+theirs. Assignment is not tied to a status: it can happen at any time before the case closes. Choosing an owner at
+intake is an assignment too, so only supervisors see the owner picker there. Each change is an `Assigned` audit entry
+("Assigned to X (was Y)"), logged as EventId 2004, and the new owner's notification feed shows it as "Assigned to you".
+The detail page offers Assign/Reassign (dialog), Take case or Hand back in its command bar, and the case list's row
+menu offers "Assign…" to supervisors. The seeded demo cases spread their due dates from June 2026 over 420 days,
+so the demo shows a mix of overdue and upcoming cases instead of everything overdue; the E5 triage migration gives
+seeded rows of existing databases the same values (checked by `CaseTriageBackfillTests`).
+
+**Notifications (issue #21).** The feed is the append-only audit trail: every entry written by someone else in the last
+`Notifications:WindowDays` (14) days on a case the user can see. A per-user "read up to" time
+(`CaseNotificationCursors`) marks entries after it as unread; "Mark all as read" moves it forward. The sidebar and bottom
+bar show the unread count. A process-wide `CaseActivitySignal` makes every open circuit re-read its own count (through
+the authorized service) right after any case change, with a one-minute poll as a fallback; the signal carries no data.
+With several web instances the signal would need a shared bus; until then other instances catch up within a minute.
+
+**Progress feedback (issue #21).** Every page wraps its loads, refreshes and saves in `PageActivity`; the layout shows a
+thin indeterminate bar while any work runs (hidden from assistive technology, because each page announces its own
+loading and results). Refresh buttons show "Refreshing…" for at least a moment, announce the result and briefly
+highlight the refreshed figures.
 
 **PWA and offline policy.** `manifest.webmanifest` (standalone, theme colour, icons including maskable and Apple touch
 icons) and `sw.js`. The worker caches only static, same-origin assets (CSS, JS, icons, the manifest, `offline.html`),

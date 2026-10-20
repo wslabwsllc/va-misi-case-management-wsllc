@@ -10,7 +10,7 @@
    may take), so the UI never duplicates workflow or permission rules. Each change is confirmed in a native modal
    dialog (focus trapped, Esc cancels, cancelling returns focus to the button). After a change the persistent status
    heading takes focus and the change is announced; a rejected change shows an alert and the status is refreshed. *@
-<section class="card" aria-labelledby="status-heading" data-testid="status-section">
+<section class="@Class" aria-labelledby="status-heading" data-testid="status-section">
     <div class="card__header">
         <h2 id="status-heading" tabindex="-1" @ref="_heading" data-testid="status-heading">Status: @UiText.Status(Case.Status)</h2>
     </div>
@@ -58,6 +58,9 @@
     private string? _focusAfterRender;
 
     [Parameter, EditorRequired] public CaseDetailDto Case { get; set; } = default!;
+
+    /// <summary>CSS classes of the section: a card on its own (default), or a plain block inside another card.</summary>
+    [Parameter] public string Class { get; set; } = "card";
 
     /// <summary>The case after a successful change.</summary>
     [Parameter] public EventCallback<CaseDetailDto> OnChanged { get; set; }

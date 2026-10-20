@@ -322,7 +322,8 @@ separator (for example `Attachments__MaxBytes=5242880`). In Docker, set them und
 | `TestResults:ArtifactRetention` / `KeepLatestRuns` | 90 days / 30 runs | evidence retention (results are kept) |
 | `TestResults:MaxArtifactBytes` | 200 MiB | largest evidence file imported |
 | `Identity:RevalidationInterval` | `00:01:00` | how often open sessions re-check roles |
-| `Dashboard:OverdueAfterDays` / `TrendMonths` / `RecentActivityDays` | 14 / 12 / 14 | dashboard calculations |
+| `Dashboard:NewCasesDays` / `TrendMonths` / `RecentActivityDays` | 7 / 12 / 14 | dashboard calculations (Recent cases window, trend months, recent activity window) |
+| `Notifications:WindowDays` | 14 | how far back the notification feed reaches |
 
 </details>
 

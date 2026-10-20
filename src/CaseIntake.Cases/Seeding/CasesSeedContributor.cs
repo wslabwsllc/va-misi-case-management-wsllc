@@ -54,7 +54,7 @@ public sealed class CasesSeedContributor(
     {
         var creator = actors[fixture.CreatorUserName];
         var entity = Case.Create(fixture.Title, fixture.Description, veteran: null,
-            AuditAppender.ActorName(creator), fixture.CreatedAtUtc, fixture.Key);
+            AuditAppender.ActorName(creator), fixture.CreatedAtUtc, fixture.Key, fixture.Triage);
         db.Cases.Add(entity);
         AuditAppender.Append(db, entity, creator, AuditEvent.Created(fixture.CreatedAtUtc, hasVeteranSnapshot: false));
 

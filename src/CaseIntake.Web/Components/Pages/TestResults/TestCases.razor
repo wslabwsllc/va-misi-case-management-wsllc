@@ -5,6 +5,7 @@
 @using CaseIntake.Domain.TestResults
 @using CaseIntake.Web.Services
 @inject ITestResultsService Results
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<TestCases> Logger
 
 @* Every test known to the results store with its story, requirements and latest outcome (failures first). *@
@@ -133,6 +134,7 @@
 
     private async Task LoadAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         try
         {

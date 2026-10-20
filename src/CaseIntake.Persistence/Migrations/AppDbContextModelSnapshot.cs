@@ -93,6 +93,13 @@ namespace CaseIntake.Persistence.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityAlwaysColumn(b.Property<long>("Id"));
 
+                    b.Property<string>("AssignedTo")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<int>("Category")
+                        .HasColumnType("integer");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -104,6 +111,12 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<string>("Description")
                         .HasMaxLength(4000)
                         .HasColumnType("character varying(4000)");
+
+                    b.Property<DateOnly?>("DueOn")
+                        .HasColumnType("date");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer");
 
                     b.Property<string>("SeedKey")
                         .HasMaxLength(64)
@@ -146,7 +159,13 @@ namespace CaseIntake.Persistence.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("AssignedTo");
+
                     b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("DueOn");
+
+                    b.HasIndex("Priority");
 
                     b.HasIndex("SeedKey")
                         .IsUnique()
@@ -158,7 +177,11 @@ namespace CaseIntake.Persistence.Migrations
 
                     b.ToTable("Cases", null, t =>
                         {
+                            t.HasCheckConstraint("CK_Case_Category_Range", "\"Category\" BETWEEN 0 AND 11");
+
                             t.HasCheckConstraint("CK_Case_Id_Positive", "\"Id\" > 0");
+
+                            t.HasCheckConstraint("CK_Case_Priority_Range", "\"Priority\" BETWEEN 0 AND 3");
 
                             t.HasCheckConstraint("CK_Case_Status_Range", "\"Status\" BETWEEN 0 AND 4");
 
@@ -219,6 +242,20 @@ namespace CaseIntake.Persistence.Migrations
 
                             t.HasCheckConstraint("CK_CaseAuditEntry_ToStatus_Range", "\"ToStatus\" IS NULL OR \"ToStatus\" BETWEEN 0 AND 4");
                         });
+                });
+
+            modelBuilder.Entity("CaseIntake.Domain.Cases.CaseNotificationCursor", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<DateTimeOffset>("LastReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId");
+
+                    b.ToTable("CaseNotificationCursors", (string)null);
                 });
 
             modelBuilder.Entity("CaseIntake.Domain.TestResults.TestArtifact", b =>
@@ -941,11 +978,13 @@ namespace CaseIntake.Persistence.Migrations
                         .HasForeignKey("ExecutionId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("CaseIntake.Domain.TestResults.TestRun", null)
+                    b.HasOne("CaseIntake.Domain.TestResults.TestRun", "Run")
                         .WithMany()
                         .HasForeignKey("RunId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.Navigation("Run");
                 });
 
             modelBuilder.Entity("CaseIntake.Domain.TestResults.TestExecution", b =>

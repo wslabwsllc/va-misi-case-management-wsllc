@@ -5,6 +5,7 @@
 @using CaseIntake.Domain.TestResults
 @using CaseIntake.Web.Services
 @inject ITestResultsService Results
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<TestCaseDetail> Logger
 
 @* One test case and its outcome in every recent run (newest first), with the duration trend. *@
@@ -85,6 +86,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         try
         {

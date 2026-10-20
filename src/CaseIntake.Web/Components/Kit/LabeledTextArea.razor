@@ -5,11 +5,11 @@
         @Label
         @if (Required)
         {
-            <span class="field__required"> (required)</span>
+            <span class="field__required"><span class="field__asterisk" aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span></span>
         }
         else
         {
-            <span class="field__required"> (optional)</span>
+            <span class="visually-hidden"> (optional)</span>
         }
     </label>
     @if (!string.IsNullOrEmpty(Hint))

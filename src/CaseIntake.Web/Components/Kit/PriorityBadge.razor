@@ -1,0 +1,8 @@
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+@* Case priority as text plus a coloured marker whose shape grows with urgency (never colour alone). *@
+<span class="priority-badge @UiText.PriorityCss(Priority)" data-priority="@Priority">@UiText.Priority(Priority)</span>
+
+@code {
+    [Parameter, EditorRequired] public CasePriority Priority { get; set; }
+}

@@ -4,6 +4,7 @@
 @using CaseIntake.Contracts.TestResults
 @using CaseIntake.Web.Services
 @inject ITestResultsService Results
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<History> Logger
 
 @* History and trends over the most recent runs: pass rate, failures and tests that did not run, duration, and the tests
@@ -88,6 +89,7 @@ else if (_runs is { } runs)
 
     protected override async Task OnInitializedAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         try
         {

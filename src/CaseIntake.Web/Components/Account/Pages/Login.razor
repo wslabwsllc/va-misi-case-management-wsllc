@@ -14,7 +14,7 @@
 <PageTitle>Sign in - Case Intake and Triage</PageTitle>
 
 <h1>Sign in</h1>
-<p>Sign in with one of the synthetic demo accounts listed in the README.</p>
+<p>Welcome back. Enter your email and password to open Case Management.</p>
 
 @if (errorMessage is not null)
 {
@@ -41,10 +41,10 @@ else if (IsReturnToProtectedPage)
 
 <EditForm Model="Input" method="post" OnValidSubmit="SignInAsync" FormName="login" novalidate>
     <DataAnnotationsValidator />
-    <LabeledInputText Id="login-email" Label="Email" Type="email" AutoComplete="username" Spellcheck="false"
-                      Required="true" @bind-Value="Input.Email" />
+    <LabeledInputText Id="login-email" Label="Email address" Type="email" AutoComplete="username" Spellcheck="false"
+                      Required="true" @bind-Value="Input.Email" placeholder="Enter your email" />
     <LabeledInputText Id="login-password" Label="Password" Type="password" AutoComplete="current-password"
-                      Required="true" @bind-Value="Input.Password" />
+                      Required="true" @bind-Value="Input.Password" placeholder="Enter your password" />
     <div class="form-actions">
         <button type="submit" class="btn btn--primary">Sign in</button>
     </div>
@@ -54,6 +54,7 @@ else if (IsReturnToProtectedPage)
    without demo seeding reveals no account names. *@
 @if (!string.IsNullOrEmpty(Configuration[DemoUsers.PasswordKey]))
 {
+    <p class="account-divider" aria-hidden="true">or use a demo account</p>
     <section class="demo-accounts" aria-labelledby="demo-accounts-heading" data-testid="demo-accounts">
         <h2 id="demo-accounts-heading">Demo accounts</h2>
         <ul>
@@ -77,7 +78,7 @@ else if (IsReturnToProtectedPage)
         AppRoles.Auditor => "read-only review of cases, audit trails and documents",
         AppRoles.IntakeClerk => "opens new cases, looks up veterans and attaches documents",
         AppRoles.CaseWorker => "edits cases, starts and resolves them",
-        AppRoles.Supervisor => "everything, including triage, close and reopen",
+        AppRoles.Supervisor => "everything, including triage, assigning cases, close and reopen",
         AppRoles.QualityAnalyst => "reads cases; views and imports test results",
         _ => "",
     };

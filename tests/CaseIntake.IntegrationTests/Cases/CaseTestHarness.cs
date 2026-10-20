@@ -33,6 +33,7 @@ internal static class TestActors
     public static OperationActor Supervisor { get; } = FakeCurrentUser.Authenticated("sv-id", "supervisor@example.test", AppRoles.Supervisor,
     [
         .. Common,
+        Permissions.CasesAssign,
         Permissions.Transition(CaseStatus.New, CaseStatus.Triaged),
         Permissions.Transition(CaseStatus.Triaged, CaseStatus.InProgress),
         Permissions.Transition(CaseStatus.InProgress, CaseStatus.Resolved),

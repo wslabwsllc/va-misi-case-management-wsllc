@@ -32,8 +32,13 @@ public class CaseListTests : WebTestContext
 
         cut.WaitForAssertion(() => Assert.Equal(25, cut.FindAll("[data-testid=case-table] tbody tr").Count));
         Assert.StartsWith("Cases", cut.Find("[data-testid=case-table] caption").TextContent.Trim(), StringComparison.Ordinal);
-        Assert.Equal(["ID", "Title", "Status", "Created (UTC)", "Updated (UTC)"],
-            cut.FindAll("[data-testid=case-table] thead th").Select(th => th.QuerySelector("button")!.TextContent.Trim().Trim('▲', '▼').Trim()));
+        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date", "Created (UTC)", "Updated (UTC)", "Actions"],
+            cut.FindAll("[data-testid=case-table] thead th").Select(th => th.TextContent.Trim().Trim('▲', '▼', '⇅').Trim()));
+        // Every data column sorts; the row menu column does not.
+        Assert.Equal(9, cut.FindAll("[data-testid=case-table] thead th button.sort-button").Count);
+        Assert.Equal("Actions for case 1", cut.Find("[data-testid=row-menu] summary").GetAttribute("aria-label"));
+        Assert.Equal(["cases/1", "cases/1?tab=workflow", "cases/1?tab=attachments", "cases/1?tab=history"],
+            cut.Find("[data-testid=row-menu]").QuerySelectorAll("a").Select(a => a.GetAttribute("href")));
         var query = CaseService.ListQueries.Last();
         Assert.Equal(new CaseListQuery(), query with { Statuses = null });
         Assert.Equal("Showing 1–25 of 30 cases. Page 1 of 2.", cut.Find("[data-testid=results-announcement]").TextContent);
@@ -180,6 +185,75 @@ public class CaseListTests : WebTestContext
         SignInAs(AppRoles.QualityAnalyst);
         var cut = Render<CaseList>();
         Assert.Empty(cut.FindAll("[data-testid=new-case]"));
+    }
+
+    [Fact]
+    public async Task Drill_through_parameters_become_service_filters_and_date_chips()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedCaseAsync("Urgent claim", triage: new CaseTriage(CasePriority.Urgent, CaseCategory.Claims, "caseworker@example.test", null));
+        await SeedCaseAsync("Low billing", triage: new CaseTriage(CasePriority.Low, CaseCategory.Billing, null, null));
+        Navigation.NavigateTo("cases?priority=Urgent&category=Claims&owner=caseworker%40example.test&createdFrom=2026-10-01&createdTo=2026-10-31&sort=DueOn&dir=asc");
+
+        var cut = Render<CaseList>();
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=case-table] tbody tr")));
+        var query = CaseService.ListQueries.Last();
+        Assert.Equal([CasePriority.Urgent], query.Priorities);
+        Assert.Equal([CaseCategory.Claims], query.Categories);
+        Assert.Equal("caseworker@example.test", query.AssignedTo);
+        Assert.Equal(new DateTimeOffset(2026, 10, 1, 0, 0, 0, TimeSpan.Zero), query.CreatedFromUtc);
+        Assert.Equal(new DateTimeOffset(2026, 10, 31, 23, 59, 59, TimeSpan.Zero).AddTicks(9_999_999), query.CreatedToUtc);
+        Assert.Equal(CaseSortField.DueOn, query.SortBy);
+        Assert.Contains("Urgent claim", cut.Find("[data-testid=case-table]").TextContent);
+        Assert.Contains("Urgent", cut.Find("[data-testid=case-table] tbody [data-priority]").TextContent);
+        Assert.True(cut.Find("[data-testid=priority-Urgent]").HasAttribute("checked"));
+        Assert.Equal("Claims", cut.Find("[data-testid=filter-category]").GetAttribute("value"));
+
+        var chip = cut.Find("[data-testid=filter-chips]");
+        Assert.Contains("Created 2026-10-01 to 2026-10-31", chip.TextContent);
+        Assert.Contains("createdFrom=2026-10-01", cut.Find("[data-testid=export-csv]").GetAttribute("href"));
+        chip.QuerySelector("button")!.Click();
+        Assert.DoesNotContain("createdFrom", Navigation.Uri, StringComparison.Ordinal);
+        Assert.Contains("priority=Urgent", Navigation.Uri, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Overdue_filter_keeps_open_cases_past_their_due_date_and_marks_them()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedCaseAsync("Due soon", triage: new CaseTriage(CasePriority.Medium, CaseCategory.General, null, new DateOnly(2026, 10, 25)));
+        await SeedCaseAsync("Past due", triage: new CaseTriage(CasePriority.High, CaseCategory.General, null, new DateOnly(2026, 10, 15)));
+        await SeedCaseAsync("Past due but closed", CaseStatus.Closed, triage: new CaseTriage(CasePriority.High, CaseCategory.General, null, new DateOnly(2026, 10, 10)));
+        Navigation.NavigateTo("cases?overdue=true");
+
+        var cut = Render<CaseList>();
+
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=case-table] tbody tr")));
+        Assert.True(CaseService.ListQueries.Last().OverdueOnly);
+        var row = cut.Find("[data-testid=case-table] tbody tr");
+        Assert.Contains("Past due", row.TextContent);
+        Assert.Contains("Overdue by 4 days", row.QuerySelector(".cell-overdue")!.TextContent);
+        Assert.True(cut.Find("[data-testid=filter-overdue]").HasAttribute("checked"));
+    }
+
+    [Fact]
+    public async Task Owner_filter_offers_me_unassigned_and_the_people_who_work_cases()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedCaseAsync("Any case");
+        var cut = Render<CaseList>();
+
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll("[data-testid=case-table] tbody tr")));
+        var options = cut.FindAll("[data-testid=filter-owner] option").Select(o => (o.GetAttribute("value"), o.TextContent)).ToList();
+        Assert.Equal(("", "Anyone"), options[0]);
+        Assert.Equal(("supervisor@example.test", "Me (supervisor@example.test)"), options[1]);
+        Assert.Equal((CaseListQuery.UnassignedFilter, "Unassigned"), options[2]);
+        Assert.Equal(("caseworker@example.test", "caseworker@example.test"), options[3]);
+
+        cut.Find("[data-testid=filter-owner]").Change(CaseListQuery.UnassignedFilter);
+        cut.Find("[data-testid=case-filters]").Submit();
+        Assert.Contains("owner=%28unassigned%29", Navigation.Uri, StringComparison.Ordinal);
     }
 
     [Theory]

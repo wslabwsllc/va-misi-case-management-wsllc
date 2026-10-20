@@ -19,7 +19,12 @@ public static class CasesModule
         ArgumentNullException.ThrowIfNull(configuration);
         services.TryAddSingleton(TimeProvider.System);
         services.TryAddSingleton<ICaseWorkflow>(CaseWorkflow.Instance);
-        services.TryAddScoped<ICaseService, CaseService>();
+        services.TryAddScoped<CaseService>();
+        services.TryAddScoped<ICaseService>(sp => sp.GetRequiredService<CaseService>());
+        services.TryAddScoped<ICaseAssignmentService>(sp => sp.GetRequiredService<CaseService>());
+        services.TryAddScoped<ICaseAssigneeDirectory, CaseAssigneeDirectory>();
+        services.TryAddScoped<ICaseNotificationService, CaseNotificationService>();
+        services.AddOptions<CaseNotificationOptions>().Bind(configuration.GetSection(CaseNotificationOptions.SectionName));
         return services;
     }
 

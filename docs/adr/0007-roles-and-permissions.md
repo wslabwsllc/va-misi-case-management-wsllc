@@ -34,6 +34,7 @@ The spec requires at least two roles; the extra two separate read-only oversight
 | `attachments.download` | ✔ | ✔ | ✔ | ✔ | – |
 | `cases.create` / `veteran.lookup` / `attachments.upload` | – | ✔ | ✔ | ✔ | – |
 | `cases.edit` | – | – | ✔ | ✔ | – |
+| `cases.assign` (assign or reassign any case; without it, `cases.edit` may only take an unassigned case or hand back your own) | – | – | – | ✔ | – |
 | `cases.transition.Triaged.InProgress` | – | – | ✔ | ✔ | – |
 | `cases.transition.InProgress.Resolved` | – | – | ✔ | ✔ | – |
 | `cases.transition.New.Triaged` | – | – | – | ✔ | – |

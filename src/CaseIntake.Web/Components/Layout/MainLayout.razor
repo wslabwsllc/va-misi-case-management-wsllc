@@ -44,6 +44,12 @@
                 </ol>
             </nav>
             <div class="user-menu">
+                <AuthorizeView Policy="@Permissions.CasesView">
+                    <a class="btn btn--subtle btn--icon header-bell" href="notifications" title="Notifications" data-testid="header-notifications">
+                        <Icon Name="bell" /><span class="visually-hidden">Notifications</span>
+                        <NotificationBadge TestId="header-unread" />
+                    </a>
+                </AuthorizeView>
                 <UserStatus />
             </div>
         </div>
@@ -54,6 +60,7 @@
     <div class="app-body">
         <SideNav Collapsed="_navCollapsed" />
         <main id="main" class="app-main" tabindex="-1" @ref="_main">
+            <TopProgressBar />
             <div class="page">
                 @Body
             </div>

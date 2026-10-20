@@ -1,0 +1,63 @@
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+
+@* Status history (issue #22): every status the case has entered, newest first, who moved it and how long it stayed. *@
+<section class="card" aria-labelledby="status-history-heading" data-testid="status-history">
+    <div class="card__header"><h2 id="status-history-heading">Status history</h2></div>
+    @if (Entries is null)
+    {
+        <LoadingIndicator Text="Loading status history…" />
+    }
+    else if (Steps.Count == 0)
+    {
+        <p class="page-header__subtitle">No status changes recorded.</p>
+    }
+    else
+    {
+        <ol class="timeline" aria-label="Status changes, newest first">
+            @foreach (var step in Steps)
+            {
+                <li>
+                    <div class="timeline__head">
+                        <StatusPill Status="step.Status" />
+                        @if (step.Reopened)
+                        {
+                            <span class="badge">Reopened</span>
+                        }
+                    </div>
+                    <div class="timeline__meta">@UiText.Utc(step.At) · @step.Actor</div>
+                    <div class="timeline__meta">@(step.Until is { } until ? $"{Duration(until - step.At)} in this status" : "Current status")</div>
+                </li>
+            }
+        </ol>
+    }
+</section>
+
+@code {
+    private sealed record Step(CaseStatus Status, DateTimeOffset At, string Actor, bool Reopened, DateTimeOffset? Until);
+
+    [Parameter] public IReadOnlyList<AuditEntryDto>? Entries { get; set; }
+
+    private List<Step> Steps
+    {
+        get
+        {
+            var changes = (Entries ?? []).Where(e => e.ToStatus is not null)
+                .OrderBy(e => e.OccurredAtUtc).ThenBy(e => e.Id).ToList();
+            List<Step> steps = [];
+            for (var i = 0; i < changes.Count; i++)
+            {
+                var e = changes[i];
+                steps.Add(new Step(e.ToStatus!.Value, e.OccurredAtUtc, e.Actor, e.Action == AuditActions.Reopened,
+                    i + 1 < changes.Count ? changes[i + 1].OccurredAtUtc : null));
+            }
+            steps.Reverse();
+            return steps;
+        }
+    }
+
+    private static string Duration(TimeSpan span) => span.TotalDays >= 1
+        ? $"{(int)span.TotalDays} d {span.Hours} h"
+        : span.TotalHours >= 1 ? $"{(int)span.TotalHours} h {span.Minutes} min" : $"{Math.Max(span.Minutes, 0)} min";
+}

@@ -1,0 +1,93 @@
+@implements IDisposable
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Web.Services
+@inject ICaseNotificationService Notifications
+@inject CaseActivitySignal ActivitySignal
+@inject NavigationManager Navigation
+@inject ILogger<NotificationBadge> Logger
+
+@* Unread notification count on the Notifications navigation items (issue #21). Updated when any session changes a case
+   (CaseActivitySignal), after every navigation, and once a minute as a fallback. The number is followed by hidden text,
+   so the link reads "Notifications, 3 unread". Nothing is shown at zero or before the circuit starts. *@
+@if (_count > 0)
+{
+    <span class="nav-badge" data-testid="@TestId">@(_count > 99 ? "99+" : _count.ToString(System.Globalization.CultureInfo.InvariantCulture))<span class="visually-hidden"> unread</span></span>
+}
+
+@code {
+    private static readonly TimeSpan PollInterval = TimeSpan.FromMinutes(1);
+
+    private readonly CancellationTokenSource _cts = new();
+    private PeriodicTimer? _timer;
+    private int _count;
+
+    [Parameter] public string? TestId { get; set; }
+
+    protected override void OnInitialized()
+    {
+        if (!RendererInfo.IsInteractive)
+        {
+            return;
+        }
+        ActivitySignal.Changed += OnSignal;
+        Navigation.LocationChanged += OnLocationChanged;
+        _timer = new PeriodicTimer(PollInterval);
+        _ = PollAsync(_timer);
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender) =>
+        firstRender && RendererInfo.IsInteractive ? RefreshAsync() : Task.CompletedTask;
+
+    private void OnSignal() => _ = InvokeAsync(RefreshAsync);
+
+    private void OnLocationChanged(object? sender, Microsoft.AspNetCore.Components.Routing.LocationChangedEventArgs e) => _ = InvokeAsync(RefreshAsync);
+
+    private async Task PollAsync(PeriodicTimer timer)
+    {
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                await InvokeAsync(RefreshAsync);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private async Task RefreshAsync()
+    {
+        if (_cts.IsCancellationRequested)
+        {
+            return;
+        }
+        try
+        {
+            var result = await Notifications.GetUnreadCountAsync(_cts.Token);
+            var count = result.IsSuccess ? result.Value : 0;
+            if (count != _count)
+            {
+                _count = count;
+                StateHasChanged();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception ex)
+        {
+            // A badge failure must never break navigation; the Notifications page shows the real error.
+            Logger.LogWarning(new EventId(5012, "NotificationBadgeFailed"), "Unread count failed ({ExceptionType})", ex.GetType().Name);
+        }
+    }
+
+    public void Dispose()
+    {
+        ActivitySignal.Changed -= OnSignal;
+        Navigation.LocationChanged -= OnLocationChanged;
+        _cts.Cancel();
+        _timer?.Dispose();
+        _cts.Dispose();
+    }
+}

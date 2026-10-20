@@ -1,0 +1,139 @@
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+
+@* Priority, category, owner and due date inputs (issue #22), shared by intake and edit. Each input has a programmatic
+   label, an optional hint and its server error linked with aria-describedby / aria-invalid, like the text inputs of
+   the kit. The owner list holds the users who can work cases; without CanAssign it is shown read-only. *@
+<div class="form-grid" data-testid="@($"{IdPrefix}-triage")">
+    <div class="field">
+        <label class="field__label" for="@($"{IdPrefix}-priority")">Priority</label>
+        <select id="@($"{IdPrefix}-priority")" @bind="Model.Priority" @bind:after="OnChangedAsync"
+                aria-invalid="@Invalid(nameof(ITriageForm.Priority))" aria-describedby="@Described(nameof(ITriageForm.Priority), hint: false)">
+            @foreach (var priority in Enum.GetValues<CasePriority>().OrderDescending())
+            {
+                <option value="@priority">@UiText.Priority(priority)</option>
+            }
+        </select>
+        @Error(nameof(ITriageForm.Priority))
+    </div>
+    <div class="field">
+        <label class="field__label" for="@($"{IdPrefix}-category")">Category</label>
+        <select id="@($"{IdPrefix}-category")" @bind="Model.Category" @bind:after="OnChangedAsync"
+                aria-invalid="@Invalid(nameof(ITriageForm.Category))" aria-describedby="@Described(nameof(ITriageForm.Category), hint: false)">
+            @foreach (var category in Enum.GetValues<CaseCategory>().OrderBy(UiText.Category))
+            {
+                <option value="@category">@UiText.Category(category)</option>
+            }
+        </select>
+        @Error(nameof(ITriageForm.Category))
+    </div>
+    <div class="field">
+        <label class="field__label" for="@($"{IdPrefix}-owner")">Owner</label>
+        @if (CanAssign)
+        {
+            <select id="@($"{IdPrefix}-owner")" @bind="Model.AssignedTo" @bind:after="OnChangedAsync"
+                    aria-invalid="@Invalid(nameof(ITriageForm.AssignedTo))" aria-describedby="@Described(nameof(ITriageForm.AssignedTo), hint: true)">
+                <option value="">Unassigned</option>
+                @foreach (var a in Assignees)
+                {
+                    <option value="@a.UserName">@a.UserName (@CaseIntake.Contracts.Security.AppRoles.DisplayName(a.Role))</option>
+                }
+                @if (Model.AssignedTo is { Length: > 0 } current && Assignees.All(a => a.UserName != current))
+                {
+                    <option value="@current">@current</option>
+                }
+            </select>
+            <span class="field__hint" id="@($"{IdPrefix}-owner-hint")">People who can work cases.</span>
+        }
+        else
+        {
+            <input id="@($"{IdPrefix}-owner")" type="text" readonly value="@UiText.Owner(Model.AssignedTo)"
+                   aria-describedby="@($"{IdPrefix}-owner-hint")" />
+            <span class="field__hint" id="@($"{IdPrefix}-owner-hint")">@ReadOnlyOwnerHint</span>
+        }
+        @Error(nameof(ITriageForm.AssignedTo))
+    </div>
+    <div class="field">
+        <label class="field__label" for="@($"{IdPrefix}-due")">Due date (UTC) <span class="field__required">(optional)</span></label>
+        <input id="@($"{IdPrefix}-due")" type="date" @bind="Model.DueOn" @bind:format="yyyy-MM-dd" @bind:after="OnChangedAsync"
+               min="2000-01-01" max="2100-12-31"
+               aria-invalid="@Invalid(nameof(ITriageForm.DueOn))" aria-describedby="@Described(nameof(ITriageForm.DueOn), hint: DueHint is not null)" />
+        @if (DueHint is not null)
+        {
+            <span class="field__hint" id="@($"{IdPrefix}-due-hint")">@DueHint</span>
+        }
+        @Error(nameof(ITriageForm.DueOn))
+    </div>
+</div>
+
+@code {
+    [CascadingParameter] private EditContext? EditContext { get; set; }
+
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "triage";
+    [Parameter, EditorRequired] public ITriageForm Model { get; set; } = default!;
+    [Parameter] public IReadOnlyList<AssigneeDto> Assignees { get; set; } = [];
+    [Parameter] public bool CanAssign { get; set; }
+
+    /// <summary>Shown under the read-only owner when <see cref="CanAssign"/> is false.</summary>
+    [Parameter] public string ReadOnlyOwnerHint { get; set; } = "A supervisor assigns the owner.";
+    [Parameter] public string? DueHint { get; set; }
+
+    /// <summary>Raised after any triage input changes (for example to recompute a suggested due date).</summary>
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private Task OnChangedAsync() => OnChanged.InvokeAsync();
+
+    private IReadOnlyList<string> Messages(string field) =>
+        EditContext is null ? [] : EditContext.GetValidationMessages(new FieldIdentifier(EditContext.Model, field)).ToList();
+
+    private string? Invalid(string field) => Messages(field).Count > 0 ? "true" : null;
+
+    private string? Described(string field, bool hint)
+    {
+        var key = field switch
+        {
+            nameof(ITriageForm.Priority) => "priority",
+            nameof(ITriageForm.Category) => "category",
+            nameof(ITriageForm.AssignedTo) => "owner",
+            _ => "due",
+        };
+        List<string> ids = [];
+        if (hint)
+        {
+            ids.Add($"{IdPrefix}-{key}-hint");
+        }
+        if (Messages(field).Count > 0)
+        {
+            ids.Add($"{IdPrefix}-{key}-error");
+        }
+        return ids.Count == 0 ? null : string.Join(' ', ids);
+    }
+
+    private RenderFragment Error(string field) => builder =>
+    {
+        var messages = Messages(field);
+        if (messages.Count == 0)
+        {
+            return;
+        }
+        var key = field switch
+        {
+            nameof(ITriageForm.Priority) => "priority",
+            nameof(ITriageForm.Category) => "category",
+            nameof(ITriageForm.AssignedTo) => "owner",
+            _ => "due",
+        };
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "field__error");
+        builder.AddAttribute(2, "id", $"{IdPrefix}-{key}-error");
+        builder.OpenComponent<Icon>(3);
+        builder.AddComponentParameter(4, nameof(Icon.Name), "error");
+        builder.AddComponentParameter(5, nameof(Icon.Small), true);
+        builder.CloseComponent();
+        builder.OpenElement(6, "span");
+        builder.AddContent(7, string.Join(" ", messages));
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+}

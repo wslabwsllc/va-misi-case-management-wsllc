@@ -34,12 +34,12 @@ public static partial class CaseExportEndpoints
         ILoggerFactory loggers, CancellationToken ct)
     {
         var query = http.Request.Query;
-        var state = CaseListState.Parse(1, 25, query["status"].Where(s => s is not null).ToArray()!, query["q"].ToString(),
-            query.ContainsKey("sort") ? query["sort"].ToString() : null, query.ContainsKey("dir") ? query["dir"].ToString() : null);
+        // Same filters and sort as the list page (paging is ignored: the export holds every matching case).
+        var state = CaseListState.Parse(key => key is "page" or "size" ? [] : [.. query[key].OfType<string>()]);
         var cases = ActivatorUtilities.CreateInstance<CaseService>(services, currentUser);
 
         var csv = new StringBuilder();
-        csv.AppendLine("Id,Title,Status,CreatedAtUtc,UpdatedAtUtc");
+        csv.AppendLine("Id,Title,Status,Priority,Category,Owner,DueOn,CreatedAtUtc,UpdatedAtUtc");
         var page = 1;
         var rows = 0;
         while (rows < MaxRows)
@@ -56,6 +56,10 @@ public static partial class CaseExportEndpoints
                 csv.Append(c.Id.ToString(CultureInfo.InvariantCulture)).Append(',')
                    .Append(Cell(c.Title)).Append(',')
                    .Append(UiText.Status(c.Status)).Append(',')
+                   .Append(UiText.Priority(c.Priority)).Append(',')
+                   .Append(Cell(UiText.Category(c.Category))).Append(',')
+                   .Append(c.AssignedTo is null ? string.Empty : Cell(c.AssignedTo)).Append(',')
+                   .Append(c.DueOn?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty).Append(',')
                    .Append(UiText.IsoUtc(c.CreatedAtUtc)).Append(',')
                    .Append(UiText.IsoUtc(c.UpdatedAtUtc)).AppendLine();
                 rows++;

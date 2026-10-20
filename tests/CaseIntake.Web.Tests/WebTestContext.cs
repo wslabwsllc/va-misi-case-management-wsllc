@@ -41,6 +41,13 @@ public abstract class WebTestContext : BunitContext
         Services.AddSingleton<InMemoryCaseService>();
         Services.AddSingleton<ScriptedCaseService>();
         Services.AddSingleton<ICaseService>(sp => sp.GetRequiredService<ScriptedCaseService>());
+        Services.AddSingleton<ICaseAssignmentService>(sp => sp.GetRequiredService<InMemoryCaseService>());
+        Services.AddSingleton<InMemoryAssigneeDirectory>();
+        Services.AddSingleton<ICaseAssigneeDirectory>(sp => sp.GetRequiredService<InMemoryAssigneeDirectory>());
+        Services.AddSingleton<FakeCaseNotificationService>();
+        Services.AddSingleton<ICaseNotificationService>(sp => sp.GetRequiredService<FakeCaseNotificationService>());
+        Services.AddSingleton<CaseActivitySignal>();
+        Services.AddScoped<PageActivity>();
         Services.AddSingleton<FakeTestResultsService>();
         Services.AddSingleton<Contracts.TestResults.ITestResultsService>(sp => sp.GetRequiredService<FakeTestResultsService>());
         // The sign-in page injects AccountSignIn; presentation tests never submit, so an uninitialized instance suffices.
@@ -66,6 +73,7 @@ public abstract class WebTestContext : BunitContext
     }
 
     protected ScriptedCaseService CaseService => Services.GetRequiredService<ScriptedCaseService>();
+    protected FakeCaseNotificationService NotificationFeed => Services.GetRequiredService<FakeCaseNotificationService>();
     protected FakeTestResultsService TestResults => Services.GetRequiredService<FakeTestResultsService>();
     protected StatusAnnouncer Announcer => Services.GetRequiredService<StatusAnnouncer>();
     protected NavigationManager Navigation => Services.GetRequiredService<NavigationManager>();
@@ -82,13 +90,13 @@ public abstract class WebTestContext : BunitContext
     }
 
     /// <summary>Adds cases through the fake service as a temporary all-permissions actor, leaving the signed-in actor unchanged.</summary>
-    protected async Task<CaseDetailDto> SeedCaseAsync(string title, CaseStatus status = CaseStatus.New, string? description = null)
+    protected async Task<CaseDetailDto> SeedCaseAsync(string title, CaseStatus status = CaseStatus.New, string? description = null, CaseTriage? triage = null)
     {
         var actor = CurrentUser.Actor;
         CurrentUser.Actor = FakeCurrentUser.Authenticated("seed", "seed", AppRoles.Supervisor, FakeCurrentUser.AllPermissions);
         try
         {
-            var created = (await CaseService.CreateAsync(new CreateCaseRequest(title, description, null), CancellationToken.None)).Value!;
+            var created = (await CaseService.CreateAsync(new CreateCaseRequest(title, description, null, triage), CancellationToken.None)).Value!;
             CaseStatus[] path = status switch
             {
                 CaseStatus.Triaged => [CaseStatus.Triaged],

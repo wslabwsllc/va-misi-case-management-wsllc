@@ -138,6 +138,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         await s.StepAsync("A Triaged case is read-only for the Auditor", async () =>
         {
             await GotoAsync(page, $"/cases/{await FirstCaseInStatusAsync(page, "Triaged")}");
+            await PressAsync(page.GetByTestId("tab-history"));
             await Expect(page.GetByTestId("audit-list")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("no-transitions")).ToHaveTextAsync("No status changes available");
             await Expect(page.GetByTestId("edit-case")).ToHaveCountAsync(0);
@@ -171,6 +172,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         await s.StepAsync("A Triaged case offers upload but no edit or status change", async () =>
         {
             await GotoAsync(page, $"/cases/{await FirstCaseInStatusAsync(page, "Triaged")}");
+            await PressAsync(page.GetByTestId("tab-attachments"));
             await Expect(page.GetByTestId("upload-form")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("edit-case")).ToHaveCountAsync(0);
             await Expect(page.GetByTestId("no-transitions")).ToHaveTextAsync("No status changes available");

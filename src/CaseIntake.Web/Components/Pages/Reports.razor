@@ -4,6 +4,7 @@
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Services
 @inject CaseDashboardService Dashboard
+@inject CaseIntake.Web.Services.PageActivity Activity
 
 @* Case reports: the dashboard figures as tables (the accessible equivalent of the charts) and a CSV export of the case
    list, all from the authorized case service. *@
@@ -70,6 +71,7 @@ else if (_data is { } d)
 
     protected override async Task OnInitializedAsync()
     {
+        using var busy = Activity.Begin();
         var result = await Dashboard.LoadAsync(_cts.Token);
         _data = result.IsSuccess ? result.Value : null;
         _error = result.IsSuccess ? null : result.Error!.Message;

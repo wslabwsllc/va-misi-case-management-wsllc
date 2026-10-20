@@ -30,6 +30,11 @@ internal static partial class CaseLog
         Message = "Case {CaseId} {Operation} rejected: stale version")]
     public static partial void VersionConflict(ILogger logger, long caseId, string operation);
 
+    /// <summary>The owner changed. User names are not logged; the audit trail records them.</summary>
+    [LoggerMessage(EventId = 2004, EventName = "CaseAssigned", Level = LogLevel.Information,
+        Message = "Case {CaseId} owner changed by {ActorId}")]
+    public static partial void CaseAssigned(ILogger logger, long caseId, string actorId);
+
     [LoggerMessage(EventId = 2006, EventName = "CaseRequestRejected", Level = LogLevel.Information,
         Message = "Case operation {Operation} rejected with {ErrorCode}")]
     public static partial void RequestRejected(ILogger logger, string operation, string errorCode);

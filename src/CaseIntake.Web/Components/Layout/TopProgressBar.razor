@@ -1,0 +1,18 @@
+@implements IDisposable
+@using CaseIntake.Web.Services
+@inject PageActivity Activity
+
+@* Indeterminate progress bar at the top of the content area (issue #21), shown while any page loads, refreshes or saves
+   (PageActivity). Decorative: the pages announce loading and results in text, so it is hidden from assistive
+   technology. It fades in after a short delay, so very fast operations do not flicker. *@
+<div class="top-progress @(Activity.IsBusy ? "top-progress--active" : null)" aria-hidden="true" data-testid="top-progress" data-busy="@(Activity.IsBusy ? "true" : "false")">
+    <span class="top-progress__bar"></span>
+</div>
+
+@code {
+    protected override void OnInitialized() => Activity.Changed += OnChanged;
+
+    private void OnChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => Activity.Changed -= OnChanged;
+}

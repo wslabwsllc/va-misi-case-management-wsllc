@@ -22,6 +22,10 @@ public static class CaseRequestValidator
         {
             errors.AddRange(CaseTextRules.ValidateVeteran(veteran.Name, veteran.Address, veteran.SsnLast4));
         }
+        if (request.Triage is { } triage)
+        {
+            errors.AddRange(CaseTriageRules.Validate(triage));
+        }
 
         return ToError(errors);
     }
@@ -30,7 +34,12 @@ public static class CaseRequestValidator
     public static Error? Validate(UpdateCaseRequest request)
     {
         ArgumentNullException.ThrowIfNull(request);
-        return ToError(CaseTextRules.ValidateCase(CaseTextRules.NormalizeTitle(request.Title), request.Description));
+        List<FieldError> errors = [.. CaseTextRules.ValidateCase(CaseTextRules.NormalizeTitle(request.Title), request.Description)];
+        if (request.Triage is { } triage)
+        {
+            errors.AddRange(CaseTriageRules.Validate(triage));
+        }
+        return ToError(errors);
     }
 
     public static Error? ToError(IEnumerable<FieldError> errors)

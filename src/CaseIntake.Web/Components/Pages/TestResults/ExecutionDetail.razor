@@ -5,6 +5,7 @@
 @using CaseIntake.Domain.TestResults
 @using CaseIntake.Web.Services
 @inject ITestResultsService Results
+@inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<ExecutionDetail> Logger
 
 @* One test result: what the test is (general), where and when it ran (execution), the validation (preconditions,
@@ -231,6 +232,7 @@ else
 
     protected override async Task OnParametersSetAsync()
     {
+        using var busy = Activity.Begin();
         _loading = true;
         _error = null;
         try

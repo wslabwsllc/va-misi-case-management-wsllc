@@ -26,17 +26,23 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; a
 
 1. **Sign in** as the supervisor. Press Tab once on any freshly loaded page: "Skip to main content" appears. The header
    shows the user name, the role **Supervisor** and **Sign out**. The dashboard shows Total, Open, Pending review,
-   Overdue, Resolved and Assigned to me (definitions under each figure), the case volume and resolution trends, cases by
-   status, and the work lists. Priority and category say "Not available" because cases have no such fields.
+   Overdue (open and past the due date), Resolved and Assigned to me (open cases you own), the case volume and resolution
+   trends, cases by status, open cases by priority and by category, and the work lists. Hover over or Tab to a column:
+   its value appears; activate it to open the matching cases. *Expand* opens a larger chart. *Refresh* shows
+   "Refreshing…", then announces the new time. Recent cases lists only New cases from the last 7 days.
 2. **List controls**: Cases > tick *In Progress*, Apply (the count is announced: "Showing 1–n of N cases"); activate the
    *Title* header twice (ascending, then descending); Next page; reload the browser: the same view returns from the URL.
    Search "Benefit inquiry" to filter by text; a search with no match shows the empty state with *Clear filters*.
 3. **Validation and intake**: New case > Create case with an empty title: the error summary takes focus and the Title
    field explains the rule. Enter a title and a description (counters show the limits). In *Veteran lookup* enter
    `999-99-9999` (Not found), `12345` (invalid format alert), then `900-12-3456`: Rowan Calloway is found; choose
-   **Use this veteran**. The SSN box is empty again; only "SSN ending 3456" is kept. Create the case: the detail page
-   opens and "Case N created" is announced.
-4. **Audit information**: on the detail page note Created/Updated (UTC) and by, and the audit trail.
+   **Use this veteran**. The SSN box is empty again; only "SSN ending 3456" is kept. Choose a priority (the due-date hint
+   shows the default target), a category and an owner. Create the case: the detail page opens and "Case N created" is
+   announced.
+4. **Case detail and audit information**: the summary strip shows status, priority, category, owner, due date (with
+   "Due in n days" or "Overdue by n days") and last change; the stepper shows the workflow stage. The tabs (arrow keys
+   move between them) hold the Overview with Created/Updated (UTC) and by, the Workflow status history, the
+   Attachments and the History (audit trail, 10 entries per page).
 5. **Edit**: Edit > change the title > Save ("Changes saved"). Edit > Cancel restores the values. To show the conflict
    handling, open the same case in a second browser as the case worker and save there first; saving in the first
    browser explains the conflict, offers **Reload latest** and keeps your unsaved text.
@@ -50,8 +56,14 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; a
    no Edit and no status buttons. Sign in as `auditor@example.test`: cases and the audit trail are readable and
    downloads work, but nothing can be changed and `/cases/new` shows Access denied.
 8. **Lookup**: shown in step 3 against the real `veteran-lookup` container (`POST /veterans/lookup`).
-9. **Upload and download**: on an open case choose a `.txt` file and Upload ("File uploaded" is announced and the row
-   appears); upload an `.exe` to see the rejection. Use **Download** on the row; the file is identical.
+9. **Upload and download**: on an open case open the Attachments tab, choose a file and use **Remove** to take it back;
+   choose a `.txt` file and Upload ("File uploaded" is announced and the row appears); upload an `.exe` to see the
+   rejection. Use **Download** on the row; the file is identical.
+9a. **Assignment and notifications**: as the supervisor open an unassigned case and choose **Assign** (also in the
+   case list's ⋮ menu): pick the case worker. With the case worker signed in in a second browser, their bell and
+   Notifications badge update without a reload, and the Notifications page shows "assigned this case to you" with an
+   **Assigned to you** label. As the case worker, an unassigned case offers **Take case** and your own case offers
+   **Hand back**; someone else's case offers neither. **Mark all as read** clears the badge.
 10. **Phone and tablet**: narrow the window below 768 px (or use the browser's device toolbar): bottom navigation,
     app bar with back button, case cards, the floating New case button and sheets for More and Profile.
 11. **Test evidence**: run `scripts/run-all-tests.sh` (or `docker compose run --rm tests`), sign in as
