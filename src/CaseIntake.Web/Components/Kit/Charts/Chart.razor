@@ -5,7 +5,10 @@
    the same chart works on desktop and phone widths.
    Issue #21: hovering or focusing a column or bar shows its value in a tooltip; with Links each one is a link to the
    matching records (drill-through, reachable by Tab); columns grow in on first render (not with reduced motion); and
-   Expand opens a larger copy in a dialog. Axis labels are thinned so they never overlap. *@
+   Expand opens a larger copy in a dialog. Axis labels are thinned so they never overlap.
+   Tooltips are drawn in one layer after every point, so no later point paints over them, and each point names its
+   tooltip in data-tip. js/app.js shows the tooltip on hover or focus and hides it on Escape (WCAG 1.4.13). There is no
+   <title> in the SVG (the figcaption names it), because browsers show the nearest <title> as a second, native tooltip. *@
 <figure class="chart @(ShowExpand ? "chart--expandable" : null)" aria-labelledby="@CaptionId" data-testid="@TestId">
     <figcaption id="@CaptionId">@Title</figcaption>
     @if (!string.IsNullOrEmpty(Description))
@@ -19,9 +22,8 @@
     else
     {
         @* With links the SVG is a group of named links; without, a single image described by its summary. *@
-        <svg viewBox="0 0 @N(Width) @N(Height)" role="@(HasLinks ? "group" : "img")" aria-labelledby="@SvgTitleId @SvgDescId"
+        <svg viewBox="0 0 @N(Width) @N(Height)" role="@(HasLinks ? "group" : "img")" aria-labelledby="@CaptionId @SvgDescId"
              preserveAspectRatio="xMidYMid meet" class="chart__svg @(Animate ? "chart__svg--animate" : null)">
-            <title id="@SvgTitleId">@Title</title>
             <desc id="@SvgDescId">@Summary</desc>
             @if (Kind == ChartKind.Bar)
             {
@@ -143,7 +145,6 @@
     [Parameter] public bool Animate { get; set; } = true;
 
     private string CaptionId => $"{Id}-caption";
-    private string SvgTitleId => $"{Id}-svg-title";
     private string SvgDescId => $"{Id}-svg-desc";
 
     private bool HasData => Categories.Count > 0 && Series.Count > 0 && !Series.All(s => s.Values.All(v => v == 0));
@@ -193,25 +194,63 @@
         return Math.Max(1, (int)Math.Ceiling(needed / band));
     }
 
-    /// <summary>A tooltip above (x, y) inside the plot: a rounded box with the point's text, shown by CSS on hover/focus.</summary>
-    private void AddTooltip(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, double x, double y, string text)
+    private const double TipHeight = 22;
+
+    /// <summary>One point's tooltip: a rounded box at (Left, Top) holding the point's text.</summary>
+    private readonly record struct Tip(int Index, double Left, double Top, double Width, string Text);
+
+    private string TipId(int index) => $"{Id}-tip-{index.ToString(CultureInfo.InvariantCulture)}";
+
+    /// <summary>Estimated at 6.6 px per character of 12 px semibold text, plus padding; never wider than the chart.</summary>
+    private double TipWidth(string text) => Math.Min((text.Length * 6.6) + 16, Width - 8);
+
+    /// <summary>A tooltip centred above (x, y), kept inside the chart.</summary>
+    private Tip TipAbove(int index, double x, double y)
     {
-        var width = Math.Min((text.Length * 6.6) + 16, Width - 8);
-        var left = Math.Clamp(x - (width / 2), 4, Width - width - 4);
-        var top = Math.Max(y - 30, 2);
+        var text = PointText(index);
+        var width = TipWidth(text);
+        return new Tip(index, Math.Clamp(x - (width / 2), 4, Width - width - 4), Math.Max(y - 30, 2), width, text);
+    }
+
+    /// <summary>
+    /// A bar's tooltip inside its own row (rowY to rowY + 26), so it never covers another row: after the value label when
+    /// it fits, otherwise against the right edge, over the end of its own bar.
+    /// </summary>
+    private Tip TipInRow(int index, double rowY, double valueX, string value)
+    {
+        var text = PointText(index);
+        var width = TipWidth(text);
+        var left = valueX + (value.Length * 7.5) + 8;
+        if (left + width > Width - 4)
+        {
+            left = Width - width - 4;
+        }
+        return new Tip(index, Math.Max(left, 4), rowY + 2, width, text);
+    }
+
+    /// <summary>All tooltips, drawn last so they sit above every point. Hidden until js/app.js shows one.</summary>
+    private void AddTooltips(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, List<Tip> tips)
+    {
         builder.OpenElement(seq++, "g");
-        builder.AddAttribute(seq++, "class", "chart__tip");
+        builder.AddAttribute(seq++, "class", "chart__tips");
         builder.AddAttribute(seq++, "aria-hidden", "true");
-        builder.OpenElement(seq++, "rect");
-        builder.AddAttribute(seq++, "x", N(left)); builder.AddAttribute(seq++, "y", N(top));
-        builder.AddAttribute(seq++, "width", N(width)); builder.AddAttribute(seq++, "height", "22");
-        builder.AddAttribute(seq++, "rx", "4");
-        builder.CloseElement();
-        builder.OpenElement(seq++, "text");
-        builder.AddAttribute(seq++, "x", N(left + (width / 2))); builder.AddAttribute(seq++, "y", N(top + 15));
-        builder.AddAttribute(seq++, "text-anchor", "middle");
-        builder.AddContent(seq++, text);
-        builder.CloseElement();
+        foreach (var tip in tips)
+        {
+            builder.OpenElement(seq++, "g");
+            builder.AddAttribute(seq++, "class", "chart__tip");
+            builder.AddAttribute(seq++, "id", TipId(tip.Index));
+            builder.OpenElement(seq++, "rect");
+            builder.AddAttribute(seq++, "x", N(tip.Left)); builder.AddAttribute(seq++, "y", N(tip.Top));
+            builder.AddAttribute(seq++, "width", N(tip.Width)); builder.AddAttribute(seq++, "height", N(TipHeight));
+            builder.AddAttribute(seq++, "rx", "4");
+            builder.CloseElement();
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "x", N(tip.Left + (tip.Width / 2))); builder.AddAttribute(seq++, "y", N(tip.Top + 15));
+            builder.AddAttribute(seq++, "text-anchor", "middle");
+            builder.AddContent(seq++, tip.Text);
+            builder.CloseElement();
+            builder.CloseElement();
+        }
         builder.CloseElement();
     }
 
@@ -227,9 +266,7 @@
             builder.AddAttribute(seq++, "aria-label", PointText(index) + ". Open the list.");
         }
         builder.AddAttribute(seq++, "style", $"--i: {index.ToString(CultureInfo.InvariantCulture)}");
-        builder.OpenElement(seq++, "title");
-        builder.AddContent(seq++, PointText(index));
-        builder.CloseElement();
+        builder.AddAttribute(seq++, "data-tip", TipId(index));
     }
 
     private RenderFragment RenderColumnsOrLines() => builder =>
@@ -238,6 +275,7 @@
         var plotW = Width - Left - Right;
         var plotH = Height - Top - Bottom;
         var seq = 0;
+        var tips = new List<Tip>(Categories.Count);
         // Grid lines and y-axis labels (0, 25, 50, 75, 100 % of the nice maximum).
         for (var g = 0; g <= 4; g++)
         {
@@ -320,7 +358,7 @@
                 }
                 stackBase += value;
             }
-            AddTooltip(builder, ref seq, x0 + band / 2, topY - 14, PointText(i));
+            tips.Add(TipAbove(i, x0 + band / 2, topY - 14));
             builder.CloseElement();
         }
 
@@ -367,10 +405,11 @@
                     builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
                     builder.CloseElement();
                 }
-                AddTooltip(builder, ref seq, cx, highest - 8, PointText(i));
+                tips.Add(TipAbove(i, cx, highest - 8));
                 builder.CloseElement();
             }
         }
+        AddTooltips(builder, ref seq, tips);
     };
 
     private RenderFragment RenderBars() => builder =>
@@ -379,6 +418,7 @@
         const double labelW = 150;
         var plotW = Width - labelW - 56;
         var seq = 0;
+        var tips = new List<Tip>(Categories.Count);
         for (var i = 0; i < Categories.Count; i++)
         {
             var y = (Top / 2) + (i * 30);
@@ -409,15 +449,16 @@
                 offset += Stacked ? w : 0;
             }
             var total = Stacked ? Series.Sum(s => s.Values[i]) : Series[0].Values[i];
+            var valueX = labelW + (plotW * total / max) + 6;
+            var valueText = Format(total);
             builder.OpenElement(seq++, "text");
             builder.AddAttribute(seq++, "class", "chart__value");
-            builder.AddAttribute(seq++, "x", N(labelW + (plotW * total / max) + 6)); builder.AddAttribute(seq++, "y", N(y + 17));
-            builder.AddContent(seq++, Format(total));
+            builder.AddAttribute(seq++, "x", N(valueX)); builder.AddAttribute(seq++, "y", N(y + 17));
+            builder.AddContent(seq++, valueText);
             builder.CloseElement();
-            // Tooltip above the end of the bar, like the columns' (the first row's sits below it, inside the chart).
-            var tipX = labelW + Math.Max(plotW * total / max, 40);
-            AddTooltip(builder, ref seq, tipX, i == 0 ? y + 52 : y + 2, PointText(i));
+            tips.Add(TipInRow(i, y, valueX, valueText));
             builder.CloseElement();
         }
+        AddTooltips(builder, ref seq, tips);
     };
 }

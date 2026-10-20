@@ -727,9 +727,10 @@ pre.log { background: #1f1f1f; color: #f0f0f0; padding: var(--space-3); border-r
 .chart .chart__point:hover .chart__hit, .chart .chart__point:focus-visible .chart__hit { fill: rgba(15, 108, 189, 0.06); }
 .chart .chart__point:focus-visible .chart__hit { stroke: var(--focus); stroke-width: 2; stroke-dasharray: 4 3; }
 .chart .chart__tip { opacity: 0; pointer-events: none; transition: opacity 100ms ease; }
+/* Shown by js/app.js (the tooltips sit in their own layer, outside the hovered point). Hoverable while shown (1.4.13). */
+.chart .chart__tip.is-shown { opacity: 1; pointer-events: auto; }
 .chart .chart__tip rect { fill: var(--text); }
 .chart .chart__tip text { fill: #ffffff; font-size: 12px; font-weight: 600; }
-.chart .chart__point:hover .chart__tip, .chart .chart__point:focus-visible .chart__tip { opacity: 1; }
 .chart .chart__marker { transition: transform 120ms ease; transform-box: fill-box; transform-origin: center; }
 .chart .chart__point:hover .chart__marker, .chart .chart__point:focus-visible .chart__marker { transform: scale(1.5); }
 .chart__svg--animate .chart__bar { animation: bar-grow 600ms cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i, 0) * 35ms); }
