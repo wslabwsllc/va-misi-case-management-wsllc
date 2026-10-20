@@ -119,6 +119,25 @@ internal sealed class StubHandler(Func<HttpRequestMessage, int, CancellationToke
     }
 }
 
+/// <summary>
+/// Records each attempt (method, URI, content type, body) and passes the request on, so the payload sent to a real
+/// service can be asserted. Reading the body buffers it, so the framing (Content-Length rather than chunked) can differ
+/// from the production request; the tests assert the payload and headers, not the framing. A new instance is created per
+/// handler chain (IHttpClientFactory may build several); they share one list.
+/// </summary>
+internal sealed class RecordingHandler(List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)> requests) : DelegatingHandler
+{
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
+        lock (requests)
+        {
+            requests.Add((request.Content?.Headers.ContentType?.MediaType, body, request.RequestUri, request.Method));
+        }
+        return await base.SendAsync(request, cancellationToken);
+    }
+}
+
 internal static class LogAssertions
 {
     /// <summary>No captured record's message or structured state contains an SSN or any of the given values.</summary>

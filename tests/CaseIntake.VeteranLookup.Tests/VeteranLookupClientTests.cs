@@ -53,10 +53,11 @@ public class VeteranLookupClientTests
         var result = await client.LookupAsync("900123456", CancellationToken.None);
 
         Assert.Equal(new VeteranLookupResult(VeteranLookupOutcome.Found, "Avery Ashgrove", "100 Sample Street, Fernwick, VA 00010"), result);
+        var spec = await GovernmentSpec.GetAsync();   // method, path and content type come from the Government definition
         var request = Assert.Single(handler.Requests);
-        Assert.Equal(HttpMethod.Post, request.Method);
-        Assert.Equal("http://lookup.test/prefix/veterans/lookup", request.Uri!.ToString());   // base path prefix kept
-        Assert.Equal("application/json", request.ContentType);
+        Assert.Equal(spec.Method, request.Method);
+        Assert.Equal("http://lookup.test/prefix" + spec.Path, request.Uri!.ToString());   // base path prefix kept
+        Assert.Equal(spec.RequestContentType, request.ContentType);
         Assert.Equal("""{"ssn":"900-12-3456"}""", request.Body);                                 // nine digits normalized
     }
 
@@ -143,6 +144,8 @@ public class VeteranLookupClientTests
         Assert.Equal(1, handler.Calls);
     }
 
+    // Specification 4.6 does not mark name or address as required. A 200 without both cannot fill the case's veteran
+    // snapshot (E2 CaseTextRules), so intake continues as Unavailable (assumption D14).
     [Theory]
     [InlineData("not json")]
     [InlineData("{")]

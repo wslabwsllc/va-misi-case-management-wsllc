@@ -101,7 +101,8 @@ internal sealed partial class VeteranLookupClient(
                     body = null;   // malformed JSON, or a Content-Type/charset the reader cannot decode
                 }
 
-                // The result becomes the case's veteran snapshot, so it must satisfy the same rules intake applies.
+                // The result becomes the case's veteran snapshot, so it must satisfy the same rules intake applies. The
+                // Government definition (4.6) leaves name and address optional; a 200 without both is Unavailable (D14).
                 if (body is { Name: { } name, Address: { } address }
                     && CaseTextRules.ValidateVeteran(name, address, ssn[^CaseFieldLimits.SsnLast4Length..]).Count == 0)
                 {

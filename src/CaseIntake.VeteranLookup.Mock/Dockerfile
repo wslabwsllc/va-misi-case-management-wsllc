@@ -1,5 +1,6 @@
 # Veteran Lookup mock (E4-S1). Built by docker-compose.yml with the repository root as context. Only the projects the
-# mock needs are copied, so changes elsewhere do not invalidate this image. The runtime image includes bash, which the
+# mock needs are copied, so changes elsewhere do not invalidate this image. The Government contract (specification 4.6)
+# is copied from docs/contracts because the mock embeds and serves it verbatim. The runtime image includes bash, which the
 # Compose healthcheck uses (no curl is installed). Packages come from the registry at build time only.
 # Images are pinned by digest and the restore runs in locked mode against the committed packages.lock.json files
 # (docs/versions.md).
@@ -17,6 +18,7 @@ COPY src/CaseIntake.Domain/ src/CaseIntake.Domain/
 COPY src/CaseIntake.Contracts/ src/CaseIntake.Contracts/
 COPY src/CaseIntake.ServiceDefaults/ src/CaseIntake.ServiceDefaults/
 COPY src/CaseIntake.VeteranLookup.Mock/ src/CaseIntake.VeteranLookup.Mock/
+COPY docs/contracts/veteran-lookup.spec.openapi.yaml docs/contracts/
 RUN dotnet publish src/CaseIntake.VeteranLookup.Mock/CaseIntake.VeteranLookup.Mock.csproj -c Release --no-restore \
       -p:UseAppHost=false -o /app
 

@@ -1,3 +1,4 @@
+using System.Text.Json;
 using CaseIntake.Contracts.Security;
 using CaseIntake.Contracts.VeteranLookup;
 using CaseIntake.VeteranLookup.Client;
@@ -18,7 +19,7 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
         return await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(ssn, CancellationToken.None);
     }
 
-    private ServiceProvider BuildProvider(string target)
+    private ServiceProvider BuildProvider(string target, List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)>? recorded = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -33,6 +34,10 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
         {
             http.ConfigurePrimaryHttpMessageHandler(() => factory.Server.CreateHandler());
         }
+        if (recorded is not null)
+        {
+            http.AddHttpMessageHandler(() => new RecordingHandler(recorded));
+        }
 
         return services.BuildServiceProvider();
     }
@@ -45,6 +50,27 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
 
         var expected = VeteranDatasetGenerator.Generate()[0];
         Assert.Equal(new VeteranLookupResult(VeteranLookupOutcome.Found, expected.Name, expected.Address), result);
+    }
+
+    // Specification 4.6: the production client's wire request matches the Government definition, checked against the
+    // definition itself (method, path, content type, request schema), and the real service answers it.
+    [Theory]
+    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    public async Task The_client_sends_the_request_the_spec_defines(string target)
+    {
+        var spec = await GovernmentSpec.GetAsync();
+        var recorded = new List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)>();
+        await using var provider = BuildProvider(target, recorded);
+
+        var result = await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(VeteranDatasetGenerator.KnownFoundSsn, CancellationToken.None);
+
+        Assert.Equal(VeteranLookupOutcome.Found, result.Outcome);
+        var request = Assert.Single(recorded);
+        Assert.Equal(spec.Method, request.Method);
+        Assert.Equal(spec.Path, request.Uri!.AbsolutePath);
+        Assert.Equal(spec.RequestContentType, request.ContentType);
+        using var body = JsonDocument.Parse(request.Body);
+        GovernmentSpec.AssertConforms(body.RootElement, spec.RequestSchema);
     }
 
     [Theory]

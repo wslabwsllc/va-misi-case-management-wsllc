@@ -6,15 +6,16 @@ using Microsoft.OpenApi;
 namespace CaseIntake.VeteranLookup.Mock;
 
 /// <summary>
-/// Local, deterministic Veteran Lookup service (E4-S1). It is the source of truth for the lookup contract: the
-/// OpenAPI document served at <c>/openapi/v1.yaml</c> and <c>/openapi/v1.json</c> is generated from these endpoint
-/// declarations, and a test keeps the committed <c>docs/contracts/veteran-lookup.openapi.yaml</c> identical to it.
+/// Local, deterministic Veteran Lookup service (E4-S1). Its contract is the Government's definition (specification 4.6),
+/// served verbatim at <c>/openapi/v1.yaml</c> (<see cref="GovernmentContract"/>). The document generated from these
+/// endpoint declarations (<c>/openapi/implementation.json</c>) is conformance evidence only: a test compares it with the
+/// Government definition and allows only the documented extensions (ADR 0008, D11-D15).
 /// An explicit class (not top-level statements) so its entry point never collides with the web app's <c>Program</c>.
 /// </summary>
 public sealed class MockProgram
 {
     public const string LookupRoute = "/veterans/lookup";
-    public const string DocumentName = "v1";
+    public const string ImplementationDocumentName = "implementation";
 
     private MockProgram()
     {
@@ -34,20 +35,25 @@ public sealed class MockProgram
         builder.Services.AddProblemDetails();
         builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddSingleton(_ => VeteranDataset.LoadEmbedded());
-        builder.Services.AddOpenApi(DocumentName, options => options.AddDocumentTransformer((document, _, _) =>
+        builder.Services.AddOpenApi(ImplementationDocumentName, options =>
         {
-            // Fixed metadata and no "servers" entry: the generated document must not depend on the request host,
-            // otherwise the committed snapshot would differ between machines.
-            document.Info = new OpenApiInfo
+            // OpenAPI 3.0, like the Government definition. Microsoft.OpenApi writes its own 3.0 patch version (D15).
+            options.OpenApiVersion = OpenApiSpecVersion.OpenApi3_0;
+            options.AddDocumentTransformer((document, _, _) =>
             {
-                Title = "Veteran Lookup (synthetic mock)",
-                Version = "1.0.0",
-                Description = "Local, deterministic stand-in for the sample data service (specification 4.6). " +
-                    "All data is synthetic; every SSN has an area number of 900-999.",
-            };
-            document.Servers?.Clear();
-            return Task.CompletedTask;
-        }));
+                // The Government definition's info, and no "servers" entry, so the document does not depend on the host.
+                document.Info = new OpenApiInfo { Title = "Veteran Lookup Service", Version = "1.0.0" };
+                document.Servers?.Clear();
+                return Task.CompletedTask;
+            });
+            options.AddOperationTransformer((operation, _, _) =>
+            {
+                // The Government definition's response descriptions instead of the framework's reason phrases.
+                SetDescription(operation, "200", "Veteran found");
+                SetDescription(operation, "404", "Not found");
+                return Task.CompletedTask;
+            });
+        });
 
         var app = builder.Build();
         app.UseOperationContext();
@@ -75,9 +81,18 @@ public sealed class MockProgram
             .WithDescription("Returns the veteran's name and address. 404 when the SSN is not in the dataset; " +
                 "400 when the body is not valid JSON or ssn is missing, null, not a string or empty; 415 when the body is not JSON.");
         app.MapGet("/health", () => TypedResults.Ok()).ExcludeFromDescription();
-        app.MapOpenApi("/openapi/{documentName}.yaml");
+        app.MapGet(GovernmentContract.Route, () => TypedResults.Bytes(GovernmentContract.Bytes, GovernmentContract.ContentType))
+            .ExcludeFromDescription();
         app.MapOpenApi("/openapi/{documentName}.json");
         return app;
+    }
+
+    private static void SetDescription(OpenApiOperation operation, string status, string description)
+    {
+        if (operation.Responses?.TryGetValue(status, out var response) == true && response is OpenApiResponse concrete)
+        {
+            concrete.Description = description;
+        }
     }
 
     internal static Results<Ok<VeteranLookupResponse>, NotFound, ProblemHttpResult> Lookup(
