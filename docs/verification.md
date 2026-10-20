@@ -289,5 +289,20 @@ New tests: `The_Government_contract_exemption_matches_the_committed_file_and_is_
 | Q&A hash command from [demo.md](demo.md) against the container | `bbd95fc2…0f26`, identical to the committed file |
 | SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
 
-Remaining before the demo baseline: merge main once its fix for the apt-snapshot test lands, then rerun for a fully
-green result.
+## After merging main again (PR #27: flaky timing tests, SSN detection in GUIDs, apt snapshot test)
+
+Merge `28582ec` (`origin/main` at `a5b4d82`). One conflict, in `ClientAgainstMockTests.cs`: PR #27 and US-4.1 both
+extended `BuildProvider` (a warm-up timeout budget and a request recorder). Both were kept:
+`BuildProvider(target, budget, recorded)`. Isolated Compose project `-p caseintake-r12`, removed afterwards with `down -v`.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln -c Release` | 0 warnings, 0 errors |
+| `dotnet test tests/CaseIntake.VeteranLookup.Tests -c Release` (host) | 87 passed, 0 failed |
+| `dotnet test tests/CaseIntake.IntegrationTests -c Release` (host) | 345 passed, 0 failed |
+| `docker compose -p caseintake-r12 up --build -d --wait` | `db`, `veteran-lookup`, `web` healthy |
+| `docker compose -p caseintake-r12 run --rm tests` (test image rebuilt), run `20261020T175437Z-d2f4a65d` | **`RESULT: PASS`**: Attachments 86/0, Cases 112/0, E2E 18/0, Identity 113/0, IntegrationTests 345/0, VeteranLookup 111/0 (87 in-process + 24 against the container), Web.Tests 122/0 (907 tests) |
+| Q&A hash command from [demo.md](demo.md) against the container | `bbd95fc2…0f26`, identical to the committed file |
+| SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
+
+The apt-snapshot test noted above as failing on main passes after PR #27.
