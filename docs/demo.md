@@ -55,6 +55,8 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; a
    with a link back to the case list. Sign in as `intake@example.test`: New case and Upload are offered, but a case has
    no Edit and no status buttons. Sign in as `auditor@example.test`: cases and the audit trail are readable and
    downloads work, but nothing can be changed and `/cases/new` shows Access denied.
+   **Users** (supervisor): Administration > Users, add `clerk@example.test` as Intake clerk with an initial password,
+   sign in as them, choose **Change password** in the header and sign in again with the new password.
 8. **Lookup**: shown in step 3 against the real `veteran-lookup` container (`POST /veterans/lookup`).
 9. **Upload and download**: on an open case open the Attachments tab, choose a file and use **Remove** to take it back;
    choose a `.txt` file and Upload ("File uploaded" is announced and the row appears); upload an `.exe` to see the

@@ -15,6 +15,7 @@ public static class AccountRoutes
     public const string Login = "/account/login";
     public const string Logout = "/account/logout";
     public const string AccessDenied = "/account/access-denied";
+    public const string ChangePassword = "/account/change-password";
 
     /// <summary>Where sign-out lands: the login page with its "You have signed out." confirmation.</summary>
     public const string SignedOut = Login + "?signedOut=true";

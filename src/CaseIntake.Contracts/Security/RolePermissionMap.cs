@@ -32,10 +32,11 @@ public static class RolePermissionMap
     public static ImmutableArray<string> TestResultsPermissions { get; } = [Permissions.TestResultsView, Permissions.TestResultsManage];
 
     /// <summary>
-    /// Every permission an authorization policy is registered for: the six fixed ones, assignment, the five transitions
-    /// and the two test results permissions.
+    /// Every permission an authorization policy is registered for: the six fixed ones, assignment, the five transitions,
+    /// the two test results permissions and user administration.
     /// </summary>
-    public static ImmutableArray<string> AllPermissions { get; } = [.. Common, Permissions.CasesAssign, .. TransitionPermissions, .. TestResultsPermissions];
+    public static ImmutableArray<string> AllPermissions { get; } =
+        [.. Common, Permissions.CasesAssign, .. TransitionPermissions, .. TestResultsPermissions, Permissions.UsersManage];
 
     // The case roles build on each other: Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor.
     private static readonly string[] ReadOnly = [Permissions.CasesView, Permissions.AttachmentsDownload];
@@ -56,8 +57,9 @@ public static class RolePermissionMap
             [AppRoles.Auditor] = [.. ReadOnly],
             [AppRoles.IntakeClerk] = [.. Intake],
             [AppRoles.CaseWorker] = [.. Casework],
-            // Supervisors also assign and reassign case owners (case workers may only take or hand back, see CaseAssignmentRules).
-            [AppRoles.Supervisor] = [.. Common, Permissions.CasesAssign, .. TransitionPermissions],
+            // Supervisors also assign and reassign case owners (case workers may only take or hand back, see CaseAssignmentRules)
+            // and add users of any role.
+            [AppRoles.Supervisor] = [.. Common, Permissions.CasesAssign, .. TransitionPermissions, Permissions.UsersManage],
             // QA reads cases (to follow evidence back to the application) and owns test evidence; it cannot change cases.
             [AppRoles.QualityAnalyst] = [Permissions.CasesView, .. TestResultsPermissions],
         }.ToFrozenDictionary(StringComparer.Ordinal);

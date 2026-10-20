@@ -22,7 +22,7 @@ public abstract class E2ETestBase(PlaywrightFixture fixture)
         E2ESession.StartAsync(Fixture, meta, viewport, mobile);
 
     /// <summary>Signs in on the static sign-in page using only the keyboard and waits for the dashboard.</summary>
-    protected static async Task SignInAsync(E2ESession s, string email, string? expectHeading = "Dashboard")
+    protected static async Task SignInAsync(E2ESession s, string email, string? expectHeading = "Dashboard", string? password = null)
     {
         await s.StepAsync($"Sign in as {email} (keyboard)", async () =>
         {
@@ -32,7 +32,7 @@ public abstract class E2ETestBase(PlaywrightFixture fixture)
             await s.Page.Keyboard.TypeAsync(email);
             await s.Page.Keyboard.PressAsync("Tab");
             await E2ESession.ExpectFocusedAsync(s.Page.Locator("#login-password"));
-            await s.Page.Keyboard.TypeAsync(E2ESettings.DemoPassword);
+            await s.Page.Keyboard.TypeAsync(password ?? E2ESettings.DemoPassword);
             await s.Page.Keyboard.PressAsync("Enter");
             if (expectHeading is not null)
             {

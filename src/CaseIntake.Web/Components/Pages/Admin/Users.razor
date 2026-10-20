@@ -1,0 +1,226 @@
+@page "/admin/users"
+@attribute [Authorize(Policy = Permissions.UsersManage)]
+@implements IDisposable
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Identity
+@using CaseIntake.Web.Services
+@inject IUserAdministrationService UserAdmin
+@inject StatusAnnouncer Announcer
+@inject ILogger<Users> Logger
+
+@* User administration: supervisors add an account with one role and an initial password, which the user then changes
+   on the change-password page. Field errors come from the service (Identity's rules) through the validation store. *@
+<PageShell Title="Users" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="Add people and choose what they can do. Fields marked * are required." />
+
+<ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The user was not added")" Message="@_error" TestId="users-error" />
+
+<div class="grid grid--main-side">
+    <section class="card" aria-labelledby="users-heading">
+        <h2 id="users-heading" class="card__header">People</h2>
+        @if (_users is null)
+        {
+            <LoadingIndicator Text="Loading users…" />
+        }
+        else
+        {
+            <table class="data-grid" data-testid="users-table">
+                <caption class="visually-hidden">Users and their roles</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Email</th>
+                        <th scope="col">Role</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in _users)
+                    {
+                        <tr>
+                            <td class="mono">@user.UserName</td>
+                            <td>@AppRoles.Describe(user.Roles)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <section class="card" aria-labelledby="add-user-heading">
+        <h2 id="add-user-heading" class="card__header">Add user</h2>
+        <div role="status" aria-live="polite" data-testid="user-added">
+            @if (_added is not null)
+            {
+                <p class="message message--success"><Icon Name="success" /><span class="message__body">@_added</span></p>
+            }
+        </div>
+        <EditForm EditContext="_editContext" OnSubmit="SubmitAsync" id="add-user-form" novalidate class="form" data-testid="add-user-form">
+            <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
+            <LabeledInputText Id="user-email" Label="Email address" Type="email" AutoComplete="off" Spellcheck="false" Required="true"
+                              @bind-Value="_model.Email" Hint="The person signs in with this address." />
+            <div class="field">
+                <label class="field__label" for="user-role">
+                    Role<span class="field__required"><span class="field__asterisk" aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span></span>
+                </label>
+                <select id="user-role" @bind="_model.Role" aria-required="true"
+                        aria-invalid="@(RoleErrors.Count > 0 ? "true" : null)" aria-describedby="@(RoleErrors.Count > 0 ? "user-role-error" : null)">
+                    <option value="">Choose a role</option>
+                    @foreach (var role in RolePermissionMap.Roles)
+                    {
+                        <option value="@role">@AppRoles.DisplayName(role)</option>
+                    }
+                </select>
+                @if (RoleErrors.Count > 0)
+                {
+                    <div class="field__error" id="user-role-error"><Icon Name="error" Small="true" /><span>@string.Join(" ", RoleErrors)</span></div>
+                }
+            </div>
+            <LabeledInputText Id="user-password" Label="Initial password" Type="password" AutoComplete="new-password" Required="true"
+                              @bind-Value="_model.Password" Hint="@($"{IdentityModule.PasswordHint} Share it with the person; they can change it after signing in.")" />
+            <div class="form-actions">
+                <button type="submit" class="btn btn--primary" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="add-user">
+                    <Icon Name="add" Small="true" /><span>Add user</span>
+                </button>
+            </div>
+        </EditForm>
+    </section>
+</div>
+
+@code {
+    private sealed class UserModel
+    {
+        public string? Email { get; set; }
+        public string? Role { get; set; }
+        public string? Password { get; set; }
+    }
+
+    private static readonly IReadOnlyList<KeyValuePair<string, string>> SummaryFields =
+    [
+        new(UserFieldNames.Email, "user-email"),
+        new(UserFieldNames.Role, "user-role"),
+        new(UserFieldNames.Password, "user-password"),
+    ];
+
+    private readonly CancellationTokenSource _cts = new();
+    private UserModel _model = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private FormErrorSummary? _summary;
+    private ErrorAlert? _alert;
+    private IReadOnlyList<UserSummaryDto>? _users;
+    private bool _showSummary;
+    private bool _focusSummary;
+    private bool _focusAlert;
+    private bool _submitting;
+    private string? _error;
+    private string? _added;
+
+    private IReadOnlyList<string> RoleErrors => _editContext.GetValidationMessages(new FieldIdentifier(_model, UserFieldNames.Role)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        NewForm();
+        await LoadAsync();
+    }
+
+    private void NewForm()
+    {
+        _model = new();
+        _editContext = new EditContext(_model);
+        _messages = new ValidationMessageStore(_editContext);
+        _showSummary = false;
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            var result = await UserAdmin.ListAsync(_cts.Token);
+            _users = result.IsSuccess ? result.Value : [];
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5020, "UserListFailed"), "User list failed ({ExceptionType})", ex.GetType().Name);
+            _users = [];
+            _error = "The user list could not be loaded. Reload the page to try again.";
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        if (_submitting)
+        {
+            return;
+        }
+        _error = null;
+        _added = null;
+        _submitting = true;
+        try
+        {
+            var result = await UserAdmin.CreateAsync(new CreateUserRequest(_model.Email ?? "", _model.Role ?? "", _model.Password ?? ""), _cts.Token);
+            if (result.IsSuccess)
+            {
+                var user = result.Value!;
+                NewForm();
+                _added = $"{user.UserName} was added as {AppRoles.Describe(user.Roles)}.";
+                Announcer.Announce(_added);
+                await LoadAsync();
+                return;
+            }
+
+            _model.Password = null;
+            if (result.Error!.FieldErrors is { Count: > 0 } fieldErrors)
+            {
+                _messages.Clear();
+                foreach (var (field, messages) in fieldErrors)
+                {
+                    _messages.Add(new FieldIdentifier(_model, field), messages);
+                }
+                _showSummary = true;
+                _focusSummary = true;
+                _editContext.NotifyValidationStateChanged();
+            }
+            else
+            {
+                _error = result.Error.Message;
+                _focusAlert = true;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5021, "UserCreateFailed"), "Adding a user failed ({ExceptionType})", ex.GetType().Name);
+            _error = "Something went wrong and the user was not added. Try again.";
+            _focusAlert = true;
+        }
+        finally
+        {
+            _submitting = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusSummary && _summary is not null)
+        {
+            _focusSummary = false;
+            await _summary.FocusAsync();
+        }
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

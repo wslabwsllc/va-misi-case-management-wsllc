@@ -579,8 +579,9 @@ pre.log { background: #1f1f1f; color: #f0f0f0; padding: var(--space-3); border-r
   .nav-link { min-height: var(--touch); }
   .btn, .command, input[type="text"], input[type="email"], input[type="password"], input[type="search"], select { min-height: var(--touch); }
   .data-grid th, .data-grid td { height: 48px; }
-  .user-status__name { max-width: 150px; }
-  .user-status__text { max-width: 170px; }
+  .user-status { gap: var(--space-2); }
+  .user-status__name { max-width: 130px; }
+  .user-status__text { max-width: 130px; }
 }
 
 /* Phone: below 768 px. Native-app shell: compact sticky header, bottom navigation, cards, floating action. */

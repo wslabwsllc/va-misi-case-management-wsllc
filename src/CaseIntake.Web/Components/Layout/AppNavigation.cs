@@ -33,6 +33,7 @@ public static class AppNavigation
         new("Reports", [new("Case reports", "reports", "reports", Permissions.CasesView)]),
         new("Administration",
         [
+            new("Users", "admin/users", "person", Permissions.UsersManage),
             new("Quality assurance", "test-results", "admin", Permissions.TestResultsView),
             new("Test results", "test-results/runs", "beaker", Permissions.TestResultsView, Child: true),
             new("Test cases", "test-results/cases", "document", Permissions.TestResultsView, Child: true),

@@ -50,6 +50,9 @@ public static class Permissions
     /// <summary>Import executed test runs into the results store (runs are executed by the documented test command).</summary>
     public const string TestResultsManage = "testresults.manage";
 
+    /// <summary>List users and add users of any role (supervisors).</summary>
+    public const string UsersManage = "users.manage";
+
     public static string Transition(CaseStatus from, CaseStatus to) => $"cases.transition.{from}.{to}";
 }
 
