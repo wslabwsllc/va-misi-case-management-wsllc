@@ -14,9 +14,8 @@ internal static class GovernmentContract
 
     private const string ResourceName = "CaseIntake.VeteranLookup.Mock.veteran-lookup.spec.openapi.yaml";
 
-    private static readonly Lazy<byte[]> Content = new(Load);
-
-    public static byte[] Bytes => Content.Value;
+    /// <summary>Read once, when the class is first used.</summary>
+    public static readonly byte[] Bytes = Load();
 
     private static byte[] Load()
     {

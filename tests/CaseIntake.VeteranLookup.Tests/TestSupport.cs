@@ -99,22 +99,32 @@ internal sealed class TestCurrentUser(params string[] permissions) : ICurrentUse
     public Task<OperationActor> GetAsync(CancellationToken ct) => Task.FromResult(Actor);
 }
 
+/// <summary>One request as sent: content type, body, URI and method.</summary>
+internal sealed record RecordedRequest(string? ContentType, string Body, Uri? Uri, HttpMethod Method)
+{
+    /// <summary>Reads the request (buffering its body) and appends it to <paramref name="requests"/> under a lock.</summary>
+    public static async Task CaptureAsync(HttpRequestMessage request, List<RecordedRequest> requests, CancellationToken ct)
+    {
+        var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(ct);
+        lock (requests)
+        {
+            requests.Add(new(request.Content?.Headers.ContentType?.MediaType, body, request.RequestUri, request.Method));
+        }
+    }
+}
+
 /// <summary>Scripted HTTP responses; records every request body so the wire format can be asserted.</summary>
 internal sealed class StubHandler(Func<HttpRequestMessage, int, CancellationToken, Task<HttpResponseMessage>> respond) : HttpMessageHandler
 {
     private int _calls;
 
     public int Calls => _calls;
-    public List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)> Requests { get; } = [];
+    public List<RecordedRequest> Requests { get; } = [];
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var attempt = Interlocked.Increment(ref _calls);
-        var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
-        lock (Requests)
-        {
-            Requests.Add((request.Content?.Headers.ContentType?.MediaType, body, request.RequestUri, request.Method));
-        }
+        await RecordedRequest.CaptureAsync(request, Requests, cancellationToken);
         return await respond(request, attempt, cancellationToken);
     }
 }
@@ -125,15 +135,11 @@ internal sealed class StubHandler(Func<HttpRequestMessage, int, CancellationToke
 /// from the production request; the tests assert the payload and headers, not the framing. A new instance is created per
 /// handler chain (IHttpClientFactory may build several); they share one list.
 /// </summary>
-internal sealed class RecordingHandler(List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)> requests) : DelegatingHandler
+internal sealed class RecordingHandler(List<RecordedRequest> requests) : DelegatingHandler
 {
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var body = request.Content is null ? "" : await request.Content.ReadAsStringAsync(cancellationToken);
-        lock (requests)
-        {
-            requests.Add((request.Content?.Headers.ContentType?.MediaType, body, request.RequestUri, request.Method));
-        }
+        await RecordedRequest.CaptureAsync(request, requests, cancellationToken);
         return await base.SendAsync(request, cancellationToken);
     }
 }

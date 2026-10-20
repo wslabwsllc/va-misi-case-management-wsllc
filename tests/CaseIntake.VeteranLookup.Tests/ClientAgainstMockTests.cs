@@ -19,7 +19,7 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
         return await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(ssn, CancellationToken.None);
     }
 
-    private ServiceProvider BuildProvider(string target, List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)>? recorded = null)
+    private ServiceProvider BuildProvider(string target, List<RecordedRequest>? recorded = null)
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
@@ -59,7 +59,7 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
     public async Task The_client_sends_the_request_the_spec_defines(string target)
     {
         var spec = await GovernmentSpec.GetAsync();
-        var recorded = new List<(string? ContentType, string Body, Uri? Uri, HttpMethod Method)>();
+        var recorded = new List<RecordedRequest>();
         await using var provider = BuildProvider(target, recorded);
 
         var result = await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(VeteranDatasetGenerator.KnownFoundSsn, CancellationToken.None);

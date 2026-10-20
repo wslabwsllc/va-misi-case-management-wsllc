@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using CaseIntake.VeteranLookup.Mock;
 using Microsoft.OpenApi;
 
@@ -15,7 +14,7 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// </summary>
 public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture<MockServiceFactory>
 {
-    private const string Operation = "/paths/~1veterans~1lookup/post";
+    private static readonly string Operation = $"/paths/{Escape(MockProgram.LookupRoute)}/post";
 
     /// <summary>
     /// Elements the generated document may add to the definition. An entry covers that leaf and everything below it.
@@ -81,11 +80,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
         {
             if (!generated.TryGetValue(path, out var actual))
             {
-                // Examples are illustrative, not part of the shape; the definition's SSN example is not reproduced.
-                if (!path.EndsWith("/example", StringComparison.Ordinal))
-                {
-                    problems.Add($"missing  {path} = {value}");
-                }
+                problems.Add($"missing  {path} = {value}");
             }
             else if (actual != value)
             {
@@ -133,7 +128,9 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
     /// <summary>
     /// Every scalar of an OpenAPI document by JSON Pointer path. Local <c>$ref</c>s are followed, so a schema compares the
     /// same inline or by reference; <c>required</c> arrays become one <c>required{name}</c> entry per name (order is not
-    /// significant). The <c>openapi</c> version is left out: the definition is 3.0.3, the generator writes its own 3.0.x.
+    /// significant). Left out on both sides: the <c>openapi</c> version (the definition is 3.0.3, the generator writes its
+    /// own 3.0.x, D15) and <c>example</c> values (illustrative, not part of the shape; the definition's SSN example is not
+    /// reproduced). A schema property that happens to be named <c>example</c> is still compared.
     /// </summary>
     private static Dictionary<string, string> Flatten(JsonElement root)
     {
@@ -155,6 +152,10 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
             case JsonValueKind.Object:
                 foreach (var property in element.EnumerateObject())
                 {
+                    if (property.Name == "example" && !path.EndsWith("/properties", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
                     var child = path + "/" + Escape(property.Name);
                     if (property.Name == "required" && property.Value.ValueKind == JsonValueKind.Array)
                     {
@@ -193,5 +194,6 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
         return current;
     }
 
-    private static string Escape(string name) => Regex.Replace(name, "[~/]", m => m.Value == "~" ? "~0" : "~1");
+    private static string Escape(string name) =>
+        name.Replace("~", "~0", StringComparison.Ordinal).Replace("/", "~1", StringComparison.Ordinal);
 }

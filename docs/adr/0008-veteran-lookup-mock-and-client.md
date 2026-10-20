@@ -94,6 +94,8 @@ Readiness (`/health/ready`) probes the mock's `/health` (ServiceDefaults).
 
 - Any change to the mock outside the allowlist fails the conformance test; the Government file does not change
   without a new specification.
+- `/openapi/v1.json` and the generated `/openapi/v1.yaml` of the code-first design no longer exist: `/openapi/v1.yaml`
+  now returns the Government file, and the generated document is `/openapi/implementation.json` (evidence only).
 - The lookup tests run against both the in-process mock and, inside `docker compose run --rm tests`, the real
   `veteran-lookup` container.
 - No SSN, SSN hash, name or address appears in any log; this is asserted on success and failure paths.
