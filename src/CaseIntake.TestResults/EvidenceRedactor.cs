@@ -13,7 +13,9 @@ public static partial class EvidenceRedactor
 {
     public const string Mask = "[REDACTED]";
 
-    [GeneratedRegex(@"(?<!\d)(\d{3}-\d{2}-\d{4}|\d{9})(?!\d)", RegexOptions.CultureInvariant)]
+    // Same SSN pattern as CaseIntake.ServiceDefaults.SsnRedaction: the value must not touch a letter or digit, so digit
+    // runs inside GUIDs and hex IDs in traces and logs are not redacted. SsnDetectionTests keeps the two in agreement.
+    [GeneratedRegex(@"(?<![0-9A-Za-z])(\d{3}-\d{2}-\d{4}|\d{9})(?![0-9A-Za-z])", RegexOptions.CultureInvariant)]
     private static partial Regex Ssn();
 
     [GeneratedRegex(@"(?i)(password|passwd|pwd|secret|apikey|api_key|token|__RequestVerificationToken)(\s*[=:]\s*|""\s*:\s*"")[^\s&;,""']+", RegexOptions.CultureInvariant)]

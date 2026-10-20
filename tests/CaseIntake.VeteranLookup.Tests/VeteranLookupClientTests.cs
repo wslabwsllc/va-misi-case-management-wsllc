@@ -278,11 +278,13 @@ public class VeteranLookupClientTests
     [Fact]
     public async Task A_hanging_service_is_Unavailable_within_the_total_budget_after_one_retry()
     {
+        // Two attempts (2 x 500 ms + 10 ms delay) fit in the 2 s total with about 1 s to spare. With 100 ms attempts and a
+        // 400 ms total, a slow first attempt under linux/amd64 emulation used up the budget before the retry could start.
         var (client, handler, _, provider) = Build(async (_, _, ct) =>
         {
             await Task.Delay(Timeout.Infinite, ct);
             throw new UnreachableException();
-        }, attemptTimeout: TimeSpan.FromMilliseconds(100), totalTimeout: TimeSpan.FromMilliseconds(400));
+        }, attemptTimeout: TimeSpan.FromMilliseconds(500), totalTimeout: TimeSpan.FromSeconds(2));
         await using var _ = provider;
         var stopwatch = Stopwatch.StartNew();
 
@@ -290,7 +292,7 @@ public class VeteranLookupClientTests
 
         Assert.Equal(VeteranLookupOutcome.Unavailable, result.Outcome);
         Assert.Equal(2, handler.Calls);
-        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"took {stopwatch.Elapsed}");
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"took {stopwatch.Elapsed}");   // capped by the 2 s total
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
 using CaseIntake.TestKit;
@@ -39,10 +40,10 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, url);
         using var client = factory.CreateClient();
 
-        var response = await client.GetAsync("/health/ready");
+        var ready = await ProbeReadyAsync(client, r => r.Status == HttpStatusCode.OK);
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        Assert.True(response.Headers.Contains("X-Operation-Id"));
+        Assert.True(ready.Status == HttpStatusCode.OK, ready.Raw);
+        Assert.True(ready.HasOperationId);
     }
 
     [Fact]
@@ -53,7 +54,9 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, $"{url}/lookup");
         using var client = factory.CreateClient();
 
-        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/health/ready")).StatusCode);
+        var ready = await ProbeReadyAsync(client, r => r.Status == HttpStatusCode.OK);
+
+        Assert.True(ready.Status == HttpStatusCode.OK, ready.Raw);
     }
 
     [Fact]
@@ -98,6 +101,38 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
     private static string ComponentStatus(JsonElement body, string name) =>
         body.GetProperty("components").GetProperty(name).GetProperty("status").GetString()!;
 
+    private sealed record ReadyProbe(HttpStatusCode Status, string Raw, JsonElement Body, bool HasOperationId)
+    {
+        public bool ComponentIs(string name, string status) =>
+            Body.ValueKind == JsonValueKind.Object && Body.TryGetProperty("components", out var components)
+            && components.TryGetProperty(name, out var component) && component.GetProperty("status").GetString() == status;
+    }
+
+    /// <summary>
+    /// Probes /health/ready until <paramref name="settled"/> holds or 30 s pass, and returns the last probe. The
+    /// production checks allow 3 s for the lookup probe and 5 s per check; under linux/amd64 emulation a cold first probe
+    /// can exceed that although every dependency is up, which is why the Compose healthcheck retries too. Use it for
+    /// components expected to be healthy; a component that is really down stays down however often it is probed.
+    /// </summary>
+    private static async Task<ReadyProbe> ProbeReadyAsync(HttpClient client, Func<ReadyProbe, bool> settled)
+    {
+        var stopwatch = Stopwatch.StartNew();
+        while (true)
+        {
+            using var response = await client.GetAsync("/health/ready");
+            var raw = await response.Content.ReadAsStringAsync();
+            var body = response.Content.Headers.ContentType?.MediaType == "application/json"
+                ? JsonDocument.Parse(raw).RootElement.Clone()
+                : default;
+            var probe = new ReadyProbe(response.StatusCode, raw, body, response.Headers.Contains("X-Operation-Id"));
+            if (settled(probe) || stopwatch.Elapsed > TimeSpan.FromSeconds(30))
+            {
+                return probe;
+            }
+            await Task.Delay(TimeSpan.FromMilliseconds(500));
+        }
+    }
+
     [Fact]
     public async Task Ready_reports_each_component_as_json_when_all_are_healthy()
     {
@@ -106,10 +141,10 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, url);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/health/ready");
-        var body = await ReadJsonAsync(response);
+        var ready = await ProbeReadyAsync(client, r => r.Status == HttpStatusCode.OK);
+        var body = ready.Body;
 
-        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.True(ready.Status == HttpStatusCode.OK, ready.Raw);
         Assert.Equal("Healthy", body.GetProperty("status").GetString());
         Assert.Equal(["attachment-storage", "database", "veteran-lookup"],
             body.GetProperty("components").EnumerateObject().Select(p => p.Name).Order());
@@ -125,16 +160,15 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         await using var factory = new CaseIntakeWebFactory(badDb, url);
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/health/ready");
-        var raw = await response.Content.ReadAsStringAsync();
-        var body = await ReadJsonAsync(response);
+        var ready = await ProbeReadyAsync(client, r => r.ComponentIs("veteran-lookup", "Healthy") && r.ComponentIs("attachment-storage", "Healthy"));
+        var body = ready.Body;
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(ready.Status == HttpStatusCode.ServiceUnavailable, ready.Raw);
         Assert.Equal("Unhealthy", body.GetProperty("status").GetString());
         Assert.Equal("Unhealthy", ComponentStatus(body, "database"));
         Assert.Equal("Healthy", ComponentStatus(body, "veteran-lookup"));
         Assert.Equal("Healthy", ComponentStatus(body, "attachment-storage"));
-        Assert.DoesNotContain("secret-value", raw);
+        Assert.DoesNotContain("secret-value", ready.Raw);
     }
 
     [Fact]
@@ -143,10 +177,10 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, "http://127.0.0.1:1");
         using var client = factory.CreateClient();
 
-        using var response = await client.GetAsync("/health/ready");
-        var body = await ReadJsonAsync(response);
+        var ready = await ProbeReadyAsync(client, r => r.ComponentIs("database", "Healthy"));
+        var body = ready.Body;
 
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.True(ready.Status == HttpStatusCode.ServiceUnavailable, ready.Raw);
         Assert.Equal("Unhealthy", ComponentStatus(body, "veteran-lookup"));
         Assert.Equal("Healthy", ComponentStatus(body, "database"));
     }
