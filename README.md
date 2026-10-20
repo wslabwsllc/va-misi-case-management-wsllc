@@ -251,7 +251,7 @@ dotnet build
 # 2. PostgreSQL 18 on localhost:5432 (a standalone container, separate from the Compose database)
 docker run -d --name caseintake-pg -p 5432:5432 \
   -e POSTGRES_USER=caseintake -e POSTGRES_PASSWORD=caseintake_local_only -e POSTGRES_DB=caseintake \
-  postgres:18
+  postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
 
 # 3. Schema and seed data (safe to rerun; run again after pulling new migrations)
 dotnet run --project src/CaseIntake.MigrationService

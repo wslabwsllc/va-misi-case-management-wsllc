@@ -3,6 +3,8 @@
 # All containers run as linux/amd64 (spec 4.5). The .NET compile steps run natively on the build machine (Dockerfile
 # --platform=$BUILDPLATFORM), so Apple Silicon only emulates the running apps, not the SDK build.
 # Credentials below are synthetic and local-only. No .env file is needed.
+# Every image is pinned by digest and every package by exact version (docs/versions.md), so a rebuild weeks later
+# produces the same build.
 name: caseintake
 
 # The demo app (web + migrator, also their e2e copies): published output on the ASP.NET runtime image.
@@ -38,7 +40,8 @@ x-web-healthcheck: &web-healthcheck
 
 services:
   db:
-    image: postgres:18
+    # Exact version and digest (docs/versions.md); the TestKit's Testcontainers server uses the same reference.
+    image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
     platform: linux/amd64
     environment:
       POSTGRES_USER: caseintake
