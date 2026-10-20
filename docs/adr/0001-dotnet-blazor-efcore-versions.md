@@ -6,7 +6,8 @@
 ## Context
 
 Specification 4.5 asks for a currently supported LTS runtime and for exact versions to be named. Blazor's shared
-framework is not pinned by package versions alone.
+framework is not pinned by package versions alone. Part 2 Q112 (Amendment 0002) adds the Government's rationale:
+.NET 8 support ends on 2026-11-10 and the Army is moving EISS to .NET 10.
 
 ## Decision
 
