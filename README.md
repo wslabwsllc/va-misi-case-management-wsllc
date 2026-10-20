@@ -399,10 +399,12 @@ Phones and tablets: the app adapts below 1024 px and 768 px and is installable a
 
 </details>
 
-## Documents
+---
 
-- [Epic plan](docs/Epic_Plan.md)
-- [Implementation prompt](docs/implementation-prompt.md)
+<details>
+<summary><b>Documents</b></summary>
+
+- [Architecture](docs/architecture.md)
 - [ADRs](docs/adr/README.md)
 - [Versions](docs/versions.md)
 - [Assumptions and limitations](docs/assumptions-and-limitations.md)
@@ -411,4 +413,21 @@ Phones and tablets: the app adapts below 1024 px and 768 px and is installable a
 - [Testing](docs/testing.md)
 - [Docker troubleshooting](docs/docker-troubleshooting.md)
 - [Accessibility review](docs/accessibility-review.md).
+- [Epic plan](docs/Epic_Plan.md)
+- [Implementation prompt](docs/implementation-prompt.md)
 Traceability and the requirement-change note are produced at G3/G4.
+
+</details>
+
+---
+
+<details>
+<summary><b>Contributors</b></summary>
+
+- Dr. Janar Senthurpandi
+- Alhagie Bai Cham
+- Kabir Shaikh
+- Rikhin Bhuta
+- Antony Pon Jeyakumar Selvaraj
+
+</details>
