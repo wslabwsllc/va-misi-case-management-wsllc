@@ -95,6 +95,23 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         Assert.Contains("404", spec.ResponseStatuses);
     }
 
+    // D16: the definition's own example SSN is illustrative and not in the synthetic dataset (every dataset SSN is
+    // 900-999, VeteranDatasetTests). The value is read from the definition, so no issuable SSN is written in this file.
+    [Theory]
+    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    public async Task The_spec_example_SSN_is_not_in_the_synthetic_dataset(string target)
+    {
+        var spec = await GovernmentSpec.GetAsync();
+        var required = spec.RequestSchema.GetProperty("required")[0].GetString()!;
+        var example = spec.RequestSchema.GetProperty("properties").GetProperty(required).GetProperty("example").GetString()!;
+        using var client = LookupTarget.CreateClient(target, factory);
+
+        using var request = spec.CreateLookupRequest(example);
+        using var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
     public static TheoryData<string, string> InvalidBodies()
     {
         var data = new TheoryData<string, string>();

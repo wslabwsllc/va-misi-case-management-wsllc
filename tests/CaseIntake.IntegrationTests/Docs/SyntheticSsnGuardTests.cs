@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 
 namespace CaseIntake.IntegrationTests.Docs;
@@ -29,6 +30,12 @@ public partial class SyntheticSsnGuardTests
         "artifacts", "TestResults", "results",
     };
 
+    // The Government's Veteran Lookup definition (TBS 4.6) must stay byte for byte, and it contains the Government's own
+    // example SSN. The file is skipped only while its bytes match this SHA-256 exactly (the same pin as GovernmentSpec in
+    // CaseIntake.VeteranLookup.Tests); any edit, however small, puts the whole file back under the guard (assumption D16).
+    private static readonly string GovernmentContractPath = Path.Combine("docs", "contracts", "veteran-lookup.spec.openapi.yaml");
+    private const string GovernmentContractSha256 = "bbd95fc2a187220e9bfc1860c84fbf148bfc8b10282ae82f13c05bbb84730f26";
+
     // ASCII digits only: \d would also match full-width and other Unicode digits, which tests use on purpose as invalid input.
     [GeneratedRegex(@"(?<![0-9])(?<area>[0-9]{3})-[0-9]{2}-[0-9]{4}(?![0-9])|(?<=[""'=:/])(?<area>[0-9]{3})[0-9]{6}(?![0-9])",
         RegexOptions.CultureInvariant)]
@@ -40,8 +47,11 @@ public partial class SyntheticSsnGuardTests
         var files = RepositoryTextFiles().ToList();
         Assert.Contains(files, f => f.EndsWith(Path.Combine("Logging", "LoggingTests.cs"), StringComparison.Ordinal));
 
-        var violations = files.SelectMany(file => Violations(File.ReadAllText(file))
-            .Select(v => $"{Path.GetRelativePath(RepositoryRoot.Path, file)}:{v.Line} (area {v.Area})")).ToList();
+        var violations = files
+            .Select(file => (File: file, RelativePath: Path.GetRelativePath(RepositoryRoot.Path, file)))
+            .Where(f => f.RelativePath != GovernmentContractPath || !IsPinnedGovernmentContract(f.RelativePath, File.ReadAllBytes(f.File)))
+            .SelectMany(f => Violations(File.ReadAllText(f.File)).Select(v => $"{f.RelativePath}:{v.Line} (area {v.Area})"))
+            .ToList();
 
         Assert.True(violations.Count == 0,
             "SSN-shaped values must use a never-issued area number (000, 666 or 900-999):\n" + string.Join("\n", violations));
@@ -77,6 +87,30 @@ public partial class SyntheticSsnGuardTests
             Assert.Equal(expectedArea, Assert.Single(violations).Area);
         }
     }
+
+    [Fact]
+    public void The_Government_contract_exemption_matches_the_committed_file_and_is_still_needed()
+    {
+        var content = File.ReadAllBytes(RepositoryRoot.File(GovernmentContractPath));
+
+        Assert.True(IsPinnedGovernmentContract(GovernmentContractPath, content),
+            $"{GovernmentContractPath} no longer matches the pinned SHA-256; restore it from TBS 4.6 or update the pin deliberately.");
+        Assert.NotEmpty(Violations(System.Text.Encoding.UTF8.GetString(content)));   // otherwise the exemption is obsolete: remove it
+    }
+
+    [Fact]
+    public void The_Government_contract_is_exempt_only_with_its_exact_bytes_at_its_own_path()
+    {
+        var content = File.ReadAllBytes(RepositoryRoot.File(GovernmentContractPath));
+
+        Assert.True(IsPinnedGovernmentContract(GovernmentContractPath, content));
+        Assert.False(IsPinnedGovernmentContract(GovernmentContractPath, [.. content, (byte)'\n']));   // any edit: scanned again
+        Assert.False(IsPinnedGovernmentContract(Path.Combine("docs", "demo.md"), content));          // same bytes elsewhere: scanned
+    }
+
+    private static bool IsPinnedGovernmentContract(string relativePath, byte[] content) =>
+        string.Equals(relativePath, GovernmentContractPath, StringComparison.Ordinal)
+        && Convert.ToHexStringLower(SHA256.HashData(content)) == GovernmentContractSha256;
 
     private static IEnumerable<(int Line, string Area)> Violations(string text)
     {
