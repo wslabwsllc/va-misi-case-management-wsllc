@@ -16,7 +16,7 @@ compiles natively instead of under emulation. Nothing is restored, built or down
 
 | Service | Purpose | Notes |
 |---|---|---|
-| `db` | PostgreSQL 18 | volume `pgdata18` (mounted at `/var/lib/postgresql`) |
+| `db` | PostgreSQL 18 (Alpine, built from `docker/db/Dockerfile`) | volume `pgdata18-alpine` (mounted at `/var/lib/postgresql`) |
 | `migrator` | migrate + seed (demo DB `caseintake`), reconcile attachments | `working_dir: /app/migrator` |
 | `veteran-lookup` | synthetic lookup mock | Compose network only |
 | `web` | the app on <http://localhost:8080> | `working_dir: /app/web`; volumes `attachments`, `dataprotection`, `testresults` |
@@ -83,7 +83,8 @@ the Console has no errors. The automated equivalent is `CaseIntake.E2E.Framework
 | `tests` reports `FAILED TO START (application not reachable)` | `web-e2e` is not healthy | `docker compose --profile tests logs web-e2e`; `docker compose --profile tests up -d web-e2e` |
 | Playwright: "Executable doesn't exist at /ms-playwright/..." | an image built before the E2E project | `docker compose --profile tests build --no-cache` |
 | Test results page is empty | runs not imported yet | wait a minute (background import) or press **Import new runs**; check `docker compose logs web` for event 5202 |
-| An old `caseintake_pgdata` volume is left over | PostgreSQL 17 data from before the move to 18 (the stack now uses `pgdata18`) | nothing uses it; `docker volume rm caseintake_pgdata` when you no longer need that data |
+| An old `caseintake_pgdata` volume is left over | PostgreSQL 17 data from before the move to 18 | nothing uses it; `docker volume rm caseintake_pgdata` when you no longer need that data |
+| An old `caseintake_pgdata18` volume is left over | PostgreSQL 18 data from the earlier Debian image (other user ID and collation library); the stack now uses `pgdata18-alpine`, which starts empty and is seeded again | nothing uses it; `docker volume rm caseintake_pgdata18` when you no longer need that data |
 | Port 8080 in use | another stack | `docker compose ls`; stop it; never use `down -v` unless you mean to delete data |
 
 `docker compose down` keeps all volumes (data, attachments, keys, test history). `docker compose down -v` deletes them.

@@ -73,7 +73,10 @@ public class VersionConsistencyTests
     [Fact]
     public void Testcontainers_uses_the_same_postgres_image_as_compose()
     {
-        Assert.Contains($"image: {PostgresDatabaseFixture.PostgresImage}", File.ReadAllText(RepositoryRoot.File("docker-compose.yml")));
+        Assert.Equal([PostgresDatabaseFixture.PostgresImage], BaseImages(DatabaseDockerfile));
+        var compose = File.ReadAllText(RepositoryRoot.File("docker-compose.yml"));
+        Assert.Contains("context: docker/db", compose);
+        Assert.Contains($"POSTGRES_INITDB_ARGS: \"{PostgresDatabaseFixture.InitDbArgs}\"", compose);
     }
 
     [Fact]
@@ -119,8 +122,10 @@ public class VersionConsistencyTests
         });
     }
 
+    private static string DatabaseDockerfile => RepositoryRoot.File("docker", "db", "Dockerfile");
+
     private static IEnumerable<string> Dockerfiles =>
-        [RepositoryRoot.File("Dockerfile"), RepositoryRoot.File("src", "CaseIntake.VeteranLookup.Mock", "Dockerfile")];
+        [RepositoryRoot.File("Dockerfile"), RepositoryRoot.File("src", "CaseIntake.VeteranLookup.Mock", "Dockerfile"), DatabaseDockerfile];
 
     private static IEnumerable<string> ProjectFiles() =>
         Directory.EnumerateFiles(RepositoryRoot.File("src"), "*.csproj", SearchOption.AllDirectories)
