@@ -25,6 +25,13 @@ public class AccessDeniedMessageTests
         var services = new ServiceCollection();
         services.AddFakeLogging();
         services.AddSingleton<NavigationManager>(new TestNavigationManager("http://localhost/cases/5?tab=audit"));
+        // The circuit's ICurrentUser for this principal, with the default matrix for its roles.
+        var roles = CaseIntake.Identity.CurrentUser.OperationActorFactory.Roles(user);
+        services.AddSingleton<ICurrentUser>(new CaseIntake.TestKit.Fakes.FakeCurrentUser
+        {
+            Actor = new OperationActor(CaseIntake.Identity.CurrentUser.OperationActorFactory.UserId(user), user.Identity?.Name, roles,
+                RolePermissionMap.PermissionsFor(roles)),
+        });
         await using var provider = services.BuildServiceProvider();
         await using var renderer = new HtmlRenderer(provider, provider.GetRequiredService<ILoggerFactory>());
 

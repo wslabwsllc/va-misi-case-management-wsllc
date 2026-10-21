@@ -278,6 +278,7 @@ internal sealed partial class TestResultImporter(
         db.TestResultAuditEntries.Add(new TestResultAuditEntry
         {
             OccurredAtUtc = now, ActorId = actorId, Actor = run.ImportedBy, Action = "RunImported",
+            CorrelationId = Contracts.Common.OperationContext.CurrentId,
             Details = string.Create(CultureInfo.InvariantCulture, $"Run {run.RunKey}: {run.Total} results, {artifactCount} evidence files"),
         });
         await db.SaveChangesAsync(ct);

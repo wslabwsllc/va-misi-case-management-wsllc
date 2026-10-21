@@ -1,0 +1,90 @@
+@using CaseIntake.Contracts.Auditing
+@using CaseIntake.Web.Services
+@implements IDisposable
+@inject IAuditLogService Audit
+@inject ICurrentUser CurrentUser
+@inject ILogger<AuditHistory> Logger
+
+@* The latest audit entries about one user or role (ADR 0014), newest first, with a link to all of them in the audit
+   log. Only for people who may read the audit log; the page reloads it after each change it makes. *@
+<AuthorizeView Policy="@Permissions.AuditView">
+    <section class="card mt-4" aria-labelledby="history-heading" data-testid="audit-history">
+        <h2 id="history-heading" class="card__header">History</h2>
+        @if (_entries is null)
+        {
+            <LoadingIndicator Text="Loading history…" />
+        }
+        else if (_failed)
+        {
+            <p class="message message--warning"><Icon Name="warning" /><span class="message__body">The history could not be loaded. Reload the page to try again.</span></p>
+        }
+        else if (_entries.Count == 0)
+        {
+            <p class="page-header__subtitle">Nothing has been recorded yet.</p>
+        }
+        else
+        {
+            <ul class="compact-list audit-history">
+                @foreach (var e in _entries)
+                {
+                    <li>
+                        <a href="@($"admin/audit/{e.Key}")">@AuditText.Action(e.Action)</a>
+                        <span class="cell-sub">@UiText.Time(e.OccurredAtUtc) by @(e.ActorName ?? "unknown")@(string.IsNullOrEmpty(e.Summary) ? "" : $": {e.Summary}")</span>
+                    </li>
+                }
+            </ul>
+        }
+        <p class="card__note"><a href="@AuditText.ListHref(new AuditQuery(EntityType: EntityType, EntityId: EntityId))" data-testid="history-all">View all history in the audit log</a></p>
+    </section>
+</AuthorizeView>
+
+@code {
+    private const int Shown = 10;
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<AuditLogEntryDto>? _entries;
+    private bool _failed;
+
+    [Parameter, EditorRequired] public string EntityType { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string EntityId { get; set; } = string.Empty;
+
+    /// <summary>Change it (for example the subject's concurrency stamp) to reload after the page saved something.</summary>
+    [Parameter] public string? Version { get; set; }
+
+    private string? _loadedFor;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var key = $"{EntityType}|{EntityId}|{Version}";
+        if (key == _loadedFor)
+        {
+            return;
+        }
+        _loadedFor = key;
+        try
+        {
+            if (!(await CurrentUser.GetAsync(_cts.Token)).HasPermission(Permissions.AuditView))
+            {
+                _entries = [];
+                return;
+            }
+            var result = await Audit.ListAsync(new AuditQuery(EntityType: EntityType, EntityId: EntityId, PageSize: Shown), _cts.Token);
+            _entries = result.IsSuccess ? result.Value!.Items : [];
+            _failed = false;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5032, "AuditHistoryFailed"), "Loading history failed ({ExceptionType})", ex.GetType().Name);
+            _entries = [];
+            _failed = true;
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

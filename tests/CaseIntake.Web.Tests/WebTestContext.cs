@@ -52,6 +52,14 @@ public abstract class WebTestContext : BunitContext
         Services.AddSingleton<FakeTestResultsService>();
         Services.AddSingleton<FakeUserAdministrationService>();
         Services.AddSingleton<IUserAdministrationService>(sp => sp.GetRequiredService<FakeUserAdministrationService>());
+        Services.AddSingleton<FakeRoleAdministrationService>();
+        Services.AddSingleton<IRoleAdministrationService>(sp => sp.GetRequiredService<FakeRoleAdministrationService>());
+        Services.AddSingleton<FakeAuditLogService>();
+        Services.AddSingleton<Contracts.Auditing.IAuditLogService>(sp => sp.GetRequiredService<FakeAuditLogService>());
+        Services.AddSingleton<FakeErrorLogService>();
+        Services.AddSingleton<Contracts.Diagnostics.IErrorLogService>(sp => sp.GetRequiredService<FakeErrorLogService>());
+        Services.AddSingleton<FakeSystemHealthService>();
+        Services.AddSingleton<Contracts.Diagnostics.ISystemHealthService>(sp => sp.GetRequiredService<FakeSystemHealthService>());
         Services.AddSingleton<Contracts.TestResults.ITestResultsService>(sp => sp.GetRequiredService<FakeTestResultsService>());
         // The sign-in page injects AccountSignIn; presentation tests never submit, so an uninitialized instance suffices.
         Services.AddScoped(_ => (Identity.Account.AccountSignIn)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Identity.Account.AccountSignIn)));
@@ -83,6 +91,10 @@ public abstract class WebTestContext : BunitContext
     protected ScriptedAttachmentService AttachmentScript => Services.GetRequiredService<ScriptedAttachmentService>();
     protected FakeTestResultsService TestResults => Services.GetRequiredService<FakeTestResultsService>();
     protected FakeUserAdministrationService UserAdmin => Services.GetRequiredService<FakeUserAdministrationService>();
+    protected FakeRoleAdministrationService RoleAdmin => Services.GetRequiredService<FakeRoleAdministrationService>();
+    protected FakeAuditLogService AuditLog => Services.GetRequiredService<FakeAuditLogService>();
+    protected FakeErrorLogService ErrorLog => Services.GetRequiredService<FakeErrorLogService>();
+    protected FakeSystemHealthService HealthService => Services.GetRequiredService<FakeSystemHealthService>();
     protected StatusAnnouncer Announcer => Services.GetRequiredService<StatusAnnouncer>();
     protected NavigationManager Navigation => Services.GetRequiredService<NavigationManager>();
 

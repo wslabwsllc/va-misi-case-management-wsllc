@@ -237,7 +237,7 @@ public class PagesAndShellTests : WebTestContext
 
         cut.Find("[data-testid=mark-all-read]").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Last marked as read 2026-10-19 08:00.", cut.Find(".page-header__subtitle").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("Last marked as read 10/19/2026 08:00 AM EDT.", cut.Find(".page-header__subtitle").TextContent));
         Assert.Equal(1, NotificationFeed.MarkAllReadCalls);
     }
 

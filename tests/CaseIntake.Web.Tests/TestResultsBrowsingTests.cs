@@ -138,14 +138,14 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=history-table] tbody tr").Count));
         var rows = cut.FindAll("[data-testid=history-table] tbody tr");
         Assert.Equal("test-results/executions/51", rows[0].QuerySelector("a")!.GetAttribute("href"));
-        Assert.Contains("2026-10-05 09:00", rows[0].TextContent);
+        Assert.Contains("10/05/2026 09:00 AM EDT", rows[0].TextContent);
         Assert.Contains("3.3 s", rows[0].TextContent);
         Assert.Contains("0123456789", rows[0].TextContent);
         Assert.DoesNotContain("0123456789a", rows[0].TextContent);
         Assert.Contains("800 ms", rows[1].TextContent);
         Assert.Contains("unknown", rows[1].TextContent);
         // The chart reads oldest to newest.
-        Assert.Equal(["10-04 09:00", "10-05 09:00"], cut.FindAll("[data-testid=testcase-chart-duration] table tbody th").Select(th => th.TextContent.Trim()));
+        Assert.Equal(["10/04 09:00 AM EDT", "10/05 09:00 AM EDT"], cut.FindAll("[data-testid=testcase-chart-duration] table tbody th").Select(th => th.TextContent.Trim()));
         Assert.Contains("Ns.Class.Confirm_the_transition", cut.Find("[aria-labelledby=testcase-heading]").TextContent);
         Assert.Equal("Confirm the transition", cut.Find("h1").TextContent.Trim());
     }
@@ -348,7 +348,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
         cut.WaitForElement("[data-testid=flaky-table]");
         Assert.Equal(new TestRunQuery(1, 20), TestResults.RunQueries.Single());
-        Assert.Equal(["10-02 05:00", "10-03 05:00"], cut.FindAll("[data-testid=history-chart-passrate] table tbody th").Select(th => th.TextContent.Trim()));
+        Assert.Equal(["10/02 05:00 AM EDT", "10/03 05:00 AM EDT"], cut.FindAll("[data-testid=history-chart-passrate] table tbody th").Select(th => th.TextContent.Trim()));
         Assert.Contains("The last 20 imported runs", cut.Markup);
         var row = cut.Find("[data-testid=flaky-table] tbody tr");
         Assert.Equal("test-results/cases/11", row.QuerySelector("a")!.GetAttribute("href"));
@@ -589,7 +589,7 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal("Passed", cut.Find("[data-testid=execution-outcome]").TextContent));
         Assert.Contains("No evidence files were recorded", cut.Find("[data-testid=no-evidence]").TextContent);
         Assert.Contains("Not a browser test", cut.Markup);
-        Assert.Contains("2026-10-03 05:00", cut.Markup);
+        Assert.Contains("10/03/2026 05:00 AM EDT", cut.Markup);
         Assert.Empty(cut.FindAll("[data-testid=failure-message]"));
         Assert.Empty(cut.FindAll("[data-testid=steps-table]"));
         Assert.Empty(cut.FindAll("#logs-heading"));

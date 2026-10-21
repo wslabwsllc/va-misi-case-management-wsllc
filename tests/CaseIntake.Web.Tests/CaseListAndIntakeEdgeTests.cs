@@ -79,10 +79,10 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
     }
 
     [Theory]
-    [InlineData("updatedFrom=2026-10-01", "Updated on or after 2026-10-01")]
-    [InlineData("updatedTo=2026-10-15", "Updated on or before 2026-10-15")]
-    [InlineData("createdTo=2026-10-15", "Created on or before 2026-10-15")]
-    [InlineData("createdFrom=2026-10-01", "Created on or after 2026-10-01")]
+    [InlineData("updatedFrom=2026-10-01", "Updated on or after 10/01/2026")]
+    [InlineData("updatedTo=2026-10-15", "Updated on or before 10/15/2026")]
+    [InlineData("createdTo=2026-10-15", "Created on or before 10/15/2026")]
+    [InlineData("createdFrom=2026-10-01", "Created on or after 10/01/2026")]
     public void Open_ended_date_filters_read_as_chips_that_can_be_removed(string filter, string chip)
     {
         SignInAs(AppRoles.CaseWorker);

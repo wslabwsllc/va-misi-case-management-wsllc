@@ -17,8 +17,14 @@ public class PostgresDatabaseFixture : IAsyncLifetime
 {
     public const string AdminConnectionEnvironmentVariable = "TESTKIT_POSTGRES_ADMIN";
 
-    /// <summary>Same image, tag and digest as the Compose <c>db</c> service (checked by <c>VersionConsistencyTests</c>).</summary>
-    public const string PostgresImage = "postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336";
+    /// <summary>
+    /// The upstream image the Compose <c>db</c> image is built from (<c>docker/db/Dockerfile</c>, checked by
+    /// <c>VersionConsistencyTests</c>); the build only removes gosu, so the server is the same.
+    /// </summary>
+    public const string PostgresImage = "postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873";
+
+    /// <summary>Same <c>initdb</c> arguments as the Compose <c>db</c> service: ICU collation instead of musl's byte order.</summary>
+    public const string InitDbArgs = "--locale-provider=icu --icu-locale=en-US";
     private static readonly Lazy<Task<string>> AdminConnection = new(StartServerAsync);
 
     // CREATE/DROP DATABASE contend for server-wide locks and can each take seconds on a busy server. Running them one at
@@ -110,7 +116,7 @@ public class PostgresDatabaseFixture : IAsyncLifetime
             return configured;
         }
 
-        var container = new PostgreSqlBuilder(PostgresImage).Build();
+        var container = new PostgreSqlBuilder(PostgresImage).WithEnvironment("POSTGRES_INITDB_ARGS", InitDbArgs).Build();
         await container.StartAsync();   // reaped by Testcontainers' Ryuk when the process exits
         return container.GetConnectionString();
     }

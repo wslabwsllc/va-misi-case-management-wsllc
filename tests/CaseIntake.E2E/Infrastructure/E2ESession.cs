@@ -91,6 +91,9 @@ public sealed partial class E2ESession : IAsyncDisposable
             AcceptDownloads = true,
             Locale = "en-US",
             TimezoneId = "UTC",
+            // The app's prefers-reduced-motion rule cuts animations to ~0 ms, so an element that appears late (the status
+            // toast fades in after a 60 ms gap) is never scanned by axe mid-fade with blended, mis-measured colours.
+            ReducedMotion = ReducedMotion.Reduce,
             // The service worker is exercised by its own test; elsewhere it would hide network events from the recorder.
             ServiceWorkers = ServiceWorkerPolicy.Block,
             RecordVideoDir = E2ESettings.RecordVideo ? System.IO.Path.Combine(folder, "video") : null,

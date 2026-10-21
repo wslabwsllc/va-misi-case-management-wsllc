@@ -36,6 +36,7 @@ public static class PersistenceServiceCollectionExtensions
             .EnableSensitiveDataLogging(false)
             .EnableDetailedErrors(false));
         services.AddSingleton<DatabaseInitializer>();
+        services.AddSingleton<Auditing.AuditLogWriter>();
         return services;
     }
 }

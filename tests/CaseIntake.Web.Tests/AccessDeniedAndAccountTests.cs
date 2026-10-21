@@ -65,9 +65,10 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Configuration["Seed:DemoPassword"] = "Demo-Passw0rd!";
         var accounts = Render<Login>().Find("[data-testid=demo-accounts]");
 
-        Assert.Equal(5, accounts.QuerySelectorAll("li").Length);
+        Assert.Equal(6, accounts.QuerySelectorAll("li").Length);
         Assert.Contains("auditor@example.test", accounts.TextContent);
         Assert.Contains("Intake clerk", accounts.TextContent);
+        Assert.Contains("admin@example.test", accounts.TextContent);
     }
 
     [Fact]

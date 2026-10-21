@@ -11,7 +11,7 @@ namespace CaseIntake.Identity.CurrentUser;
 
 /// <summary>
 /// Re-checks a connected circuit's user against the database every <see cref="IdentityModuleOptions.RevalidationInterval"/>
-/// (Blazor template pattern). A deleted user or a changed security stamp (password change, role change, explicit
+/// (Blazor template pattern). A deleted or deactivated user, or a changed security stamp (password change, role change, explicit
 /// revocation) replaces the circuit's state with an anonymous user, so <see cref="CircuitCurrentUser"/> denies every
 /// later operation. Each check uses its own DI scope: <see cref="UserManager{TUser}"/> and its context are never held
 /// by the long-lived circuit.
@@ -42,7 +42,7 @@ internal sealed class IdentityRevalidatingAuthenticationStateProvider(
     private async Task<bool> ValidateSecurityStampAsync(UserManager<AppUser> userManager, ClaimsPrincipal principal)
     {
         var user = await userManager.GetUserAsync(principal);
-        if (user is null)
+        if (user is null || !user.IsActive)
         {
             return false;
         }

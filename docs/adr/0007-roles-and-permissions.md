@@ -1,6 +1,6 @@
 # 0007. Local Identity authentication, roles and the permission matrix
 
-* Status: accepted
+* Status: accepted; the permission matrix, user administration and current-user sections are superseded by [0013](0013-database-roles-and-permissions.md)
 * Owner: E3
 
 ## Context

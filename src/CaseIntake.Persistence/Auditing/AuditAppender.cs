@@ -1,3 +1,4 @@
+using CaseIntake.Contracts.Common;
 using CaseIntake.Contracts.Security;
 using CaseIntake.Domain.Cases;
 
@@ -20,7 +21,7 @@ public static class AuditAppender
             throw new InvalidOperationException("Audit entries require an authenticated actor.");
         }
 
-        var entry = CaseAuditEntry.Record(caseEntity, actor.UserId!, ActorName(actor), auditEvent);
+        var entry = CaseAuditEntry.Record(caseEntity, actor.UserId!, ActorName(actor), auditEvent, OperationContext.CurrentId);
         db.CaseAuditEntries.Add(entry);
         return entry;
     }

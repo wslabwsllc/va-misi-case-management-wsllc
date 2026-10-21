@@ -39,6 +39,7 @@ internal sealed class AttachmentService(
     public async Task<Result<AttachmentDto>> UploadAsync(long caseId, string fileName, string contentType,
         long declaredSize, Stream content, CancellationToken ct)
     {
+        using var operation = AuditOperation.BeginIfNone(logger, "UploadAttachment");
         ArgumentNullException.ThrowIfNull(content);
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.AttachmentsUpload))

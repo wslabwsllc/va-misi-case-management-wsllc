@@ -361,6 +361,9 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
             await Expect(page.Locator("#edit-title")).ToHaveValueAsync($"Changed by the supervisor {id}");
             await Expect(page.GetByTestId("unsaved-draft")).ToContainTextAsync(" mine");
             await E2ESession.ExpectFocusedAsync(page.Locator("#edit-title"));
+            // The toast appears about 60 ms after the render (StatusAnnouncerOutlet.RefreshGap). Wait for it so the axe scan
+            // below sees the settled page, not a toast that starts fading in mid-scan.
+            await Expect(Announcer(page)).ToHaveTextAsync("Latest version loaded. Your unsaved text is shown below the form.");
         });
         await s.AxeAsync("Case detail with a conflict");
         s.Complete();

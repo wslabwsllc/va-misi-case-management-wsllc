@@ -37,7 +37,7 @@ else
             <RunResultPill Run="r" Large="true" TestId="run-result" />
         </div>
         <ul class="record-header__facts">
-            <li><span class="label">Started (ET)</span><span>@UiText.Time(r.StartedAtUtc)</span></li>
+            <li><span class="label">Started</span><span>@UiText.Time(r.StartedAtUtc)</span></li>
             <li><span class="label">Duration</span><span>@UiText.Duration(r.Duration)</span></li>
             <li><span class="label">Pass rate</span><span>@TestResultsText.PassRate(r.Counts)</span></li>
             <li><span class="label">Environment</span><span>@r.Environment</span></li>
@@ -134,7 +134,7 @@ else
                 <div class="card__header"><h2 id="run-facts-heading">Run</h2></div>
                 <dl class="field-list">
                     <dt>Run key</dt><dd>@r.RunKey</dd>
-                    <dt>Finished (ET)</dt><dd>@(r.FinishedAtUtc is { } f ? UiText.Time(f) : "Not recorded")</dd>
+                    <dt>Finished</dt><dd>@(r.FinishedAtUtc is { } f ? UiText.Time(f) : "Not recorded")</dd>
                     <dt>Test runner</dt><dd>@r.Runner</dd>
                     <dt>Operating system</dt><dd>@_run.OperatingSystem</dd>
                     <dt>Runtime</dt><dd>@_run.Runtime</dd>
@@ -142,7 +142,7 @@ else
                     <dt>Commit SHA</dt><dd class="mono">@(r.GitCommit ?? "unknown")</dd>
                     <dt>Build ID</dt><dd>@(r.BuildId ?? "unknown")</dd>
                     <dt>Docker image</dt><dd>@(r.ImageVersion ?? "unknown")</dd>
-                    <dt>Imported (ET)</dt><dd>@UiText.Time(r.ImportedAtUtc)</dd>
+                    <dt>Imported</dt><dd>@UiText.Time(r.ImportedAtUtc)</dd>
                     @if (r.Notes is { } notes)
                     {
                         <dt>Notes</dt><dd class="pre-wrap">@notes</dd>

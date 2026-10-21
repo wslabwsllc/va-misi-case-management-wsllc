@@ -1,3 +1,4 @@
+using System.Globalization;
 using CaseIntake.Attachments;
 using CaseIntake.Cases;
 using CaseIntake.Identity;
@@ -13,7 +14,13 @@ using CaseIntake.Web.Endpoints.Attachments;
 using CaseIntake.Web.Endpoints.Exports;
 using CaseIntake.Web.Endpoints.TestResults;
 using CaseIntake.Web.Health;
+using CaseIntake.Web.Services;
 using Microsoft.AspNetCore.DataProtection;
+
+// Every date, time and number is shown en-US (Change 1, part 4), whatever the server's or the browser's culture. Circuits
+// run on pool threads, so the process defaults are set too, not only the request culture.
+CultureInfo.DefaultThreadCurrentCulture = UiText.Culture;
+CultureInfo.DefaultThreadCurrentUICulture = UiText.Culture;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -45,6 +52,10 @@ var app = builder.Build();
 // sign-in redirect and the browser would never start Blazor. Fail at startup with a clear reason instead.
 WebRootGuard.EnsureWebRootExists(app.Environment);
 
+// Outermost: the operation ID must still be current when the exception handler logs an unhandled exception, so the
+// stored error and the reference on the error page match (ADR 0015).
+app.UseOperationContext();
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/error", createScopeForErrors: true);
@@ -54,7 +65,12 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute(NotFoundPages.Route, createScopeForStatusCodePages: true);
 app.Use(NotFoundPages.OnlyForUnmatchedRequests);
 
-app.UseOperationContext();
+app.UseRequestLocalization(options =>
+{
+    options.SetDefaultCulture(UiText.Culture.Name);
+    options.SupportedCultures = options.SupportedUICultures = [UiText.Culture];
+    options.RequestCultureProviders.Clear();          // Accept-Language, cookies and query strings never change it
+});
 app.UseSecurityHeaders();                                         // E3
 app.UseAuthentication();
 app.UseAuthorization();
@@ -67,6 +83,7 @@ app.MapDefaultEndpoints();
 app.MapAccountEndpoints();                                        // E3
 app.MapAttachmentEndpoints();                                     // E4
 app.MapCaseExportEndpoints();                                     // E5 case list CSV export
+app.MapAuditExportEndpoints();                                    // Change 1 audit log CSV export (ADR 0014)
 app.MapTestResultEndpoints();                                     // E5 test evidence downloads and exports
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 

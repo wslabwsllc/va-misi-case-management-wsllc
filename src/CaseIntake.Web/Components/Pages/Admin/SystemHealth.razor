@@ -1,0 +1,209 @@
+@page "/admin/health"
+@attribute [Authorize(Policy = Permissions.SystemHealth)]
+@implements IDisposable
+@using CaseIntake.Contracts.Diagnostics
+@using CaseIntake.Web.Services
+@inject ISystemHealthService Health
+@inject StatusAnnouncer Announcer
+@inject ILogger<SystemHealth> Logger
+
+@* System Health (ADR 0015): the health checks run when the page opens (and on "Check again"), the app and database
+   state, and error and security counts for the last 24 hours. Every state is text plus icon, never colour alone. *@
+<PageShell Title="System health" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="@(_health is null ? "Checking…" : $"Checked {UiText.Time(_health.CheckedAtUtc)}")">
+    <Actions>
+        <button type="button" class="btn" @onclick="RefreshAsync" disabled="@_busy" aria-busy="@(_busy ? "true" : "false")" data-testid="check-again">
+            <Icon Name="refresh" Small="true" /> Check again
+        </button>
+    </Actions>
+</PageShell>
+
+<ErrorAlert @ref="_alert" Title="@(_failure is null ? null : "System health could not be checked")" Message="@_failure" TestId="health-error" />
+
+@if (_health is null)
+{
+    <LoadingIndicator Text="Running health checks…" />
+}
+else
+{
+    var h = _health;
+    <p class="message @StateCss(h.Overall)" data-testid="health-overall">
+        <Icon Name="@StateIcon(h.Overall)" />
+        <span class="message__body"><strong>Overall: @StateText(h.Overall).</strong> @OverallHint(h)</span>
+    </p>
+
+    <div class="grid grid--2">
+        <section class="card" aria-labelledby="checks-heading">
+            <h2 id="checks-heading" class="card__header">Health checks</h2>
+            <div class="table-wrap">
+                <table class="data-grid" data-testid="health-checks">
+                    <caption class="visually-hidden">Health checks and their results</caption>
+                    <thead><tr><th scope="col">Check</th><th scope="col">Result</th><th scope="col" class="num">Took</th></tr></thead>
+                    <tbody>
+                        @foreach (var c in h.Checks)
+                        {
+                            <tr>
+                                <th scope="row">@c.Name@if (c.Description is { } d) { <span class="cell-sub">@d</span> }</th>
+                                <td><span class="health-state health-state--@c.State.ToString().ToLowerInvariant()"><Icon Name="@StateIcon(c.State)" Small="true" /> @StateText(c.State)</span></td>
+                                <td class="num">@($"{c.Duration.TotalMilliseconds:N0} ms")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card" aria-labelledby="app-heading" data-testid="health-app">
+            <h2 id="app-heading" class="card__header">Application and database</h2>
+            <dl class="field-list">
+                <dt>Version</dt>
+                <dd class="mono">@h.Version</dd>
+                <dt>Environment</dt>
+                <dd>@h.Environment</dd>
+                <dt>Started</dt>
+                <dd>@UiText.Time(h.StartedAtUtc) <span class="cell-sub">up @Uptime(h)</span></dd>
+                <dt>Database</dt>
+                <dd data-testid="health-database">@(h.DatabaseReachable ? "Reachable" : "Not reachable")</dd>
+                <dt>Migrations</dt>
+                <dd data-testid="health-migrations">@($"{h.AppliedMigrations} applied; {(h.PendingMigrations.Count == 0 ? "none pending" : $"pending: {string.Join(", ", h.PendingMigrations)}")}")</dd>
+            </dl>
+        </section>
+
+        <section class="card" aria-labelledby="counts-heading" data-testid="health-counts">
+            <h2 id="counts-heading" class="card__header">Last 24 hours</h2>
+            <dl class="field-list">
+                <dt>Open errors (all time)</dt>
+                <dd><AuthorizeView Policy="@Permissions.ErrorsView"><Authorized><a href="@Errors.Href(new ErrorQuery(Status: ErrorStatus.Open))">@h.OpenErrors</a></Authorized><NotAuthorized>@h.OpenErrors</NotAuthorized></AuthorizeView></dd>
+                @foreach (var c in h.ErrorsLast24Hours)
+                {
+                    <dt>@c.Label events</dt>
+                    <dd>@c.Count</dd>
+                }
+                @foreach (var c in h.SecurityLast24Hours)
+                {
+                    <dt>@AuditText.Action(c.Label)</dt>
+                    <dd>@c.Count</dd>
+                }
+            </dl>
+        </section>
+
+        <section class="card" aria-labelledby="latest-heading">
+            <h2 id="latest-heading" class="card__header">Latest errors</h2>
+            @if (h.LatestErrors.Count == 0)
+            {
+                <p class="page-header__subtitle">No errors recorded.</p>
+            }
+            else
+            {
+                <ul class="compact-list audit-history" data-testid="health-latest-errors">
+                    @foreach (var e in h.LatestErrors)
+                    {
+                        <li>
+                            <AuthorizeView Policy="@Permissions.ErrorsView">
+                                <Authorized><a href="@($"admin/errors/{e.Id}")">@e.Level: @(e.ExceptionType ?? e.Category)</a></Authorized>
+                                <NotAuthorized>@e.Level: @(e.ExceptionType ?? e.Category)</NotAuthorized>
+                            </AuthorizeView>
+                            <span class="cell-sub">@UiText.Time(e.OccurredAtUtc) · @e.Status</span>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private SystemHealthDto? _health;
+    private ErrorAlert? _alert;
+    private string? _failure;
+    private bool _busy;
+    private bool _focusAlert;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task RefreshAsync()
+    {
+        await LoadAsync();
+        if (_health is not null && _failure is null)
+        {
+            Announcer.Announce($"Checked again. Overall: {StateText(_health.Overall)}.");
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var result = await Health.GetAsync(_cts.Token);
+            _health = result.IsSuccess ? result.Value : _health;
+            _failure = result.IsSuccess ? null : result.Error!.Message;
+            _focusAlert = _failure is not null;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5036, "SystemHealthFailed"), "System health failed ({ExceptionType})", ex.GetType().Name);
+            _failure = "Try again in a moment.";
+            _focusAlert = true;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string StateText(HealthState state) => state switch
+    {
+        HealthState.Healthy => "Healthy",
+        HealthState.Degraded => "Degraded",
+        _ => "Unhealthy",
+    };
+
+    private static string StateIcon(HealthState state) => state switch
+    {
+        HealthState.Healthy => "success",
+        HealthState.Degraded => "warning",
+        _ => "error",
+    };
+
+    private static string StateCss(HealthState state) => state switch
+    {
+        HealthState.Healthy => "message--success",
+        HealthState.Degraded => "message--warning",
+        _ => "message--error",
+    };
+
+    private static string OverallHint(SystemHealthDto h) =>
+        !h.DatabaseReachable ? "The database does not answer."
+        : h.PendingMigrations.Count > 0 ? "Database migrations are pending; run the migrator."
+        : h.Overall == HealthState.Healthy ? "Every check passed." : "At least one check needs attention; see below.";
+
+    private static string Uptime(SystemHealthDto h)
+    {
+        var up = h.CheckedAtUtc - h.StartedAtUtc;
+        return up.TotalDays >= 1 ? $"{(int)up.TotalDays} d {up.Hours} h" : up.TotalHours >= 1 ? $"{(int)up.TotalHours} h {up.Minutes} min" : $"{Math.Max(0, up.Minutes)} min";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

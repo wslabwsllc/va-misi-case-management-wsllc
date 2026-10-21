@@ -32,6 +32,6 @@
 @code {
     private static string RoleText(ClaimsPrincipal user)
     {
-        return AppRoles.Describe(OperationActorFactory.FromPrincipal(user).Roles);
+        return AppRoles.Describe(OperationActorFactory.Roles(user));
     }
 }

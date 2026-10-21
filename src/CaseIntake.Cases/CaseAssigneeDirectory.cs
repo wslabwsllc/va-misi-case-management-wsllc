@@ -8,8 +8,8 @@ using Microsoft.Extensions.Logging;
 namespace CaseIntake.Cases;
 
 /// <summary>
-/// Users who can own a case (issue #22): members of a role whose permissions include <c>cases.edit</c> (from the E3
-/// matrix, not a hard-coded list), read from the Identity tables. Ordered by user name.
+/// Users who can own a case (issue #22): active users who hold <c>cases.edit</c> through their stored roles and
+/// permission overrides (ADR 0013, <see cref="PermissionQueries"/>), not a hard-coded list. Ordered by user name.
 /// </summary>
 public sealed class CaseAssigneeDirectory(
     IDbContextFactory<AppDbContext> contextFactory,
@@ -29,24 +29,34 @@ public sealed class CaseAssigneeDirectory(
         return Result<IReadOnlyList<AssigneeDto>>.Success(await QueryAsync(db, ct));
     }
 
-    /// <summary>The roles whose members can own cases.</summary>
-    internal static string[] AssignableRoles { get; } =
-        [.. RolePermissionMap.Roles.Where(r => RolePermissionMap.Grants([r], Permissions.CasesEdit))];
-
-    /// <summary>One entry per user (the first assignable role by name when a user has several).</summary>
+    /// <summary>
+    /// One entry per user, labelled with their first role (by name) that grants <c>cases.edit</c>, or their first role
+    /// when only an override grants it.
+    /// </summary>
     internal static async Task<IReadOnlyList<AssigneeDto>> QueryAsync(AppDbContext db, CancellationToken ct)
     {
+        var ids = await PermissionQueries.ActiveUserIdsHoldingAsync(db, Permissions.CasesEdit, ct);
+        var rolePermissions = await PermissionQueries.LoadRolePermissionsAsync(db, ct);
         var rows = await (
-            from userRole in db.UserRoles
-            join role in db.Roles on userRole.RoleId equals role.Id
-            join user in db.Users on userRole.UserId equals user.Id
-            where role.Name != null && AssignableRoles.Contains(role.Name) && user.UserName != null
-            select new { UserName = user.UserName!, Role = role.Name! })
-            .ToListAsync(ct);
+            from user in db.Users
+            where ids.Contains(user.Id) && user.UserName != null
+            select new
+            {
+                UserName = user.UserName!,
+                Roles = (from userRole in db.UserRoles
+                         join role in db.Roles on userRole.RoleId equals role.Id
+                         where userRole.UserId == user.Id && role.Name != null
+                         select role.Name!).ToList(),
+            }).ToListAsync(ct);
 
         return [.. rows
-            .GroupBy(r => r.UserName, StringComparer.Ordinal)
-            .Select(g => new AssigneeDto(g.Key, g.Select(r => r.Role).Order(StringComparer.Ordinal).First()))
+            .Select(r =>
+            {
+                var roles = r.Roles.Order(StringComparer.Ordinal).ToList();
+                var label = roles.FirstOrDefault(role => rolePermissions.TryGetValue(role, out var granted) && granted.Contains(Permissions.CasesEdit))
+                    ?? roles.FirstOrDefault() ?? string.Empty;
+                return new AssigneeDto(r.UserName, label);
+            })
             .OrderBy(a => a.UserName, StringComparer.OrdinalIgnoreCase)];
     }
 
@@ -54,11 +64,7 @@ public sealed class CaseAssigneeDirectory(
     internal static async Task<bool> IsAssignableAsync(AppDbContext db, string userName, CancellationToken ct)
     {
         var normalized = userName.ToUpperInvariant();
-        return await (
-            from userRole in db.UserRoles
-            join role in db.Roles on userRole.RoleId equals role.Id
-            join user in db.Users on userRole.UserId equals user.Id
-            where role.Name != null && AssignableRoles.Contains(role.Name) && user.NormalizedUserName == normalized
-            select user.Id).AnyAsync(ct);
+        var userId = await db.Users.Where(u => u.NormalizedUserName == normalized).Select(u => u.Id).SingleOrDefaultAsync(ct);
+        return userId is not null && (await PermissionQueries.ActiveUserIdsHoldingAsync(db, Permissions.CasesEdit, ct, userId)).Count > 0;
     }
 }

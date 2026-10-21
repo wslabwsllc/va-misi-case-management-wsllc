@@ -22,37 +22,34 @@ docker compose build
 scripts/scan-images.sh
 ```
 
-Date: 2026-10-20. Images built from `f36e2e6` (main). Host: macOS arm64. Trivy 0.75.0, vulnerability DB updated
-2026-10-20 19:12 UTC. Severity HIGH and CRITICAL.
+Date: 2026-10-21. Images built from `6fecbca` (main) plus the Alpine database image
+(`docker/db/Dockerfile`). Host: macOS arm64. Trivy 0.75.0, vulnerability DB updated 2026-10-20 19:12 UTC.
+Severity HIGH and CRITICAL.
 
-| Image | HIGH | CRITICAL | Fix available |
-|---|---|---|---|
-| `caseintake-app:local` (web, migrator) | 0 | 0 | - |
-| `caseintake-veteran-lookup` | 0 | 0 | - |
-| `postgres:18.6-trixie` Debian 13.7 packages (libxml2, util-linux, login, ...) | 61 | 1 (libxml2 CVE-2026-6653) | none: 57 affected, 4 fix deferred by Debian |
-| `postgres:18.6-trixie` `/usr/local/bin/gosu` (Go stdlib v1.24.6) | 24 | 1 (CVE-2025-68121, crypto/tls) | yes, in Go 1.24.13 or later |
+| Image | HIGH | CRITICAL |
+|---|---|---|
+| `caseintake-app:local` (web, migrator) | 0 | 0 |
+| `caseintake-veteran-lookup` | 0 | 0 |
+| `caseintake-db:local` (`docker/db/Dockerfile`: `postgres:18.6-alpine3.24` without `gosu`) | 0 | 0 |
 
-Result: **FAIL** on the database image; both application images are clean. With `TRIVY_IGNORE_UNFIXED=1` only the
-25 `gosu` findings remain. The pinned digest is the newest `18.6-trixie` build, so re-pinning the same tag changes
-nothing.
+Result: **PASS**. At every severity the database image has 2 MEDIUM findings and nothing higher.
 
-Other official 18.6 variants, scanned the same way for comparison:
+### Why the database image is built here
+
+The upstream PostgreSQL images all failed the scan (2026-10-20, images from `f36e2e6`):
 
 | Image | OS packages (HIGH / CRITICAL) | `gosu` (HIGH / CRITICAL) |
 |---|---|---|
+| `postgres:18.6-trixie` (the previous pin) | 61 / 1 (libxml2 CVE-2026-6653), none fixable | 24 / 1 (CVE-2025-68121, Go `crypto/tls`) |
 | `postgres:18.6-bookworm` | 71 / 3, none fixable | 24 / 1 |
 | `postgres:18.6-alpine3.24` | 0 / 0 | 24 / 1 |
 
-Every official image ships the same `gosu` build, so none scans clean.
+Every official image ships the same `gosu` build (Go stdlib v1.24.6), so none scans clean. `gosu` exists only so the
+entrypoint can drop from root to the `postgres` user. `docker/db/Dockerfile` starts from the pinned Alpine image,
+deletes `gosu` and sets `USER postgres`, so the entrypoint never needs it. The server binaries are unchanged, and
+Testcontainers runs the same upstream image (`PostgresDatabaseFixture.PostgresImage`).
 
-Assessment, pending the lead's decision (the pin is unchanged):
-
-- The findings are in the upstream PostgreSQL image, not in code this project builds. The database is reachable only
-  on the Compose network (no published port) and holds synthetic data only.
-- `gosu` runs once in the image's entrypoint to drop from root to the `postgres` user and then hands over to
-  PostgreSQL; it makes no TLS or network calls, so the Go `crypto/tls` and `net/http` findings are not reachable.
-- The Debian findings have no fixed package yet; a newer `18.x-trixie` build picks them up when Debian ships fixes.
-- Options: (1) keep the pin and list the findings in `.trivyignore` with this reasoning; (2) switch to
-  `postgres:18.6-alpine3.24`, which clears the OS findings but changes the C library (default text collation, so the
-  case list's Title sort order may change) and needs empty volumes, the Testcontainers pin and a full suite run;
-  (3) build on Alpine without `gosu` and run as the `postgres` user, which scans clean but adds an image to maintain.
+Alpine uses musl, whose default collation is byte order (`Banana` before `apple`). The cluster is therefore created
+with ICU collation (`POSTGRES_INITDB_ARGS: "--locale-provider=icu --icu-locale=en-US"`, in Compose and the fixture),
+which gives the same letter order as the previous glibc image. The one difference is punctuation, which now sorts
+before letters and digits (`_note` first).
