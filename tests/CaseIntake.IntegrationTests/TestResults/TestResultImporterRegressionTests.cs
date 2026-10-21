@@ -69,6 +69,53 @@ public sealed class TestResultImporterRegressionTests(PostgresDatabaseFixture da
         Assert.Equal("b-run", (await db.TestRuns.SingleAsync()).RunKey);
     }
 
+    [Theory]
+    [InlineData("""{"fullName":"Ns.A.B","steps":null}""")]
+    [InlineData("""{"fullName":"Ns.A.B","steps":[null]}""")]
+    [InlineData("""{"fullName":"Ns.A.B","artifacts":null}""")]
+    [InlineData("""{"fullName":"Ns.A.B","artifacts":[null]}""")]
+    [InlineData("""{"fullName":"Ns.A.B","consoleErrors":null}""")]
+    [InlineData("""{"fullName":"Ns.A.B","networkFailures":null}""")]
+    public async Task An_evidence_manifest_with_null_lists_is_reported_and_its_run_still_imports(string evidenceJson)
+    {
+        using var h = new TestResultsTestHarness(database);
+        var folder = h.NewRun("r-evidence-null").Suite(WebSuite, "Unit", Trx.Document(new TrxTest("Ns.A", "B")));
+        Directory.CreateDirectory(folder.PathOf("evidence", "a"));
+        await File.WriteAllTextAsync(folder.PathOf("evidence", "a", "evidence.json"), evidenceJson);
+        folder.Complete();
+        h.NewRun("r-later").Suite(WebSuite, "Unit", Trx.Document(new TrxTest("Ns.A", "C"))).Complete();
+
+        var summary = await h.ImportAsync();
+
+        Assert.Equal(2, summary.Imported);
+        Assert.Equal(["r-evidence-null: An evidence manifest could not be read."], summary.Problems);
+        await using var db = database.CreateContext();
+        var execution = await db.TestExecutions.Include(e => e.Steps).SingleAsync(e => e.Run.RunKey == "r-evidence-null");
+        Assert.Equal((TestOutcome.Passed, null, 0), (execution.Outcome, execution.Browser, execution.Steps.Count));
+    }
+
+    [Theory]
+    [InlineData("""[null]""")]
+    [InlineData("""[{"method":null,"categories":["Story:X"]}]""")]
+    [InlineData("""[{"method":"Ns.A.B","categories":null}]""")]
+    [InlineData("""[{"method":"Ns.A.B","categories":[null]}]""")]
+    public async Task A_test_catalog_with_null_entries_is_reported_and_its_run_still_imports(string catalogJson)
+    {
+        using var h = new TestResultsTestHarness(database);
+        var folder = h.NewRun("r-catalog-null").Suite(WebSuite, "Unit", Trx.Document(new TrxTest("Ns.A", "B")));
+        Directory.CreateDirectory(folder.PathOf("catalog"));
+        await File.WriteAllTextAsync(folder.PathOf("catalog", "Broken.json"), catalogJson);
+        folder.Complete();
+        h.NewRun("r-later").Suite(WebSuite, "Unit", Trx.Document(new TrxTest("Ns.A", "C"))).Complete();
+
+        var summary = await h.ImportAsync();
+
+        Assert.Equal(2, summary.Imported);
+        Assert.Equal(["r-catalog-null: A test catalog could not be read."], summary.Problems);
+        await using var db = database.CreateContext();
+        Assert.Null((await db.TestCases.SingleAsync(c => c.FullName == "Ns.A.B")).Story);
+    }
+
     [Fact]
     public async Task A_server_log_is_kept_until_its_run_is_saved_so_a_failed_save_can_be_retried()
     {

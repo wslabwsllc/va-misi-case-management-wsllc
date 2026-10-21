@@ -483,6 +483,11 @@ internal sealed partial class TestResultImporter(
             try
             {
                 var manifest = await ReadJsonAsync<EvidenceManifest>(file, ct);
+                if (manifest is not null && !IsWellFormed(manifest))
+                {
+                    problems.Add("An evidence manifest could not be read.");
+                    continue;
+                }
                 if (manifest is { FullName.Length: > 0 })
                 {
                     manifest.FolderRelativePath = Path.GetRelativePath(folder, dir);
@@ -496,6 +501,11 @@ internal sealed partial class TestResultImporter(
         }
         return result;
     }
+
+    /// <summary>JSON null in a list, or in a step or evidence file entry, makes the whole evidence manifest unreadable.</summary>
+    private static bool IsWellFormed(EvidenceManifest manifest) =>
+        manifest.Steps is not null && manifest.Artifacts is not null && manifest.ConsoleErrors is not null && manifest.NetworkFailures is not null
+        && manifest.Steps.All(s => s is not null) && manifest.Artifacts.All(a => a is not null);
 
     private sealed record CatalogEntry(string Method, string[] Categories);
 
@@ -512,7 +522,13 @@ internal sealed partial class TestResultImporter(
         {
             try
             {
-                foreach (var entry in await ReadJsonAsync<List<CatalogEntry>>(file, ct) ?? [])
+                var entries = await ReadJsonAsync<List<CatalogEntry>>(file, ct) ?? [];
+                if (entries.Any(e => e?.Method is null || e.Categories is null || e.Categories.Any(c => c is null)))
+                {
+                    problems.Add("A test catalog could not be read.");
+                    continue;
+                }
+                foreach (var entry in entries)
                 {
                     result[entry.Method] = entry.Categories;
                 }
