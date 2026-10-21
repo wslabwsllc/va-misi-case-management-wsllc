@@ -1,0 +1,171 @@
+@page "/admin/audit/{Key}"
+@attribute [Authorize(Policy = Permissions.AuditView)]
+@implements IDisposable
+@using CaseIntake.Contracts.Auditing
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Web.Services
+@inject IAuditLogService Audit
+@inject ILogger<AuditEntry> Logger
+
+@* One audit entry (ADR 0014): every recorded field, the before and after values of what changed, and a link to the
+   other entries of the same operation (correlation ID, also in the logs). *@
+<PageShell Title="@(_entry is null ? "Audit entry" : AuditText.Action(_entry.Action))"
+           DocumentTitle="@(_entry is null ? "Audit entry" : $"Audit entry {_entry.Key}")"
+           Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Audit log", "admin/audit")])"
+           Subtitle="@(_entry is null ? null : $"{UiText.Time(_entry.OccurredAtUtc)} · {_entry.ActorName ?? "Unknown"}")" />
+
+<ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The entry could not be loaded")" Message="@_error" TestId="audit-entry-error" />
+
+@if (_notFound)
+{
+    <EmptyState Title="Audit entry not found" Message="This entry does not exist." IconName="history" TestId="audit-entry-not-found">
+        <a class="btn" href="admin/audit">Back to the audit log</a>
+    </EmptyState>
+}
+else if (_entry is null)
+{
+    <LoadingIndicator Text="Loading the entry…" />
+}
+else
+{
+    var e = _entry;
+    <div class="grid grid--2">
+        <section class="card" aria-labelledby="entry-facts-heading" data-testid="audit-entry">
+            <h2 id="entry-facts-heading" class="card__header">Entry @e.Key</h2>
+            <dl class="field-list">
+                <dt>When</dt>
+                <dd>@UiText.Time(e.OccurredAtUtc)</dd>
+                <dt>When (UTC)</dt>
+                <dd class="mono">@UiText.IsoUtc(e.OccurredAtUtc)</dd>
+                <dt>Who</dt>
+                <dd>@(e.ActorName ?? "Unknown") @if (e.ActorId is not null) { <span class="cell-sub mono">@e.ActorId</span> }</dd>
+                <dt>Category</dt>
+                <dd>@AuditCategories.DisplayName(e.Category)</dd>
+                <dt>Action</dt>
+                <dd>@AuditText.Action(e.Action) <span class="cell-sub mono">@e.Action</span></dd>
+                <dt>Outcome</dt>
+                <dd data-testid="audit-entry-outcome">@AuditText.Outcome(e.Outcome)</dd>
+                <dt>Subject</dt>
+                <dd>
+                    @if (AuditText.EntityHref(e.EntityType, e.EntityId) is { } href)
+                    {
+                        <a href="@href">@(e.EntityName ?? e.EntityId)</a>
+                    }
+                    else
+                    {
+                        @(e.EntityName ?? e.EntityId ?? "None")
+                    }
+                    @if (e.EntityType is not null)
+                    {
+                        <span class="cell-sub">@e.EntityType @e.EntityId</span>
+                    }
+                </dd>
+                <dt>Summary</dt>
+                <dd class="pre-wrap">@(e.Summary ?? "None")</dd>
+                <dt>Correlation ID</dt>
+                <dd>
+                    @if (e.CorrelationId is { } correlation)
+                    {
+                        <span class="mono">@correlation</span>
+                        <a class="cell-sub" href="@AuditText.ListHref(new AuditQuery(Search: correlation))" data-testid="same-operation">Entries of the same operation</a>
+                    }
+                    else
+                    {
+                        @("Not recorded")
+                    }
+                </dd>
+            </dl>
+        </section>
+
+        <section class="card" aria-labelledby="entry-changes-heading">
+            <h2 id="entry-changes-heading" class="card__header">Changes</h2>
+            @if (e.Changes.Count == 0)
+            {
+                <p class="page-header__subtitle">No field values were recorded for this entry.</p>
+            }
+            else
+            {
+                <div class="table-wrap">
+                    <table class="data-grid" data-testid="audit-changes">
+                        <caption class="visually-hidden">Values before and after the change</caption>
+                        <thead>
+                            <tr>
+                                <th scope="col">Field</th>
+                                <th scope="col">Before</th>
+                                <th scope="col">After</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var change in e.Changes)
+                            {
+                                <tr>
+                                    <th scope="row">@AuditText.Field(change.Field)</th>
+                                    <td class="pre-wrap">@(change.Before ?? "(none)")</td>
+                                    <td class="pre-wrap">@(change.After ?? "(none)")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private AuditLogEntryDto? _entry;
+    private ErrorAlert? _alert;
+    private string? _error;
+    private bool _notFound;
+    private bool _focusAlert;
+
+    [Parameter] public string Key { get; set; } = string.Empty;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _entry = null;
+        _notFound = false;
+        try
+        {
+            var result = await Audit.GetAsync(Key, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _entry = result.Value;
+            }
+            else if (result.Error!.Kind == ErrorKind.NotFound)
+            {
+                _notFound = true;
+            }
+            else
+            {
+                _error = result.Error.Message;
+                _focusAlert = true;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5031, "AuditEntryFailed"), "Loading an audit entry failed ({ExceptionType})", ex.GetType().Name);
+            _error = "Reload the page to try again.";
+            _focusAlert = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

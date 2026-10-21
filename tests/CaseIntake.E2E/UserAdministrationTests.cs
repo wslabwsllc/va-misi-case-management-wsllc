@@ -26,7 +26,8 @@ public sealed class UserAdministrationTests(PlaywrightFixture fixture) : E2ETest
         await s.StepAsync("Add an intake clerk", async () =>
         {
             await page.Locator("#user-email").FillAsync(email);
-            await page.Locator("#user-role").SelectOptionAsync("IntakeClerk");
+            await PressAsync(page.Locator("#user-role-intakeclerk"), "Space");
+            await Expect(page.Locator("#user-role-intakeclerk")).ToBeCheckedAsync();
             await page.Locator("#user-password").FillAsync(InitialPassword);
             await PressAsync(page.GetByTestId("add-user"));
             await Expect(page.GetByTestId("user-added")).ToContainTextAsync($"{email} was added as Intake clerk.");

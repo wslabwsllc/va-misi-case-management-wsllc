@@ -5,6 +5,12 @@ namespace CaseIntake.Contracts.Security;
 
 public static class AppRoles
 {
+    /// <summary>
+    /// Full administration: always holds every permission (the seed grants new permissions on every run and the role's
+    /// permissions cannot be edited). Manages users, roles and permission overrides.
+    /// </summary>
+    public const string Administrator = "Administrator";
+
     /// <summary>Read-only oversight: views cases, audit trails and documents, changes nothing.</summary>
     public const string Auditor = "Auditor";
 
@@ -50,8 +56,26 @@ public static class Permissions
     /// <summary>Import executed test runs into the results store (runs are executed by the documented test command).</summary>
     public const string TestResultsManage = "testresults.manage";
 
-    /// <summary>List users and add users of any role (supervisors).</summary>
+    /// <summary>
+    /// List, add and edit users: email, roles, active status and per-user permission overrides. Only within the actor's
+    /// own access: nobody grants a permission they do not hold or manages someone who holds more than they do.
+    /// </summary>
     public const string UsersManage = "users.manage";
+
+    /// <summary>Create, edit and delete roles and choose each role's permissions (within the actor's own access).</summary>
+    public const string RolesManage = "roles.manage";
+
+    /// <summary>Read the system-wide audit log, open entries and export it as CSV; see a user's and a role's history.</summary>
+    public const string AuditView = "audit.view";
+
+    /// <summary>Read the stored error log and its details (ADR 0015).</summary>
+    public const string ErrorsView = "errors.view";
+
+    /// <summary>Acknowledge, resolve or reopen errors (ADR 0015).</summary>
+    public const string ErrorsManage = "errors.manage";
+
+    /// <summary>See the System Health page: health checks, database, migrations and error and security counts (ADR 0015).</summary>
+    public const string SystemHealth = "system.health";
 
     public static string Transition(CaseStatus from, CaseStatus to) => $"cases.transition.{from}.{to}";
 }

@@ -170,17 +170,24 @@ The four case roles build on each other (Auditor ⊂ IntakeClerk ⊂ CaseWorker 
 
 | Email | Password | Role |
 |---|---|---|
-| `auditor@example.test` | `Demo-Passw0rd!` | Auditor: read-only; view cases, audit trails and documents, export the case list |
+| `auditor@example.test` | `Demo-Passw0rd!` | Auditor: read-only; view cases, audit trails and documents, export the case list, read and export the audit log (Administration > Audit log) |
 | `intake@example.test` | `Demo-Passw0rd!` | IntakeClerk: view and open new cases, veteran lookup, upload attachments; no editing or status changes |
 | `caseworker@example.test` | `Demo-Passw0rd!` | CaseWorker: everything an intake clerk can do, plus edit cases and start and resolve them |
-| `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor: everything a case worker can do, plus triage, close and reopen, and add users (Administration > Users) |
+| `supervisor@example.test` | `Demo-Passw0rd!` | Supervisor: everything a case worker can do, plus triage, close and reopen, and manage users within their own access (Administration > Users) |
 | `qa@example.test` | `Demo-Passw0rd!` | QualityAnalyst: read cases; view and import test results (Administration > Quality assurance) |
+| `admin@example.test` | `Demo-Passw0rd!` | Administrator: every permission; manages users, roles and per-user permission overrides (Administration > Users, Roles) |
 
 The password (`Seed:DemoPassword`) is applied only when an account is first created; re-seeding never resets it. Five
-wrong passwords lock an account for five minutes. Supervisors add users of any role with an initial password; every user
-changes their own password from the header (Change password). There is no self-registration or password reset by
-email. Roles and
-permissions: [ADR 0007](docs/adr/0007-roles-and-permissions.md). Guided tour: [docs/demo.md](docs/demo.md).
+wrong passwords lock an account for five minutes. Administrators (and supervisors, within their own access) add users
+with one or more roles and an initial password, change roles, deactivate accounts and allow or deny single permissions
+per user; administrators also define roles. Auditors, supervisors and administrators read the system-wide audit log
+(sign-ins, access denials, user and role changes, cases, attachments, test results), open any entry and export it as
+CSV ([ADR 0014](docs/adr/0014-system-audit-log.md)). Administrators also see recorded errors (Administration > Errors, with the
+reference shown on the error page) and System health ([ADR 0015](docs/adr/0015-error-log-and-system-health.md)). Every user
+changes their own password from the header (Change password). Times are US Eastern with EDT or EST, in en-US format;
+Section 508 evidence is in [docs/section-508](docs/section-508/README.md).
+There is no self-registration or password reset by email. Roles and permissions: [ADR 0007](docs/adr/0007-roles-and-permissions.md)
+and [ADR 0013](docs/adr/0013-database-roles-and-permissions.md). Guided tour: [docs/demo.md](docs/demo.md).
 
 </details>
 

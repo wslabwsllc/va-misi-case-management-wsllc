@@ -1,5 +1,7 @@
 using System.Security.Claims;
+using CaseIntake.Contracts.Auditing;
 using CaseIntake.Persistence;
+using CaseIntake.Persistence.Auditing;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
@@ -37,12 +39,17 @@ public static class AccountEndpoints
         return endpoints.MapPost(AccountRoutes.Logout, async (
                 ClaimsPrincipal user,
                 SignInManager<AppUser> signInManager,
+                AuditLogWriter audit,
                 ILoggerFactory loggerFactory,
                 [FromForm] string? returnUrl) =>
             {
                 var userId = user.FindFirstValue(ClaimTypes.NameIdentifier);
                 await signInManager.SignOutAsync();
                 IdentityLog.LoggedOut(loggerFactory.CreateLogger(typeof(AccountEndpoints).FullName!), userId);
+                if (userId is not null)
+                {
+                    await AuthenticationAudit.WriteAsync(audit, AuditLogActions.SignedOut, AuditOutcome.Success, userId, user.Identity?.Name, "Signed out");
+                }
                 // The login page confirms the sign-out in a status message (E5-S8).
                 return TypedResults.LocalRedirect(AccountRoutes.SignedOut);
             })

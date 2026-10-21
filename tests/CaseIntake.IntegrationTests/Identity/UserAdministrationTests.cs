@@ -9,32 +9,28 @@ using Microsoft.EntityFrameworkCore;
 
 namespace CaseIntake.IntegrationTests.Identity;
 
-/// <summary>Supervisors add users of every role, and users change their own password, against real Identity and cookies.</summary>
+/// <summary>Supervisors add users of the roles within their access, and users change their own password, against real Identity and cookies.</summary>
 public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
 {
     private const string InitialPassword = "Initial-Passw0rd!";
     private const string NewPassword = "Changed-Passw0rd!";
 
-    private UserAdministrationService Service(string role) => new(
-        fixture.Factory.Services.GetRequiredService<IServiceScopeFactory>(),
-        fixture.Factory.Services.GetRequiredService<IDbContextFactory<AppDbContext>>(),
-        new FakeCurrentUser { Actor = FakeCurrentUser.ForRole(role) },
-        fixture.Factory.Services.GetRequiredService<ILogger<UserAdministrationService>>());
+    private UserAdministrationService Service(string role) => AdministrationTestSupport.Users(fixture.Factory.Services, FakeCurrentUser.ForRole(role));
 
     private static string NewEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@example.test";
 
     [Theory]
     [MemberData(nameof(Roles))]
-    public async Task A_supervisor_adds_a_user_of_each_role_who_can_then_sign_in_with_that_role(string role)
+    public async Task A_supervisor_adds_a_user_of_each_role_they_may_grant_who_can_then_sign_in_with_that_role(string role)
     {
         var email = NewEmail("new");
 
-        var result = await Service(AppRoles.Supervisor).CreateAsync(new CreateUserRequest($" {email} ", role, InitialPassword), CancellationToken.None);
+        var result = await Service(AppRoles.Supervisor).CreateAsync(new CreateUserRequest($" {email} ", [role], InitialPassword), CancellationToken.None);
 
         Assert.True(result.IsSuccess, result.Error?.Message);
         Assert.Equal(email, result.Value!.UserName);
-        var listed = (await Service(AppRoles.Supervisor).ListAsync(CancellationToken.None)).Value!;
-        Assert.Equal([role], listed.Single(u => u.UserName == email).Roles);
+        var listed = (await Service(AppRoles.Supervisor).ListAsync(new UserListQuery(Search: email), CancellationToken.None)).Value!;
+        Assert.Equal([role], listed.Items.Single().Roles);
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3011 && Equals(r.GetStructuredStateValue("UserId"), result.Value.Id));
 
         using var session = fixture.NewSession();
@@ -43,7 +39,8 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         Assert.Contains($"data-testid=\"user-roles\">{AppRoles.DisplayName(role)}<", html);
     }
 
-    public static TheoryData<string> Roles => [.. RolePermissionMap.Roles];
+    /// <summary>The roles whose permissions a supervisor holds (not Quality analyst or Administrator; see RolesAndPermissionsTests).</summary>
+    public static TheoryData<string> Roles => [AppRoles.Auditor, AppRoles.IntakeClerk, AppRoles.CaseWorker, AppRoles.Supervisor];
 
     [Theory]
     [InlineData(AppRoles.Auditor)]
@@ -54,8 +51,8 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
     {
         var email = NewEmail("denied");
 
-        var created = await Service(role).CreateAsync(new CreateUserRequest(email, AppRoles.Supervisor, InitialPassword), CancellationToken.None);
-        var listed = await Service(role).ListAsync(CancellationToken.None);
+        var created = await Service(role).CreateAsync(new CreateUserRequest(email, [AppRoles.Auditor], InitialPassword), CancellationToken.None);
+        var listed = await Service(role).ListAsync(new UserListQuery(), CancellationToken.None);
 
         Assert.Equal(ErrorKind.Forbidden, created.Error?.Kind);
         Assert.Equal(ErrorKind.Forbidden, listed.Error?.Kind);
@@ -68,11 +65,11 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         var email = NewEmail("weak");
         var service = Service(AppRoles.Supervisor);
 
-        var badRole = await service.CreateAsync(new CreateUserRequest("not-an-email", "Admin", ""), CancellationToken.None);
-        var weak = await service.CreateAsync(new CreateUserRequest(email, AppRoles.CaseWorker, "short"), CancellationToken.None);
-        var duplicate = await service.CreateAsync(new CreateUserRequest("SUPERVISOR@example.test", AppRoles.CaseWorker, InitialPassword), CancellationToken.None);
+        var badRole = await service.CreateAsync(new CreateUserRequest("not-an-email", ["Admin"], ""), CancellationToken.None);
+        var weak = await service.CreateAsync(new CreateUserRequest(email, [AppRoles.CaseWorker], "short"), CancellationToken.None);
+        var duplicate = await service.CreateAsync(new CreateUserRequest("SUPERVISOR@example.test", [AppRoles.CaseWorker], InitialPassword), CancellationToken.None);
 
-        Assert.Equal([UserFieldNames.Email, UserFieldNames.Password, UserFieldNames.Role], badRole.Error!.FieldErrors!.Keys.Order());
+        Assert.Equal([UserFieldNames.Email, UserFieldNames.Password, UserFieldNames.Roles], badRole.Error!.FieldErrors!.Keys.Order());
         Assert.Equal([UserFieldNames.Password], weak.Error!.FieldErrors!.Keys);
         Assert.Contains(weak.Error.FieldErrors[UserFieldNames.Password], m => m.Contains("at least 6", StringComparison.Ordinal));
         Assert.Equal(["A user with this email address already exists."], duplicate.Error!.FieldErrors![UserFieldNames.Email]);
@@ -97,7 +94,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
     public async Task A_user_changes_their_password_the_old_one_stops_working_and_other_sessions_end()
     {
         var email = NewEmail("change");
-        Assert.True((await Service(AppRoles.Supervisor).CreateAsync(new CreateUserRequest(email, AppRoles.CaseWorker, InitialPassword), CancellationToken.None)).IsSuccess);
+        Assert.True((await Service(AppRoles.Supervisor).CreateAsync(new CreateUserRequest(email, [AppRoles.CaseWorker], InitialPassword), CancellationToken.None)).IsSuccess);
         using var other = fixture.NewSession();
         await other.SignInAsync(email, InitialPassword);
         using var session = fixture.NewSession();

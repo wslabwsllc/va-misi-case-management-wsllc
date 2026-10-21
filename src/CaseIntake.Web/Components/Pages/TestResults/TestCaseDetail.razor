@@ -36,7 +36,7 @@ else
                 <div class="table-wrap">
                     <table class="data-grid" data-testid="history-table">
                         <caption class="visually-hidden">Outcome of this test in recent runs, newest first</caption>
-                        <thead><tr><th scope="col">Run</th><th scope="col">Started (ET)</th><th scope="col">Outcome</th><th scope="col" class="num">Duration</th><th scope="col">Commit</th></tr></thead>
+                        <thead><tr><th scope="col">Run</th><th scope="col">Started</th><th scope="col">Outcome</th><th scope="col" class="num">Duration</th><th scope="col">Commit</th></tr></thead>
                         <tbody>
                             @foreach (var h in _history.History)
                             {
@@ -52,9 +52,9 @@ else
                     </table>
                 </div>
                 <div class="card__note mt-4">
-                    <Chart Id="testcase-duration" Title="Duration trend" Description="Seconds per run, oldest to newest." CategoryHeader="Run (ET)"
+                    <Chart Id="testcase-duration" Title="Duration trend" Description="Seconds per run, oldest to newest." CategoryHeader="Run"
                            Format="ChartFormat.OneDecimal" TestId="testcase-chart-duration"
-                           Categories="@([.. oldestFirst.Select(h => CaseIntake.Domain.EasternTime.From(h.RunStartedAtUtc).ToString("MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture))])"
+                           Categories="@([.. oldestFirst.Select(h => UiText.ShortTime(h.RunStartedAtUtc))])"
                            Series="@([new ChartSeries("Duration (s)", [.. oldestFirst.Select(h => Math.Round(h.Duration.TotalSeconds, 1))], "--series-4")])" />
                 </div>
             }
@@ -70,7 +70,7 @@ else
                 <dt>Story</dt><dd>@(t.Story ?? "Not recorded")</dd>
                 <dt>Requirements</dt><dd>@(t.Requirements ?? "Not recorded")</dd>
                 <dt>Priority</dt><dd>@(t.Priority ?? "Not recorded")</dd>
-                <dt>First seen (ET)</dt><dd>@UiText.Time(t.FirstSeenAtUtc)</dd>
+                <dt>First seen</dt><dd>@UiText.Time(t.FirstSeenAtUtc)</dd>
             </dl>
         </section>
     </div>

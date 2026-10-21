@@ -110,7 +110,18 @@ public class LayoutTests : WebTestContext
 
         Assert.Contains(cut.FindAll("nav#app-nav .app-nav__group-label"), l => l.TextContent == "Administration");
         Assert.Contains(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/users");
+        Assert.DoesNotContain(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/roles");
         Assert.DoesNotContain(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href")?.StartsWith("test-results", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public void Administrators_see_users_and_roles()
+    {
+        SignInAs(AppRoles.Administrator);
+        var cut = RenderLayout();
+
+        Assert.Contains(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/users");
+        Assert.Contains(cut.FindAll("nav#app-nav a"), a => a.GetAttribute("href") == "admin/roles");
     }
 
     [Fact]

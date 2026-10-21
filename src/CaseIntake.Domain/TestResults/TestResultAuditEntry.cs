@@ -18,6 +18,9 @@ public sealed class TestResultAuditEntry
     public long? RunId { get; set; }
     public Guid? ArtifactId { get; set; }
     public string? Details { get; set; }
+
+    /// <summary>The operation ID of the request or action (also in the logs); null for system actions and older rows.</summary>
+    public string? CorrelationId { get; set; }
 }
 
 /// <summary>

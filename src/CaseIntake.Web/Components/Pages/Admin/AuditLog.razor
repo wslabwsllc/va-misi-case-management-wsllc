@@ -1,0 +1,303 @@
+@page "/admin/audit"
+@attribute [Authorize(Policy = Permissions.AuditView)]
+@implements IDisposable
+@using System.Globalization
+@using CaseIntake.Contracts.Auditing
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Web.Services
+@inject IAuditLogService Audit
+@inject NavigationManager Navigation
+@inject StatusAnnouncer Announcer
+@inject ILogger<AuditLog> Logger
+
+@* System-wide audit log (ADR 0014): sign-ins, access denials, user and role administration, cases, attachments and
+   test results, newest first. Filters are in the query string, so a filtered view can be linked (a user's or role's
+   "View all history") and Back returns to it; applying filters keeps focus on the form. The CSV export uses the same
+   filters and UTC times. *@
+<PageShell Title="Audit log" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="Who did what, and when. Times are US Eastern (EDT or EST); the CSV export uses UTC.">
+    <Actions>
+        <a class="btn" href="@ExportHref" download data-testid="export-audit"><Icon Name="export" Small="true" /> Export CSV</a>
+    </Actions>
+</PageShell>
+
+<ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The audit log could not be loaded")" Message="@_error" TestId="audit-error" />
+
+<div class="card filters-card">
+    <form class="filters" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter the audit log" data-testid="audit-filters">
+        <div class="field">
+            <label class="field__label" for="audit-from">From (ET)</label>
+            <input id="audit-from" type="date" @bind="_draft.From" data-testid="audit-from" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="audit-to">To (ET)</label>
+            <input id="audit-to" type="date" @bind="_draft.To" data-testid="audit-to" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="audit-category">Category</label>
+            <select id="audit-category" @bind="_draft.Category" data-testid="audit-category">
+                <option value="">All categories</option>
+                @foreach (var category in AuditCategories.All)
+                {
+                    <option value="@category">@AuditCategories.DisplayName(category)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="audit-outcome">Outcome</label>
+            <select id="audit-outcome" @bind="_draft.Outcome" data-testid="audit-outcome">
+                <option value="">All outcomes</option>
+                @foreach (var outcome in Enum.GetValues<AuditOutcome>())
+                {
+                    <option value="@outcome">@AuditText.Outcome(outcome)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="audit-actor">Who (name contains)</label>
+            <input id="audit-actor" type="search" @bind="_draft.Actor" maxlength="@AuditQuery.SearchMaxLength" autocomplete="off" spellcheck="false" data-testid="audit-actor" />
+        </div>
+        <div class="field filters__search">
+            <label class="field__label" for="audit-search">Search action, subject, summary or correlation ID</label>
+            <span class="input-icon">
+                <Icon Name="search" Small="true" />
+                <input id="audit-search" type="search" @bind="_draft.Search" maxlength="@AuditQuery.SearchMaxLength" autocomplete="off" enterkeyhint="search" data-testid="audit-search" />
+            </span>
+        </div>
+        <div class="field">
+            <label class="field__label" for="audit-order">Order</label>
+            <select id="audit-order" @bind="_draft.Order" data-testid="audit-order">
+                <option value="newest">Newest first</option>
+                <option value="oldest">Oldest first</option>
+            </select>
+        </div>
+        <div class="btn-row filters__actions">
+            <button type="submit" class="btn btn--primary" data-testid="apply-audit-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
+            <button type="button" class="btn" @onclick="ClearAsync" disabled="@(!HasFilters)" data-testid="clear-audit-filters">Clear</button>
+        </div>
+    </form>
+    @if (_query.EntityType is not null || _query.EntityId is not null)
+    {
+        <div class="filter-chips" role="group" aria-label="Subject filter" data-testid="audit-subject-filter">
+            <span class="chip">
+                Subject: @(_query.EntityType ?? "any") @_query.EntityId
+                <button type="button" class="chip__remove" @onclick="ClearSubjectAsync" aria-label="Remove filter: subject">
+                    <Icon Name="close" Small="true" />
+                </button>
+            </span>
+        </div>
+    }
+</div>
+
+<section class="card card--flush mt-4" aria-labelledby="audit-results-heading">
+    <h2 id="audit-results-heading" class="card__header">Entries</h2>
+    @if (_page is null)
+    {
+        <LoadingIndicator Text="Loading the audit log…" />
+    }
+    else if (_page.TotalCount == 0)
+    {
+        <EmptyState Title="No audit entries match these filters" Message="Try other dates or fewer filters." IconName="history" TestId="audit-empty" />
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data-grid" aria-busy="@(_loading ? "true" : "false")" data-testid="audit-table">
+                <caption class="visually-hidden">Audit entries (@UiText.ShowingRange(_page.Page, _page.PageSize, _page.TotalCount, "entries"))</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">When</th>
+                        <th scope="col">Who</th>
+                        <th scope="col">What</th>
+                        <th scope="col">Subject</th>
+                        <th scope="col">Outcome</th>
+                        <th scope="col">Summary</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in _page.Items)
+                    {
+                        <tr data-testid="audit-row">
+                            <td class="nowrap"><a href="@($"admin/audit/{e.Key}")" aria-label="@($"Entry {e.Key}, {UiText.Time(e.OccurredAtUtc)}")">@UiText.Time(e.OccurredAtUtc)</a></td>
+                            <td>@(e.ActorName ?? "Unknown")</td>
+                            <td>@AuditText.Action(e.Action)<span class="cell-sub">@AuditCategories.DisplayName(e.Category)</span></td>
+                            <td>
+                                @if (AuditText.EntityHref(e.EntityType, e.EntityId) is { } href)
+                                {
+                                    <a href="@href">@(e.EntityName ?? e.EntityId)</a>
+                                }
+                                else
+                                {
+                                    @(e.EntityName ?? e.EntityId ?? "–")
+                                }
+                            </td>
+                            <td><span class="audit-outcome audit-outcome--@e.Outcome.ToString().ToLowerInvariant()">@AuditText.Outcome(e.Outcome)</span></td>
+                            <td class="audit-summary">@e.Summary</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card__footer">
+            <PagerControl Page="_page.Page" PageSize="_page.PageSize" TotalCount="_page.TotalCount" Noun="entries" Label="Audit log pages"
+                          OnPageChanged="GoToPageAsync" />
+        </div>
+    }
+</section>
+
+@code {
+    private sealed class Draft
+    {
+        public DateOnly? From { get; set; }
+        public DateOnly? To { get; set; }
+        public string Category { get; set; } = "";
+        public string Outcome { get; set; } = "";
+        public string? Actor { get; set; }
+        public string? Search { get; set; }
+        public string Order { get; set; } = "newest";
+    }
+
+    private const int PageSize = 50;
+
+    private readonly CancellationTokenSource _cts = new();
+    private AuditQuery _query = new(PageSize: PageSize);
+    private Draft _draft = new();
+    private PagedResult<AuditLogEntryDto>? _page;
+    private ErrorAlert? _alert;
+    private string? _error;
+    private bool _loading;
+    private bool _focusAlert;
+    private bool _announce;
+
+    [SupplyParameterFromQuery(Name = "from")] private string? QueryFrom { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] private string? QueryTo { get; set; }
+    [SupplyParameterFromQuery(Name = "category")] private string? QueryCategory { get; set; }
+    [SupplyParameterFromQuery(Name = "actor")] private string? QueryActor { get; set; }
+    [SupplyParameterFromQuery(Name = "entityType")] private string? QueryEntityType { get; set; }
+    [SupplyParameterFromQuery(Name = "entityId")] private string? QueryEntityId { get; set; }
+    [SupplyParameterFromQuery(Name = "outcome")] private string? QueryOutcome { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] private string? QuerySearch { get; set; }
+    [SupplyParameterFromQuery(Name = "order")] private string? QueryOrder { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] private string? QueryPage { get; set; }
+
+    private string ExportHref => AuditText.Query(_query with { Page = 1 }) is { Length: > 0 } q ? $"exports/audit.csv?{q}" : "exports/audit.csv";
+
+    private bool HasFilters => AuditText.Query(_query with { Page = 1 }).Length > 0;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _query = AuditText.Parse(name => name switch
+        {
+            "from" => QueryFrom, "to" => QueryTo, "category" => QueryCategory, "actor" => QueryActor,
+            "entityType" => QueryEntityType, "entityId" => QueryEntityId, "outcome" => QueryOutcome,
+            "q" => QuerySearch, "order" => QueryOrder, "page" => QueryPage, _ => null,
+        }, PageSize);
+        _draft = new Draft
+        {
+            From = _query.FromDate, To = _query.ToDate, Category = _query.Category ?? "", Outcome = _query.Outcome?.ToString() ?? "",
+            Actor = _query.Actor, Search = _query.Search, Order = _query.OldestFirst ? "oldest" : "newest",
+        };
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await Audit.ListAsync(_query, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _page = result.Value;
+                _error = null;
+                if (_announce)
+                {
+                    _announce = false;
+                    Announcer.Announce(_page!.TotalCount == 0 ? "No audit entries match these filters."
+                        : UiText.ShowingRange(_page.Page, _page.PageSize, _page.TotalCount, "entries") + ".");
+                }
+            }
+            else
+            {
+                _page ??= new([], 1, PageSize, 0);
+                _error = result.Error!.FieldErrors is { Count: > 0 } fields
+                    ? string.Join(" ", fields.Values.SelectMany(m => m))
+                    : result.Error.Message;
+                _focusAlert = true;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5030, "AuditListFailed"), "Audit log failed ({ExceptionType})", ex.GetType().Name);
+            _page ??= new([], 1, PageSize, 0);
+            _error = "Reload the page to try again.";
+            _focusAlert = true;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task ApplyAsync()
+    {
+        _announce = true;
+        var query = _query with
+        {
+            FromDate = _draft.From,
+            ToDate = _draft.To,
+            Category = _draft.Category.Length > 0 ? _draft.Category : null,
+            Outcome = Enum.TryParse<AuditOutcome>(_draft.Outcome, out var o) ? o : null,
+            Actor = string.IsNullOrWhiteSpace(_draft.Actor) ? null : _draft.Actor.Trim(),
+            Search = string.IsNullOrWhiteSpace(_draft.Search) ? null : _draft.Search.Trim(),
+            OldestFirst = _draft.Order == "oldest",
+            Page = 1,
+        };
+        return NavigateAsync(query);
+    }
+
+    private Task ClearAsync()
+    {
+        _announce = true;
+        return NavigateAsync(new AuditQuery(PageSize: PageSize));
+    }
+
+    private Task ClearSubjectAsync()
+    {
+        _announce = true;
+        return NavigateAsync(_query with { EntityType = null, EntityId = null, Page = 1 });
+    }
+
+    private Task GoToPageAsync(int page) => NavigateAsync(_query with { Page = page });
+
+    private async Task NavigateAsync(AuditQuery query)
+    {
+        var target = AuditText.ListHref(query);
+        if (string.Equals(Navigation.ToBaseRelativePath(Navigation.Uri), target, StringComparison.Ordinal))
+        {
+            // Same URL: no navigation happens, so reload in place.
+            await LoadAsync();
+            return;
+        }
+        Navigation.NavigateTo(target);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

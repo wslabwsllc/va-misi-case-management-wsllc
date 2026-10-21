@@ -164,6 +164,9 @@ public class ServiceAuthorizationMatrixTests(PostgresDatabaseFixture database) :
         return data;
     }
 
+    private static readonly IReadOnlyDictionary<string, System.Collections.Immutable.ImmutableHashSet<string>> DefaultMatrix =
+        RolePermissionMap.Roles.ToDictionary(r => r, r => RolePermissionMap.PermissionsFor([r]));
+
     private static OperationActor ActorFor(string role)
     {
         var claims = new List<Claim> { new(ClaimTypes.NameIdentifier, $"id-{role}"), new(ClaimTypes.Name, $"{role}@example.test") };
@@ -171,7 +174,7 @@ public class ServiceAuthorizationMatrixTests(PostgresDatabaseFixture database) :
         {
             claims.Add(new Claim(ClaimTypes.Role, role));
         }
-        return OperationActorFactory.FromPrincipal(new ClaimsPrincipal(new ClaimsIdentity(claims, "Identity.Application")));
+        return OperationActorFactory.FromPrincipal(new ClaimsPrincipal(new ClaimsIdentity(claims, "Identity.Application")), DefaultMatrix, null);
     }
 
     private static readonly Dictionary<CaseStatus, CaseStatus[]> PathTo = new()

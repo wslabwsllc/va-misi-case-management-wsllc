@@ -32,7 +32,7 @@ public class CaseListTests : WebTestContext
 
         cut.WaitForAssertion(() => Assert.Equal(25, cut.FindAll("[data-testid=case-table] tbody tr").Count));
         Assert.StartsWith("Cases", cut.Find("[data-testid=case-table] caption").TextContent.Trim(), StringComparison.Ordinal);
-        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date", "Created (ET)", "Updated (ET)", "Actions"],
+        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date", "Created", "Updated", "Actions"],
             cut.FindAll("[data-testid=case-table] thead th").Select(th => th.TextContent.Trim().Trim('▲', '▼', '⇅').Trim()));
         // Every data column sorts; the row menu column does not.
         Assert.Equal(9, cut.FindAll("[data-testid=case-table] thead th button.sort-button").Count);
@@ -212,7 +212,7 @@ public class CaseListTests : WebTestContext
         Assert.Equal("Claims", cut.Find("[data-testid=filter-category]").GetAttribute("value"));
 
         var chip = cut.Find("[data-testid=filter-chips]");
-        Assert.Contains("Created 2026-10-01 to 2026-10-31", chip.TextContent);
+        Assert.Contains("Created 10/01/2026 to 10/31/2026", chip.TextContent);
         Assert.Contains("createdFrom=2026-10-01", cut.Find("[data-testid=export-csv]").GetAttribute("href"));
         chip.QuerySelector("button")!.Click();
         Assert.DoesNotContain("createdFrom", Navigation.Uri, StringComparison.Ordinal);

@@ -42,7 +42,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("Contact details", cut.Find("[data-testid=summary-category]").TextContent.Trim());
         Assert.Equal("caseworker@example.test", cut.Find("[data-testid=summary-owner]").TextContent.Trim());
         var due = cut.Find("[data-testid=summary-due]");
-        Assert.Contains("2026-10-16", due.TextContent);
+        Assert.Contains("10/16/2026", due.TextContent);
         Assert.Contains("Overdue by 3 days", due.TextContent);   // today is 2026-10-19 (UTC)
         Assert.Contains("cell-overdue", due.ClassName);
         Assert.Equal("Case summary", cut.Find("[data-testid=record-header]").GetAttribute("aria-label"));
@@ -62,7 +62,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Contains("stepper__step--complete", steps[1].ClassName);
         Assert.Equal("step", steps[2].GetAttribute("aria-current"));
         Assert.Contains("Current stage", steps[2].TextContent);
-        Assert.Contains("2026-10-19", steps[2].TextContent);   // when it was entered, from the audit trail
+        Assert.Contains("10/19/2026", steps[2].TextContent);   // when it was entered, from the audit trail
         Assert.Contains("Not started", steps[3].TextContent);
         Assert.Single(cut.FindAll("[data-testid=workflow-stepper] [aria-current=step]"));
         // The status controls sit with the stepper and keep their heading and buttons.
@@ -268,9 +268,9 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         SignInAs(AppRoles.Supervisor);   // choosing the owner at intake is a supervisor's assignment
         var cut = Render<NewCase>();
 
-        Assert.Contains("Leave empty to use the target for Medium priority: 10 days (2026-10-29).", cut.Find("#intake-due-hint").TextContent);
+        Assert.Contains("Leave empty to use the target for Medium priority: 10 days (10/29/2026).", cut.Find("#intake-due-hint").TextContent);
         cut.Find("#intake-priority").Change("Urgent");
-        Assert.Contains("Urgent priority: 2 days (2026-10-21)", cut.Find("#intake-due-hint").TextContent);
+        Assert.Contains("Urgent priority: 2 days (10/21/2026)", cut.Find("#intake-due-hint").TextContent);
         Assert.Equal(3, cut.FindAll("#intake-owner option").Count);   // Unassigned and the two people who work cases
 
         cut.Find("#intake-title").Input("Triage at intake");

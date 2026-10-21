@@ -4,7 +4,8 @@
 @using System.Diagnostics
 
 @* Target of UseExceptionHandler (static SSR). Shows a safe message and the operation ID for support; never the
-   exception text, which can echo submitted values (plan 0.3). *@
+   exception text, which can echo submitted values (plan 0.3). The reference is the stored error's correlation ID, so
+   Administration > Errors finds it (ADR 0015). *@
 <PageTitle>Something went wrong - Case Intake and Triage</PageTitle>
 <div class="status-page status-page--error">
     <Icon Name="error" />
@@ -12,7 +13,8 @@
     <p>The request could not be completed. Nothing was changed by the failed request. Try again, and if the problem continues, contact support.</p>
     @if (!string.IsNullOrEmpty(RequestId))
     {
-        <p class="page-header__subtitle">Reference: <code>@RequestId</code></p>
+        <p class="page-header__subtitle" data-testid="error-reference">Reference: <code>@RequestId</code></p>
+        <p class="page-header__subtitle">The error was recorded. If you contact support, give them this reference so they can find it.</p>
     }
     <div class="btn-row">
         <a class="btn btn--primary" href="">Go to the dashboard</a>
@@ -23,7 +25,10 @@
     [CascadingParameter]
     private HttpContext? HttpContext { get; set; }
 
-    private string? RequestId => HttpContext?.Response.Headers[CaseIntake.ServiceDefaults.OperationContextMiddleware.HeaderName].ToString() is { Length: > 0 } id
-        ? id
-        : Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+    // The ambient operation ID (the request is re-executed inside the operation middleware), which is also the stored
+    // error's correlation ID and the X-Operation-Id header; the header itself is only written when the response starts.
+    private string? RequestId => CaseIntake.Contracts.Common.OperationContext.CurrentId
+        ?? (HttpContext?.Response.Headers[CaseIntake.ServiceDefaults.OperationContextMiddleware.HeaderName].ToString() is { Length: > 0 } id
+            ? id
+            : Activity.Current?.Id ?? HttpContext?.TraceIdentifier);
 }

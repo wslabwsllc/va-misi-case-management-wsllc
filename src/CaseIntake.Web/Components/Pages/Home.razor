@@ -162,7 +162,7 @@ else if (_data is { } d)
     private string? _error;
 
     private string Subtitle => _data is { } d
-        ? $"Cases you are allowed to see. Updated {EasternTime.From(d.GeneratedAtUtc).ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}."
+        ? $"Cases you are allowed to see. Updated {UiText.ClockTime(d.GeneratedAtUtc)} on {UiText.Date(EasternTime.Date(d.GeneratedAtUtc))}."
         : "Cases you are allowed to see.";
 
     protected override Task OnInitializedAsync() => LoadAsync();
@@ -198,7 +198,7 @@ else if (_data is { } d)
         if (_error is null && _data is { } d)
         {
             _refreshGeneration++;
-            Announcer.Announce($"Dashboard refreshed at {EasternTime.From(d.GeneratedAtUtc).ToString("HH:mm:ss", CultureInfo.InvariantCulture)}");
+            Announcer.Announce($"Dashboard refreshed at {UiText.ClockTime(d.GeneratedAtUtc)}");
         }
     }
 

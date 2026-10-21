@@ -28,6 +28,6 @@
 
     private static string RoleText(System.Security.Claims.ClaimsPrincipal user)
     {
-        return AppRoles.Describe(OperationActorFactory.FromPrincipal(user).Roles);
+        return AppRoles.Describe(OperationActorFactory.Roles(user));
     }
 }

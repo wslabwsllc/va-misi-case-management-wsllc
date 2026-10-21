@@ -3,6 +3,7 @@ using CaseIntake.Domain.Cases;
 using CaseIntake.Domain.TestResults;
 using CaseIntake.Persistence.Auditing;
 using CaseIntake.Persistence.Conventions;
+using CaseIntake.Persistence.Diagnostics;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,8 +19,19 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
 {
     public DbSet<Case> Cases => Set<Case>();
     public DbSet<CaseAuditEntry> CaseAuditEntries => Set<CaseAuditEntry>();
+
+    /// <summary>The system audit log (ADR 0014); append-only like the case trail.</summary>
+    public DbSet<AuditLogEntry> AuditLogEntries => Set<AuditLogEntry>();
+
+    /// <summary>Stored Error and Critical log events (ADR 0015).</summary>
+    public DbSet<ErrorLogEntry> ErrorLogEntries => Set<ErrorLogEntry>();
     public DbSet<CaseNotificationCursor> CaseNotificationCursors => Set<CaseNotificationCursor>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
+
+    // Database-backed permissions (ADR 0013).
+    public DbSet<AppPermission> Permissions => Set<AppPermission>();
+    public DbSet<AppRolePermission> RolePermissions => Set<AppRolePermission>();
+    public DbSet<AppUserPermissionOverride> UserPermissionOverrides => Set<AppUserPermissionOverride>();
 
     // Test results and evidence (E5 test management).
     public DbSet<TestEnvironment> TestEnvironments => Set<TestEnvironment>();

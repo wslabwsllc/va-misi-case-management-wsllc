@@ -2,7 +2,9 @@ using System.Security.Claims;
 using CaseIntake.Contracts.Common;
 using CaseIntake.Contracts.Security;
 using CaseIntake.Identity.Administration;
+using CaseIntake.Contracts.Auditing;
 using CaseIntake.Persistence;
+using CaseIntake.Persistence.Auditing;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
 
@@ -16,6 +18,7 @@ namespace CaseIntake.Identity.Account;
 /// </summary>
 public sealed class AccountPasswordChange(
     SignInManager<AppUser> signInManager,
+    AuditLogWriter audit,
     ILogger<AccountPasswordChange> logger)
 {
     public const string LockedOutMessage =
@@ -48,6 +51,8 @@ public sealed class AccountPasswordChange(
         if (!check.Succeeded)
         {
             IdentityLog.PasswordChangeFailed(logger, user.Id, check.IsLockedOut ? "LockedOut" : "InvalidCurrentPassword");
+            await AuthenticationAudit.WriteAsync(audit, AuditLogActions.PasswordChangeFailed, AuditOutcome.Failure, user.Id, user.UserName,
+                check.IsLockedOut ? "Password change refused: locked out after failed attempts" : "Password change failed: wrong current password");
             errors[UserFieldNames.CurrentPassword] = [check.IsLockedOut ? LockedOutMessage : "Your current password is not correct."];
             return Result<bool>.Failure(IdentityErrors.Validation(errors));
         }
@@ -56,6 +61,8 @@ public sealed class AccountPasswordChange(
         if (!changed.Succeeded)
         {
             IdentityLog.PasswordChangeFailed(logger, user.Id, "PasswordRules");
+            await AuthenticationAudit.WriteAsync(audit, AuditLogActions.PasswordChangeFailed, AuditOutcome.Failure, user.Id, user.UserName,
+                "Password change failed: the new password does not meet the rules");
             var messages = IdentityErrors.PasswordMessages(changed);
             errors[UserFieldNames.NewPassword] = messages.Length > 0 ? messages : ["The password could not be changed."];
             return Result<bool>.Failure(IdentityErrors.Validation(errors));
@@ -63,6 +70,7 @@ public sealed class AccountPasswordChange(
 
         await signInManager.RefreshSignInAsync(user);
         IdentityLog.PasswordChanged(logger, user.Id);
+        await AuthenticationAudit.WriteAsync(audit, AuditLogActions.PasswordChanged, AuditOutcome.Success, user.Id, user.UserName, "Password changed; other sessions end within a minute");
         return Result<bool>.Success(true);
     }
 }

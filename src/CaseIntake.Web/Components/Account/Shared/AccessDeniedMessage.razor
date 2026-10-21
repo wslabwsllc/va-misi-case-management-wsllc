@@ -1,7 +1,10 @@
 @using System.Reflection
 @using CaseIntake.Identity
-@using CaseIntake.Identity.CurrentUser
+@using CaseIntake.Identity.Authorization
+@using CaseIntake.Persistence.Auditing
 @inject NavigationManager Navigation
+@inject ICurrentUser CurrentUser
+@inject IServiceProvider Services
 @inject ILogger<AccessDeniedMessage> Logger
 
 @* Shared access-denied content (E3-S5; styled by E5-S8). Used by the /account/access-denied page and, during interactive
@@ -38,7 +41,8 @@
             return;
         }
 
-        var actor = OperationActorFactory.FromPrincipal((await AuthenticationState).User);
+        await AuthenticationState;
+        var actor = await CurrentUser.GetAsync(CancellationToken.None);
         if (actor.IsAuthenticated)
         {
             _roleText = AppRoles.Describe(actor.Roles);
@@ -53,10 +57,16 @@
             .Select(a => a.Policy)
             .OfType<string>()
             .Where(p => !actor.HasPermission(p))
-            .DefaultIfEmpty("(policy)");
+            .DefaultIfEmpty("(policy)")
+            .ToList();
         foreach (var permission in policies)
         {
             IdentityLog.AuthorizationDenied(Logger, actor.UserId, permission, resource);
+        }
+        // No HTTP authorization middleware ran for this interactive navigation, so the audit entry is written here.
+        if (Services.GetService<AuditLogWriter>() is { } audit)
+        {
+            await AccessDeniedAudit.WriteAsync(audit, actor.UserId, actor.DisplayName, resource, policies);
         }
     }
 }

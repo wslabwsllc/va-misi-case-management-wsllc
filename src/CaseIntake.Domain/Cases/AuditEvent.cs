@@ -82,8 +82,11 @@ public sealed class CaseAuditEntry
     public CaseStatus? ToStatus { get; private set; }
     public string? Details { get; private set; }
 
+    /// <summary>The operation ID of the request or action that made the change (also in the logs); null for older rows.</summary>
+    public string? CorrelationId { get; private set; }
+
     /// <summary>Creates an entry linked to <paramref name="caseEntity"/> through the navigation, so it also works before the case has an ID.</summary>
-    public static CaseAuditEntry Record(Case caseEntity, string actorId, string actorName, AuditEvent auditEvent)
+    public static CaseAuditEntry Record(Case caseEntity, string actorId, string actorName, AuditEvent auditEvent, string? correlationId = null)
     {
         ArgumentNullException.ThrowIfNull(caseEntity);
         ArgumentNullException.ThrowIfNull(auditEvent);
@@ -110,6 +113,7 @@ public sealed class CaseAuditEntry
             FromStatus = auditEvent.FromStatus,
             ToStatus = auditEvent.ToStatus,
             Details = auditEvent.Details,
+            CorrelationId = correlationId is { Length: > 64 } ? correlationId[..64] : correlationId,
         };
     }
 }

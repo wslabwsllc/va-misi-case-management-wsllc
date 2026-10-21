@@ -1,0 +1,484 @@
+@page "/admin/users/{Id}"
+@attribute [Authorize(Policy = Permissions.UsersManage)]
+@implements IDisposable
+@using System.Collections.Immutable
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Web.Services
+@inject IUserAdministrationService UserAdmin
+@inject ICurrentUser CurrentUser
+@inject StatusAnnouncer Announcer
+@inject TimeProvider Time
+@inject ILogger<UserDetail> Logger
+
+@* One user (ADR 0013): account status and lockout, email and roles, and per-permission overrides with the resulting
+   access. Each section saves on its own and starts from the user's concurrency stamp, so a change someone else saved
+   first is reported and the latest version shown. When the administrator may only look (their own account, or a
+   person with more access), the sections are read-only and say why. *@
+<PageShell Title="@(_user?.UserName ?? "User")" DocumentTitle="@(_user is null ? "User" : $"User {_user.UserName}")"
+           Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Users", "admin/users")])"
+           Subtitle="@(_user is null ? null : StatusText(_user))" />
+
+<ErrorAlert @ref="_alert" Title="@_errorTitle" Message="@_error" TestId="user-error" />
+<div role="status" aria-live="polite" data-testid="user-saved">
+    @if (_saved is not null)
+    {
+        <p class="message message--success"><Icon Name="success" /><span class="message__body">@_saved</span></p>
+    }
+</div>
+
+@if (_user is null)
+{
+    @if (_notFound)
+    {
+        <EmptyState Title="User not found" Message="This user no longer exists." IconName="person" TestId="user-not-found">
+            <a class="btn" href="admin/users">Back to users</a>
+        </EmptyState>
+    }
+    else
+    {
+        <LoadingIndicator Text="Loading user…" />
+    }
+}
+else
+{
+    var u = _user;
+    @if (!u.CanManage)
+    {
+        <p class="message message--info" data-testid="user-read-only"><Icon Name="info" /><span class="message__body">@u.CannotManageReason</span></p>
+    }
+
+    <div class="grid grid--2">
+        <section class="card" aria-labelledby="account-heading" data-testid="account-section">
+            <h2 id="account-heading" class="card__header">Account</h2>
+            <dl class="field-list">
+                <dt>Status</dt>
+                <dd data-testid="user-status">@(u.IsActive ? "Active" : "Inactive")</dd>
+                <dt>Added</dt>
+                <dd>@(u.CreatedUtc is { } created ? UiText.Time(created) : "Not recorded")</dd>
+                <dt>Last sign-in</dt>
+                <dd>@(u.LastSignInUtc is { } last ? UiText.Time(last) : "Never")</dd>
+                @if (!u.IsActive && u.DeactivatedUtc is { } deactivated)
+                {
+                    <dt>Deactivated</dt>
+                    <dd>@UiText.Time(deactivated)</dd>
+                }
+                <dt>Sign-in lockout</dt>
+                <dd data-testid="user-lockout">@(u.IsLockedOut(Time.GetUtcNow()) ? $"Locked out after failed sign-ins until {UiText.Time(u.LockoutEndUtc!.Value)}" : "Not locked out")</dd>
+            </dl>
+            @if (u.CanManage)
+            {
+                <div class="form-actions">
+                    @if (u.IsActive)
+                    {
+                        <button type="button" class="btn btn--danger" @ref="_statusButton" @onclick="OpenStatusDialogAsync" disabled="@_busy" data-testid="deactivate-user">
+                            <Icon Name="lock" Small="true" /> Deactivate user
+                        </button>
+                    }
+                    else
+                    {
+                        <button type="button" class="btn btn--primary" @ref="_statusButton" @onclick="OpenStatusDialogAsync" disabled="@_busy" data-testid="reactivate-user">
+                            <Icon Name="success" Small="true" /> Reactivate user
+                        </button>
+                    }
+                    @if (u.IsLockedOut(Time.GetUtcNow()))
+                    {
+                        <button type="button" class="btn" @onclick="UnlockAsync" disabled="@_busy" data-testid="unlock-user">Unlock sign-in</button>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="roles-heading" data-testid="roles-section">
+            <h2 id="roles-heading" class="card__header">Email and roles</h2>
+            @if (u.CanManage)
+            {
+                <EditForm EditContext="_editContext" OnSubmit="SaveProfileAsync" id="user-profile-form" novalidate class="form" data-testid="user-profile-form">
+                    <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
+                    <LabeledInputText Id="edit-email" Label="Email address" Type="email" AutoComplete="off" Spellcheck="false" Required="true"
+                                      @bind-Value="_profile.Email" Hint="Changing the email or roles signs the person out within a minute." />
+                    <RoleCheckboxes IdPrefix="edit-role" Options="_roleOptions" Selected="_profile.Roles" Errors="RoleErrors" />
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn--primary" disabled="@_busy" aria-busy="@(_busy ? "true" : "false")" data-testid="save-user">
+                            <Icon Name="save" Small="true" /> Save email and roles
+                        </button>
+                    </div>
+                </EditForm>
+            }
+            else
+            {
+                <dl class="field-list">
+                    <dt>Email</dt>
+                    <dd class="mono">@u.UserName</dd>
+                    <dt>Roles</dt>
+                    <dd>@AppRoles.Describe(u.Roles)</dd>
+                </dl>
+            }
+        </section>
+    </div>
+
+    <section class="card mt-4" aria-labelledby="permissions-heading" data-testid="permissions-section">
+        <h2 id="permissions-heading" class="card__header">Permissions</h2>
+        <p class="card__note" id="permissions-help">
+            A person holds the permissions of all their roles. Allow adds a permission their roles don't give; Deny removes one
+            even if a role gives it. Deny always wins. You can only change permissions you hold yourself.
+        </p>
+        <form @onsubmit="SaveOverridesAsync" @onsubmit:preventDefault="true" aria-describedby="permissions-help" data-testid="overrides-form">
+            @if (_overridesError is not null)
+            {
+                <p class="message message--error" role="alert" tabindex="-1" id="overrides-error" @ref="_overridesErrorElement" data-testid="overrides-error">
+                    <Icon Name="error" /><span class="message__body">@_overridesError</span>
+                </p>
+            }
+            <div class="table-wrap">
+                <table class="data-grid permission-grid" data-testid="permissions-table">
+                    <caption class="visually-hidden">Permissions of @u.UserName: where each comes from, the override and the result</caption>
+                    <thead>
+                        <tr>
+                            <th scope="col">Permission</th>
+                            <th scope="col">From roles</th>
+                            <th scope="col">Override</th>
+                            <th scope="col">Result</th>
+                        </tr>
+                    </thead>
+                    @foreach (var group in PermissionCatalog.Groups)
+                    {
+                        <tbody>
+                            <tr class="permission-grid__group"><th scope="rowgroup" colspan="4">@group</th></tr>
+                            @foreach (var definition in PermissionCatalog.All.Where(p => p.Group == group))
+                            {
+                                var p = u.Permissions.First(e => e.Permission == definition.Name);
+                                var key = Key(definition.Name);
+                                var editable = u.CanManage && _actor.HasPermission(definition.Name);
+                                <tr data-testid="@($"permission-{definition.Name}")">
+                                    <th scope="row">
+                                        @definition.Label
+                                        <span class="cell-sub">@definition.Description</span>
+                                    </th>
+                                    <td>@(p.FromRoles.Count == 0 ? "None" : AppRoles.Describe(p.FromRoles))</td>
+                                    <td>
+                                        @if (u.CanManage)
+                                        {
+                                            <fieldset class="radio-group" disabled="@(!editable)">
+                                                <legend class="visually-hidden">Override for @definition.Label</legend>
+                                                @foreach (var choice in Choices)
+                                                {
+                                                    var c = choice;
+                                                    <label class="checkbox">
+                                                        <input type="radio" name="@($"override-{key}")" id="@($"override-{key}-{c.Value}")"
+                                                               checked="@(Draft(definition.Name) == c.Effect)" @onchange="() => SetDraft(definition.Name, c.Effect)"
+                                                               data-testid="@($"override-{definition.Name}-{c.Value}")" />
+                                                        @c.Text
+                                                    </label>
+                                                }
+                                                @if (!editable)
+                                                {
+                                                    <span class="cell-sub">You don't hold this permission.</span>
+                                                }
+                                            </fieldset>
+                                        }
+                                        else
+                                        {
+                                            @(p.Override switch { PermissionEffect.Allow => "Allow", PermissionEffect.Deny => "Deny", _ => "Inherit" })
+                                        }
+                                    </td>
+                                    <td data-testid="@($"effective-{definition.Name}")">
+                                        @if (p.Granted)
+                                        {
+                                            <span class="permission-result permission-result--yes"><Icon Name="success" Small="true" /> Has it</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="permission-result"><Icon Name="close" Small="true" /> Doesn't have it</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+            </div>
+            @if (u.CanManage)
+            {
+                <div class="form-actions">
+                    <button type="submit" class="btn btn--primary" disabled="@_busy" aria-busy="@(_busy ? "true" : "false")" data-testid="save-overrides">
+                        <Icon Name="save" Small="true" /> Save permissions
+                    </button>
+                    <button type="button" class="btn" @onclick="ResetOverrides" disabled="@_busy" data-testid="reset-overrides">Undo changes</button>
+                </div>
+            }
+        </form>
+    </section>
+
+    <AuditHistory EntityType="@CaseIntake.Contracts.Auditing.AuditEntityTypes.User" EntityId="@u.Id" Version="@u.ConcurrencyStamp" />
+
+    <ModalDialog @ref="_statusDialog" Id="user-status-dialog" TestId="user-status-dialog"
+                 Title="@(u.IsActive ? $"Deactivate {u.UserName}?" : $"Reactivate {u.UserName}?")"
+                 Description="@(u.IsActive
+                     ? "They will be signed out within a minute and can't sign in until someone reactivates them. Their cases and history stay as they are."
+                     : "They will be able to sign in again with their current password and roles.")">
+        <Footer>
+            <button type="button" class="btn" @onclick="() => _statusDialog!.CloseAsync(restoreFocus: true)" autofocus="@u.IsActive" data-testid="user-status-cancel">Cancel</button>
+            <button type="button" class="btn @(u.IsActive ? "btn--danger" : "btn--primary")" @onclick="ConfirmStatusAsync" disabled="@_busy" autofocus="@(!u.IsActive)" data-testid="user-status-confirm">
+                @(u.IsActive ? "Deactivate" : "Reactivate")
+            </button>
+        </Footer>
+    </ModalDialog>
+}
+
+@code {
+    private sealed class ProfileModel
+    {
+        public string? Email { get; set; }
+        public HashSet<string> Roles { get; } = new(StringComparer.Ordinal);
+    }
+
+    private sealed record Choice(PermissionEffect? Effect, string Value, string Text);
+
+    private static readonly Choice[] Choices =
+        [new(null, "inherit", "Inherit"), new(PermissionEffect.Allow, "allow", "Allow"), new(PermissionEffect.Deny, "deny", "Deny")];
+
+    private readonly CancellationTokenSource _cts = new();
+    private OperationActor _actor = new(null, null, ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty);
+    private UserDetailDto? _user;
+    private IReadOnlyList<RoleOptionDto> _roleOptions = [];
+    private ProfileModel _profile = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private Dictionary<string, PermissionEffect> _overrides = new(StringComparer.Ordinal);
+    private FormErrorSummary? _summary;
+    private ErrorAlert? _alert;
+    private ModalDialog? _statusDialog;
+    private ElementReference _statusButton;
+    private ElementReference _overridesErrorElement;
+    private bool _notFound;
+    private bool _busy;
+    private bool _showSummary;
+    private bool _focusSummary;
+    private bool _focusAlert;
+    private bool _focusOverridesError;
+    private bool _focusStatusButton;
+    private string? _errorTitle;
+    private string? _error;
+    private string? _overridesError;
+    private string? _saved;
+
+    [Parameter] public string Id { get; set; } = string.Empty;
+
+    private IReadOnlyList<KeyValuePair<string, string>> SummaryFields =>
+    [
+        new(UserFieldNames.Email, "edit-email"),
+        new(UserFieldNames.Roles, RoleCheckboxes.FirstInputId("edit-role", _roleOptions)),
+    ];
+
+    private IReadOnlyList<string> RoleErrors => _editContext.GetValidationMessages(new FieldIdentifier(_profile, UserFieldNames.Roles)).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _profile = new();
+        _editContext = new EditContext(_profile);
+        _messages = new ValidationMessageStore(_editContext);
+        try
+        {
+            _actor = await CurrentUser.GetAsync(_cts.Token);
+            var options = await UserAdmin.ListRoleOptionsAsync(_cts.Token);
+            _roleOptions = options.IsSuccess ? options.Value! : [];
+            var result = await UserAdmin.GetAsync(Id, _cts.Token);
+            if (result.IsSuccess)
+            {
+                Show(result.Value!);
+            }
+            else if (result.Error!.Kind == ErrorKind.NotFound)
+            {
+                _notFound = true;
+            }
+            else
+            {
+                ShowError("The user could not be loaded", result.Error.Message);
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5023, "UserDetailFailed"), "Loading a user failed ({ExceptionType})", ex.GetType().Name);
+            ShowError("The user could not be loaded", "Reload the page to try again.");
+        }
+    }
+
+    /// <summary>Shows a user and resets every form to it.</summary>
+    private void Show(UserDetailDto user)
+    {
+        _user = user;
+        _profile = new() { Email = user.UserName };
+        _profile.Roles.UnionWith(user.Roles);
+        _editContext = new EditContext(_profile);
+        _messages = new ValidationMessageStore(_editContext);
+        _showSummary = false;
+        _overrides = new(user.Overrides, StringComparer.Ordinal);
+        _overridesError = null;
+    }
+
+    private static string StatusText(UserDetailDto user) =>
+        $"{(user.IsActive ? "Active" : "Inactive")} · {AppRoles.Describe(user.Roles)}";
+
+    private static string Key(string permission) => permission.Replace('.', '-');
+
+    private PermissionEffect? Draft(string permission) => _overrides.TryGetValue(permission, out var effect) ? effect : null;
+
+    private void SetDraft(string permission, PermissionEffect? effect)
+    {
+        if (effect is { } value)
+        {
+            _overrides[permission] = value;
+        }
+        else
+        {
+            _overrides.Remove(permission);
+        }
+    }
+
+    private void ResetOverrides()
+    {
+        _overrides = new(_user!.Overrides, StringComparer.Ordinal);
+        _overridesError = null;
+        Announcer.Announce("Permission changes undone.");
+    }
+
+    private Task SaveProfileAsync() => RunAsync("Email and roles saved.", "The email and roles were not saved",
+        ct => UserAdmin.UpdateAsync(_user!.Id, new UpdateUserRequest(_profile.Email ?? "",
+            [.. _roleOptions.Select(r => r.Name).Where(_profile.Roles.Contains)], _user.ConcurrencyStamp), ct),
+        fieldErrors =>
+        {
+            _messages.Clear();
+            foreach (var (field, messages) in fieldErrors)
+            {
+                _messages.Add(new FieldIdentifier(_profile, field), messages);
+            }
+            _showSummary = true;
+            _focusSummary = true;
+            _editContext.NotifyValidationStateChanged();
+        });
+
+    private Task SaveOverridesAsync() => RunAsync("Permissions saved.", "The permissions were not saved",
+        ct => UserAdmin.SetOverridesAsync(_user!.Id, new SetPermissionOverridesRequest(_overrides, _user.ConcurrencyStamp), ct),
+        fieldErrors =>
+        {
+            _overridesError = string.Join(" ", fieldErrors.Values.SelectMany(m => m));
+            _focusOverridesError = true;
+        });
+
+    private Task UnlockAsync() => RunAsync("Sign-in unlocked.", "The user was not unlocked",
+        ct => UserAdmin.UnlockAsync(_user!.Id, _user.ConcurrencyStamp, ct), null);
+
+    private Task OpenStatusDialogAsync() => _statusDialog!.OpenAsync(() => _statusButton.FocusSafeAsync());
+
+    private async Task ConfirmStatusAsync()
+    {
+        var activate = !_user!.IsActive;
+        await RunAsync(activate ? $"{_user.UserName} was reactivated." : $"{_user.UserName} was deactivated.",
+            activate ? "The user was not reactivated" : "The user was not deactivated",
+            ct => UserAdmin.SetStatusAsync(_user.Id, new SetUserStatusRequest(activate, _user.ConcurrencyStamp), ct), null);
+        await _statusDialog!.CloseAsync();
+        // The status button was replaced by its opposite: focus it once rendered (an error alert takes focus instead).
+        _focusStatusButton = !_focusAlert;
+    }
+
+    /// <summary>
+    /// Runs one change. Success shows the returned user and announces <paramref name="done"/>; field errors go to
+    /// <paramref name="onFieldErrors"/>; a conflict reloads the user and explains; anything else is shown in the alert.
+    /// </summary>
+    private async Task RunAsync(string done, string failedTitle, Func<CancellationToken, Task<Result<UserDetailDto>>> change,
+        Action<IReadOnlyDictionary<string, string[]>>? onFieldErrors)
+    {
+        if (_busy || _user is null)
+        {
+            return;
+        }
+        _busy = true;
+        _error = null;
+        _errorTitle = null;
+        _saved = null;
+        try
+        {
+            var result = await change(_cts.Token);
+            if (result.IsSuccess)
+            {
+                Show(result.Value!);
+                _saved = done;
+                Announcer.Announce(done);
+                return;
+            }
+
+            var error = result.Error!;
+            if (error.FieldErrors is { Count: > 0 } fieldErrors && onFieldErrors is not null)
+            {
+                onFieldErrors(fieldErrors);
+                return;
+            }
+            if (error.Kind is ErrorKind.Conflict or ErrorKind.NotFound)
+            {
+                var latest = await UserAdmin.GetAsync(_user.Id, _cts.Token);
+                if (latest.IsSuccess)
+                {
+                    Show(latest.Value!);
+                }
+                else
+                {
+                    _user = null;
+                    _notFound = true;
+                }
+            }
+            ShowError(failedTitle, error.Message);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5024, "UserChangeFailed"), "Changing a user failed ({ExceptionType})", ex.GetType().Name);
+            ShowError(failedTitle, "Something went wrong. Try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ShowError(string title, string message)
+    {
+        _errorTitle = title;
+        _error = message;
+        _focusAlert = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusSummary && _summary is not null)
+        {
+            _focusSummary = false;
+            await _summary.FocusAsync();
+        }
+        if (_focusOverridesError)
+        {
+            _focusOverridesError = false;
+            await _overridesErrorElement.FocusSafeAsync();
+        }
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+        if (_focusStatusButton)
+        {
+            _focusStatusButton = false;
+            await _statusButton.FocusSafeAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

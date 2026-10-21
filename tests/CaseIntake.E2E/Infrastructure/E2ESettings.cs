@@ -39,6 +39,7 @@ public static class DemoAccounts
     public const string QualityAnalyst = "qa@example.test";
     public const string IntakeClerk = "intake@example.test";
     public const string Auditor = "auditor@example.test";
+    public const string Administrator = "admin@example.test";
 }
 
 /// <summary>Viewports required by the responsive tests.</summary>
@@ -48,6 +49,9 @@ public static class Viewports
     public static readonly ViewportSize Phone375 = new() { Width = 375, Height = 812 };
     public static readonly ViewportSize Tablet768 = new() { Width = 768, Height = 1024 };
     public static readonly ViewportSize Desktop1440 = new() { Width = 1440, Height = 900 };
+
+    /// <summary>WCAG 1.4.10 reflow width: 320 CSS px, which is 1280 px at 400% zoom.</summary>
+    public static readonly ViewportSize Reflow320 = new() { Width = 320, Height = 640 };
 
     public static string Label(ViewportSize v) => $"{v.Width}x{v.Height}";
 }

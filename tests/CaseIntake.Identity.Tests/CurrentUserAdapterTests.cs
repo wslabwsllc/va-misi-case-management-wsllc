@@ -24,13 +24,15 @@ public class CurrentUserAdapterTests
         return provider;
     }
 
+    private static CircuitCurrentUser CircuitUser(AuthenticationStateProvider provider) => new(provider, InMemoryPermissionStore.DefaultResolver);
+
     private static HttpCurrentUser Http(ClaimsPrincipal user) =>
-        new(new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = user } });
+        new(new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = user } }, InMemoryPermissionStore.DefaultResolver);
 
     [Fact]
     public async Task Circuit_adapter_reflects_the_circuit_principal()
     {
-        var actor = await new CircuitCurrentUser(Circuit(Principals.User("sv-1", "supervisor@example.test", AppRoles.Supervisor)))
+        var actor = await CircuitUser(Circuit(Principals.User("sv-1", "supervisor@example.test", AppRoles.Supervisor)))
             .GetAsync(CancellationToken.None);
 
         Assert.Equal("sv-1", actor.UserId);
@@ -51,7 +53,7 @@ public class CurrentUserAdapterTests
     [Fact]
     public async Task Anonymous_contexts_return_an_actor_without_permissions()
     {
-        ICurrentUser[] adapters = [new CircuitCurrentUser(Circuit(Principals.Anonymous)), Http(Principals.Anonymous)];
+        ICurrentUser[] adapters = [CircuitUser(Circuit(Principals.Anonymous)), Http(Principals.Anonymous)];
 
         foreach (var adapter in adapters)
         {
@@ -64,7 +66,7 @@ public class CurrentUserAdapterTests
     [Fact]
     public async Task Http_adapter_outside_a_request_fails_instead_of_guessing()
     {
-        var adapter = new HttpCurrentUser(new HttpContextAccessor());
+        var adapter = new HttpCurrentUser(new HttpContextAccessor(), InMemoryPermissionStore.DefaultResolver);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => adapter.GetAsync(CancellationToken.None));
     }
@@ -76,8 +78,8 @@ public class CurrentUserAdapterTests
         var second = new DeferredStateProvider();
         var pending = new[]
         {
-            new CircuitCurrentUser(first).GetAsync(CancellationToken.None),
-            new CircuitCurrentUser(second).GetAsync(CancellationToken.None),
+            CircuitUser(first).GetAsync(CancellationToken.None),
+            CircuitUser(second).GetAsync(CancellationToken.None),
             Http(Principals.User("http-user", "http@example.test", AppRoles.CaseWorker)).GetAsync(CancellationToken.None),
         };
 
@@ -96,7 +98,7 @@ public class CurrentUserAdapterTests
     public async Task A_revalidated_or_signed_out_circuit_denies_later_operations()
     {
         var provider = Circuit(Principals.User("sv-1", "sv", AppRoles.Supervisor));
-        var adapter = new CircuitCurrentUser(provider);
+        var adapter = CircuitUser(provider);
         var before = await adapter.GetAsync(CancellationToken.None);
 
         // What the revalidating provider does when the security stamp no longer matches.
@@ -112,7 +114,7 @@ public class CurrentUserAdapterTests
     public async Task Circuit_adapter_honors_cancellation_while_authentication_is_pending()
     {
         using var cts = new CancellationTokenSource();
-        var pending = new CircuitCurrentUser(new DeferredStateProvider()).GetAsync(cts.Token);
+        var pending = CircuitUser(new DeferredStateProvider()).GetAsync(cts.Token);
 
         await cts.CancelAsync();
 

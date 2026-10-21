@@ -376,6 +376,7 @@ internal sealed class TestResultsService(
         db.TestResultAuditEntries.Add(new TestResultAuditEntry
         {
             OccurredAtUtc = time.GetUtcNow(), ActorId = actor.UserId, Actor = actor.DisplayName ?? actor.UserId!, Action = access,
+            CorrelationId = Contracts.Common.OperationContext.CurrentId,
             RunId = artifact.RunId, ArtifactId = artifact.Id, Details = artifact.Kind.ToString(),
         });
         await db.SaveChangesAsync(ct);
@@ -416,6 +417,7 @@ internal sealed class TestResultsService(
         db.TestResultAuditEntries.Add(new TestResultAuditEntry
         {
             OccurredAtUtc = time.GetUtcNow(), ActorId = actor.UserId, Actor = actor.DisplayName ?? actor.UserId!, Action = "ReportExported",
+            CorrelationId = Contracts.Common.OperationContext.CurrentId,
             RunId = runId, Details = format,
         });
         await db.SaveChangesAsync(ct);

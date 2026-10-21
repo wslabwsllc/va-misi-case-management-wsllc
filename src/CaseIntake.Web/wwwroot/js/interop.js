@@ -3,16 +3,40 @@
 
 const focusableSelector = 'a[href], button, input, select, textarea, [tabindex]';
 
-/** Focuses the first element matching the selector; headings get tabindex="-1" so they can take programmatic focus. */
-export function focusSelector(selector) {
+/**
+ * Focuses the first element matching the selector; headings get tabindex="-1" so they can take programmatic focus.
+ * With waitMs, an element that is not on the page yet (for example while the router still shows "Checking your access")
+ * is focused as soon as it appears, unless the user has moved focus somewhere else by then.
+ */
+export function focusSelector(selector, waitMs = 0) {
+  const focus = element => {
+    if (!element.matches(focusableSelector)) {
+      element.setAttribute('tabindex', '-1');
+    }
+    element.focus();
+  };
   const element = document.querySelector(selector);
-  if (!element) {
+  if (element) {
+    focus(element);
     return;
   }
-  if (!element.matches(focusableSelector)) {
-    element.setAttribute('tabindex', '-1');
+  if (waitMs <= 0) {
+    return;
   }
-  element.focus();
+  let timer = 0;
+  const observer = new MutationObserver(() => {
+    const found = document.querySelector(selector);
+    if (!found) {
+      return;
+    }
+    observer.disconnect();
+    clearTimeout(timer);
+    if (document.activeElement === null || document.activeElement === document.body) {
+      focus(found);
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+  timer = setTimeout(() => observer.disconnect(), waitMs);
 }
 
 /**

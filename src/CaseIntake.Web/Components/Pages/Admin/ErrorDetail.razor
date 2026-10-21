@@ -1,0 +1,253 @@
+@page "/admin/errors/{Id:long}"
+@attribute [Authorize(Policy = Permissions.ErrorsView)]
+@implements IDisposable
+@using CaseIntake.Contracts.Auditing
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Contracts.Diagnostics
+@using CaseIntake.Web.Services
+@inject IErrorLogService ErrorLog
+@inject ICurrentUser CurrentUser
+@inject StatusAnnouncer Announcer
+@inject ILogger<ErrorDetail> Logger
+
+@* One stored error (ADR 0015): what was logged, where, the stack trace (never the exception message), how often the same
+   error occurred, the audit entries of the same operation, and its handling status, which people with errors.manage
+   change here (recorded in the audit log). *@
+<PageShell Title="@(_error is null ? "Error" : $"Error {_error.Id}")"
+           Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Errors", "admin/errors")])"
+           Subtitle="@(_error is null ? null : $"{_error.Level} · {_error.Status} · {UiText.Time(_error.OccurredAtUtc)}")" />
+
+<ErrorAlert @ref="_alert" Title="@_alertTitle" Message="@_alertMessage" TestId="error-detail-alert" />
+<div role="status" aria-live="polite" data-testid="error-saved">
+    @if (_saved is not null)
+    {
+        <p class="message message--success"><Icon Name="success" /><span class="message__body">@_saved</span></p>
+    }
+</div>
+
+@if (_notFound)
+{
+    <EmptyState Title="Error not found" Message="It may have been removed by retention." IconName="error" TestId="error-not-found">
+        <a class="btn" href="admin/errors">Back to errors</a>
+    </EmptyState>
+}
+else if (_error is null)
+{
+    <LoadingIndicator Text="Loading the error…" />
+}
+else
+{
+    var e = _error;
+    <div class="grid grid--main-side">
+        <section class="card" aria-labelledby="error-facts-heading" data-testid="error-detail">
+            <h2 id="error-facts-heading" class="card__header">What happened</h2>
+            <dl class="field-list">
+                <dt>When</dt>
+                <dd>@UiText.Time(e.OccurredAtUtc) <span class="cell-sub mono">@UiText.IsoUtc(e.OccurredAtUtc)</span></dd>
+                <dt>Level</dt>
+                <dd>@e.Level</dd>
+                <dt>Message</dt>
+                <dd class="pre-wrap" data-testid="error-message">@e.Message</dd>
+                <dt>Source</dt>
+                <dd class="mono">@e.Category <span class="cell-sub">Event @e.EventId@(e.EventName is null ? "" : $" ({e.EventName})")</span></dd>
+                <dt>Exception</dt>
+                <dd class="mono">@(e.ExceptionType ?? "None")</dd>
+                <dt>Page or endpoint</dt>
+                <dd class="mono">@(e.RequestPath ?? "Not recorded (interactive or background)")</dd>
+                <dt>Reference</dt>
+                <dd>
+                    @if (e.CorrelationId is { } reference)
+                    {
+                        <span class="mono" data-testid="error-reference">@reference</span>
+                        <AuthorizeView Policy="@Permissions.AuditView">
+                            <a class="cell-sub" href="@AuditText.ListHref(new AuditQuery(Search: reference))">Audit entries of the same operation</a>
+                        </AuthorizeView>
+                    }
+                    else
+                    {
+                        @("Not recorded")
+                    }
+                </dd>
+                <dt>Occurrences</dt>
+                <dd><a href="@Errors.Href(new ErrorQuery(Fingerprint: e.Fingerprint))" data-testid="error-occurrences">@e.Occurrences @(e.Occurrences == 1 ? "time" : "times") (same error)</a></dd>
+            </dl>
+            <h3 class="mt-4" id="stack-heading">Stack trace</h3>
+            @if (e.StackTrace is { } stack)
+            {
+                @* Scrollable, so it must be reachable with the keyboard (axe scrollable-region-focusable). *@
+                <pre class="stack-trace" tabindex="0" aria-labelledby="stack-heading" data-testid="error-stack">@stack</pre>
+            }
+            else
+            {
+                <p class="page-header__subtitle">No exception was logged with this error.</p>
+            }
+        </section>
+
+        <section class="card" aria-labelledby="error-status-heading" data-testid="error-status">
+            <h2 id="error-status-heading" class="card__header">Handling</h2>
+            <dl class="field-list">
+                <dt>Status</dt>
+                <dd data-testid="error-status-value">@e.Status</dd>
+                @if (e.StatusChangedUtc is { } changed)
+                {
+                    <dt>Changed</dt>
+                    <dd>@UiText.Time(changed) by @e.StatusChangedBy</dd>
+                }
+                @if (e.StatusNote is { } note)
+                {
+                    <dt>Note</dt>
+                    <dd class="pre-wrap">@note</dd>
+                }
+            </dl>
+            @if (_canManage)
+            {
+                <form class="form" @onsubmit="SaveAsync" @onsubmit:preventDefault="true" data-testid="error-status-form">
+                    <fieldset class="field">
+                        <legend class="field__label">New status</legend>
+                        <div class="checkbox-list">
+                            @foreach (var status in Enum.GetValues<ErrorStatus>())
+                            {
+                                var s = status;
+                                <label class="checkbox">
+                                    <input type="radio" name="error-status" checked="@(_draftStatus == s)" @onchange="() => _draftStatus = s"
+                                           data-testid="@($"error-status-{s}")" />
+                                    @s
+                                </label>
+                            }
+                        </div>
+                    </fieldset>
+                    <div class="field">
+                        <label class="field__label" for="error-note">Note <span class="visually-hidden">(optional)</span></label>
+                        <span class="field__hint" id="error-note-hint">What was done or why; shown here and in the audit log.</span>
+                        <textarea id="error-note" rows="3" maxlength="@SetErrorStatusRequest.NoteMaxLength" @bind="_draftNote"
+                                  aria-describedby="error-note-hint" data-testid="error-note"></textarea>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn--primary" disabled="@_busy" data-testid="save-error-status"><Icon Name="save" Small="true" /> Save status</button>
+                    </div>
+                </form>
+            }
+        </section>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private ErrorDetailDto? _error;
+    private ErrorAlert? _alert;
+    private ErrorStatus _draftStatus;
+    private string? _draftNote;
+    private string? _alertTitle;
+    private string? _alertMessage;
+    private string? _saved;
+    private bool _canManage;
+    private bool _notFound;
+    private bool _busy;
+    private bool _focusAlert;
+
+    [Parameter] public long Id { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _error = null;
+        _notFound = false;
+        try
+        {
+            _canManage = (await CurrentUser.GetAsync(_cts.Token)).HasPermission(Permissions.ErrorsManage);
+            await LoadAsync();
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5034, "ErrorDetailFailed"), "Loading an error failed ({ExceptionType})", ex.GetType().Name);
+            Alert("The error could not be loaded", "Reload the page to try again.");
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        var result = await ErrorLog.GetAsync(Id, _cts.Token);
+        if (result.IsSuccess)
+        {
+            Show(result.Value!);
+        }
+        else if (result.Error!.Kind == ErrorKind.NotFound)
+        {
+            _notFound = true;
+        }
+        else
+        {
+            Alert("The error could not be loaded", result.Error.Message);
+        }
+    }
+
+    private void Show(ErrorDetailDto error)
+    {
+        _error = error;
+        _draftStatus = error.Status;
+        _draftNote = error.StatusNote;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || _error is null)
+        {
+            return;
+        }
+        _busy = true;
+        _saved = null;
+        _alertTitle = _alertMessage = null;
+        try
+        {
+            var result = await ErrorLog.SetStatusAsync(_error.Id, new SetErrorStatusRequest(_draftStatus, _draftNote, _error.Version), _cts.Token);
+            if (result.IsSuccess)
+            {
+                Show(result.Value!);
+                _saved = $"Status saved: {result.Value!.Status}.";
+                Announcer.Announce(_saved);
+                return;
+            }
+            if (result.Error!.Kind == ErrorKind.Conflict)
+            {
+                await LoadAsync();
+            }
+            Alert("The status was not saved", result.Error.FieldErrors is { Count: > 0 } f ? string.Join(" ", f.Values.SelectMany(m => m)) : result.Error.Message);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5035, "ErrorStatusFailed"), "Saving an error status failed ({ExceptionType})", ex.GetType().Name);
+            Alert("The status was not saved", "Something went wrong. Try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void Alert(string title, string message)
+    {
+        _alertTitle = title;
+        _alertMessage = message;
+        _focusAlert = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}
