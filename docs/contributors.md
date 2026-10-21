@@ -12,7 +12,7 @@ Software Engineer · World Services LLC · E4 · 4+ years
 
 ### Alhagie Bai Cham
 
-Senior DevOps Engineer · World Services LLC · E1 · 7+ years
+Solutions Architect & DevOps Engineer · World Services LLC · E1 · 7+ years
 
 - Platform: Docker Compose, PostgreSQL, migrations and seeding, logging, test harness (EPIC 1)
 - JSON health checks, pinned lock files and images, multi-platform Docker, test results pages
