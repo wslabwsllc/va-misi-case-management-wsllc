@@ -135,7 +135,7 @@ public sealed partial class E2ESession : IAsyncDisposable
     public Task AxeAsync(string pageName) => StepAsync($"Accessibility scan (axe, WCAG A/AA): {pageName}", async () =>
     {
         // Scan the settled page: mid-animation (dialog fade-in) colours are blended and would mis-measure contrast.
-        await Page.WaitForFunctionAsync("() => document.getAnimations().every(a => a.playState !== 'running')");
+        await PageWait.UntilAsync(Page, "() => document.getAnimations().every(a => a.playState !== 'running')");
         var results = await Page.RunAxe(new AxeRunOptions
         {
             RunOnly = new RunOnlyOptions { Type = "tag", Values = ["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"] },

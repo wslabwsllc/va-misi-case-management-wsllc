@@ -72,22 +72,44 @@ public static class UiText
     public static CultureInfo Culture { get; } = CultureInfo.GetCultureInfo("en-US");
 
     /// <summary>
-    /// A stored UTC instant in US Eastern time with its zone, en-US style: "10/21/2026 09:05 AM EDT" ("EST" in winter).
+    /// A stored UTC instant in US Eastern time, MM-DD-YYYY HH:mm ET: "10-21-2026 09:05 ET" (24-hour clock). The suffix is always
+    /// "ET", never EST or EDT, all year (the zone label the redesign uses in column headers and text).
     /// Every timestamp the UI shows goes through here.
     /// </summary>
-    public static string Time(DateTimeOffset value) => Eastern(value, "MM/dd/yyyy hh:mm tt");
+    public static string Time(DateTimeOffset value) => Eastern(value, "MM-dd-yyyy HH:mm");
 
-    /// <summary>A compact label for charts and tight cells: "10/21 09:05 AM EDT".</summary>
-    public static string ShortTime(DateTimeOffset value) => Eastern(value, "MM/dd hh:mm tt");
+    /// <summary>A compact label for charts and tight cells: "10-21 09:05 ET".</summary>
+    public static string ShortTime(DateTimeOffset value) => Eastern(value, "MM-dd HH:mm");
 
-    /// <summary>Time of day with seconds, for "refreshed at" messages: "09:05:30 AM EDT".</summary>
-    public static string ClockTime(DateTimeOffset value) => Eastern(value, "hh:mm:ss tt");
+    /// <summary>Time of day with seconds, for "refreshed at" messages: "09:05:30 ET".</summary>
+    public static string ClockTime(DateTimeOffset value) => Eastern(value, "HH:mm:ss");
 
-    /// <summary>A calendar date, en-US style: "10/21/2026". Dates carry no zone (due dates are Eastern calendar days).</summary>
-    public static string Date(DateOnly value) => value.ToString("MM/dd/yyyy", Culture);
+    /// <summary>A calendar date, MM-DD-YYYY: "10-21-2026". Dates carry no zone (due dates are Eastern calendar days).</summary>
+    public static string Date(DateOnly value) => value.ToString(DateFormat, CultureInfo.InvariantCulture);
+
+    /// <summary>The one display format for calendar dates: MM-DD-YYYY. Storage, query strings and the API keep ISO dates.</summary>
+    public const string DateFormat = "MM-dd-yyyy";
+
+    /// <summary>The hint shown beside every date field.</summary>
+    public const string DateHint = "Format: MM-DD-YYYY";
+
+    /// <summary>
+    /// Parses a typed date in MM-DD-YYYY (slashes are accepted too, and single-digit months and days). Calendar parsing
+    /// only, so a date can never shift a day through a time zone. Null for anything that is not a real calendar date.
+    /// </summary>
+    public static DateOnly? ParseDate(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+        var normalized = text.Trim().Replace('/', '-');
+        return DateOnly.TryParseExact(normalized, ["MM-dd-yyyy", "M-d-yyyy", "MM-d-yyyy", "M-dd-yyyy", "yyyy-MM-dd"],
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var date) ? date : null;
+    }
 
     private static string Eastern(DateTimeOffset value, string format) =>
-        EasternTime.From(value).ToString(format, Culture) + " " + EasternTime.Abbreviation(value);
+        EasternTime.From(value).ToString(format, Culture) + " ET";
 
     /// <summary>For machine-readable exports (CSV), which stay in UTC.</summary>
     public static string IsoUtc(DateTimeOffset value) =>

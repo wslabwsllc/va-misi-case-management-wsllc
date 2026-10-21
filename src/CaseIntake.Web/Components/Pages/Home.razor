@@ -7,28 +7,80 @@
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Components.Pages.Cases
 @using CaseIntake.Web.Services
+@using Microsoft.AspNetCore.WebUtilities
 @inject CaseDashboardService Dashboard
 @inject PageActivity Activity
 @inject StatusAnnouncer Announcer
+@inject NavigationManager Navigation
+@inject TimeProvider Time
 @inject ILogger<Home> Logger
 
-@* Dashboard (Power Apps style): KPI cards, charts and work lists built from the authorized case service only.
-   Desktop shows everything; phones show the four headline KPIs, the case trend, the user's tasks, recent activity and
-   quick actions (no desktop-width charts or grids). Every figure links to the case list with the same filter, and the
-   chart columns and bars drill through to their cases (issue #21). *@
-<PageShell Title="Dashboard" Subtitle="@Subtitle">
-    <Actions>
-        <div class="btn-row">
-            <button type="button" class="btn @(_refreshing ? "btn--busy" : null)" @onclick="RefreshAsync" disabled="@_loading"
-                    aria-busy="@(_loading ? "true" : "false")" data-testid="dashboard-refresh">
-                <Icon Name="refresh" Small="true" Class="@(_refreshing ? "icon--spin" : null)" /> @(_refreshing ? "Refreshing…" : "Refresh")
-            </button>
-            <AuthorizeView Policy="@Permissions.CasesCreate">
-                <a class="btn btn--primary desktop-only" href="cases/new"><Icon Name="add" Small="true" /> New case</a>
-            </AuthorizeView>
+@* Dashboard (redesign): greeting, filters that apply as soon as they change (kept in the URL), seven interactive KPI
+   cards, four charts plus open cases by category, and quick actions, all built from the authorized case service only.
+   Date basis: the date range matches each case's created date (ET) for every figure; the resolution trend then places
+   Resolved and Closed cases by the month of their last update, an approximation of the completion date that the chart
+   says in its description. Every KPI and chart point links to the case list with the same filters. *@
+<PageTitle>@UiText.DocumentTitle("Dashboard")</PageTitle>
+<div class="page-header">
+    <div class="page-header__titles">
+        <span class="page-header__eyebrow" data-testid="dashboard-date">@TodayText</span>
+        <h1 tabindex="-1" id="page-title">@Greeting</h1>
+        <p class="page-header__subtitle" data-testid="dashboard-updated">@Subtitle</p>
+    </div>
+    <div class="btn-row page-actions">
+        <button type="button" class="btn" @onclick="RefreshAsync" disabled="@_loading"
+                aria-busy="@(_loading ? "true" : "false")" data-testid="dashboard-refresh">
+            <Icon Name="refresh" Small="true" Class="@(_refreshing ? "icon--spin" : null)" /> @(_refreshing ? "Refreshing…" : "Refresh")
+        </button>
+        <AuthorizeView Policy="@Permissions.CasesCreate">
+            <a class="btn btn--primary desktop-only" href="cases/new"><Icon Name="add" Small="true" /> New case</a>
+        </AuthorizeView>
+    </div>
+</div>
+
+<section class="filter-panel" role="search" aria-label="Filter the dashboard" data-testid="dashboard-filters">
+    <div class="filter-grid">
+        <div class="field">
+            <label class="field__label" for="dash-from">Created from</label>
+            <DateInput Id="dash-from" Value="_filter.From" ValueChanged="FromChangedAsync" data-testid="dash-from" />
         </div>
-    </Actions>
-</PageShell>
+        <div class="field">
+            <label class="field__label" for="dash-to">Created to</label>
+            <DateInput Id="dash-to" Value="_filter.To" ValueChanged="ToChangedAsync" data-testid="dash-to"
+                       Invalid="_rangeRejected" DescribedBy="@(_rangeRejected ? "dash-range-error" : null)" />
+            @if (_rangeRejected)
+            {
+                <div class="field__error" id="dash-range-error"><Icon Name="error" Small="true" /><span>Created to must be on or after Created from.</span></div>
+            }
+        </div>
+        <div class="field">
+            <label class="field__label" for="dash-status">Status</label>
+            <select id="dash-status" value="@(_filter.Status?.ToString() ?? "")" @onchange="StatusChangedAsync" data-testid="dash-status">
+                <option value="">All</option>
+                @foreach (var status in Enum.GetValues<CaseStatus>())
+                {
+                    <option value="@status">@UiText.Status(status)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="dash-priority">Priority</label>
+            <select id="dash-priority" value="@(_filter.Priority?.ToString() ?? "")" @onchange="PriorityChangedAsync" data-testid="dash-priority">
+                <option value="">All</option>
+                @foreach (var priority in Enum.GetValues<CasePriority>().OrderDescending())
+                {
+                    <option value="@priority">@UiText.Priority(priority)</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <button type="button" class="btn btn--outline btn--block" @onclick="ResetAsync" disabled="@_filter.IsEmpty" data-testid="dash-reset">
+                <Icon Name="refresh" Small="true" /> Reset filters
+            </button>
+        </div>
+    </div>
+    <p class="field__hint mb-0" id="dash-basis">The date range matches the date each case was created (Eastern Time). Figures update as soon as a filter changes.</p>
+</section>
 
 <ErrorAlert Title="@(_error is null ? null : "The dashboard could not be loaded")" Message="@_error" TestId="dashboard-error">
     @if (_error is not null)
@@ -37,11 +89,14 @@
     }
 </ErrorAlert>
 
+@* Polite live region: what the filters selected (WCAG 4.1.3). *@
+<p class="visually-hidden" role="status" aria-live="polite" data-testid="dashboard-announcement">@_announcement</p>
+
 @if (_loading && _data is null)
 {
     <LoadingIndicator Text="Loading dashboard…" />
     <ul class="kpi-grid" aria-hidden="true">
-        @for (var i = 0; i < 6; i++)
+        @for (var i = 0; i < 7; i++)
         {
             <li class="skeleton skeleton--kpi"></li>
         }
@@ -49,7 +104,7 @@
 }
 else if (_data is { } d)
 {
-    @if (d.Total == 0)
+    @if (d.Total == 0 && _filter.IsEmpty)
     {
         <div class="card">
             <EmptyState Title="No cases yet" Message="When cases are created they appear here with their status and trends." TestId="dashboard-empty">
@@ -61,15 +116,16 @@ else if (_data is { } d)
     }
     else
     {
-        <div class="dashboard @(_refreshGeneration % 2 == 0 ? "dashboard--refresh-a" : "dashboard--refresh-b")" data-generation="@_refreshGeneration" data-testid="dashboard-body">
+        <div class="dashboard" data-generation="@_refreshGeneration" data-testid="dashboard-body">
             <h2 class="visually-hidden">Key figures</h2>
             <ul class="kpi-grid" data-testid="kpis">
-                <KpiTile Label="Total cases" Value="@UiText.Number(d.Total)" Hint="All statuses" Href="cases" TestId="kpi-total" />
-                <KpiTile Label="Open cases" Value="@UiText.Number(d.Open)" Hint="New, Triaged or In Progress" Href="@($"cases?{CaseDashboardService.OpenStatusQuery}")" TestId="kpi-open" />
-                <KpiTile Label="Pending review" Value="@UiText.Number(d.PendingReview)" Hint="Resolved, waiting to be closed" Href="cases?status=Resolved" Variant="warning" TestId="kpi-pending" />
-                <KpiTile Label="Overdue cases" Value="@UiText.Number(d.Overdue)" Hint="Open and past their due date" Href="cases?overdue=true&sort=DueOn&dir=asc" Variant="danger" TestId="kpi-overdue" />
-                <KpiTile Label="Resolved cases" Value="@UiText.Number(d.Completed)" Hint="Resolved or Closed" Href="cases?status=Resolved&status=Closed" Variant="success" Class="desktop-only" TestId="kpi-resolved" />
-                <KpiTile Label="Assigned to me" Value="@UiText.Number(d.AssignedToMe)" Hint="Open cases you own" Href="@MineHref(d)" Variant="neutral" Class="desktop-only" TestId="kpi-mine" />
+                <KpiTile Label="Total cases" Value="@UiText.Number(d.Total)" Hint="@(_filter.IsEmpty ? "All statuses" : "Matching the filters")" Href="@ListHref(null)" Accent="blue" Icon="folder-open" TestId="kpi-total" />
+                <KpiTile Label="Open cases" Value="@UiText.Number(d.Open)" Hint="New, Triaged or In Progress" Href="@ListHref(OpenStatuses)" Accent="teal" Icon="clock" TestId="kpi-open" />
+                <KpiTile Label="Pending review" Value="@UiText.Number(d.PendingReview)" Hint="Resolved, waiting to be closed" Href="@ListHref([CaseStatus.Resolved])" Accent="purple" Icon="eye" TestId="kpi-pending" />
+                <KpiTile Label="Overdue" Value="@UiText.Number(d.Overdue)" Hint="Open and past their due date" Href="@ListHref(null, "overdue=true&sort=DueOn&dir=asc")" Accent="red" Icon="warning" TestId="kpi-overdue" />
+                <KpiTile Label="Resolved / Closed" Value="@UiText.Number(d.Completed)" Hint="Resolved or Closed" Href="@ListHref([CaseStatus.Resolved, CaseStatus.Closed])" Accent="green" Icon="circle-check" TestId="kpi-resolved" />
+                <KpiTile Label="Assigned to me" Value="@UiText.Number(d.AssignedToMe)" Hint="Open cases you own" Href="@MineHref(d)" Accent="orange" Icon="person" TestId="kpi-mine" />
+                <KpiTile Label="My pending tasks" Value="@UiText.Number(d.AwaitingMyAction)" Hint="Waiting on your action" Href="my-work" Accent="pink" Icon="list-todo" TestId="kpi-tasks" />
             </ul>
             @if (d.Partial)
             {
@@ -77,75 +133,66 @@ else if (_data is { } d)
             }
 
             <div class="grid grid--3 grid--cards">
-                <section class="card card--chart" aria-labelledby="trend-heading">
-                    <h2 id="trend-heading" class="visually-hidden">Case volume trend</h2>
-                    <Chart Id="chart-volume" Title="Case volume trend" Description="Cases created per month (ET), last 12 months."
+                <section class="card card--chart" aria-labelledby="chart-volume-caption">
+                    <Chart Id="chart-volume" Title="Case volume trend" Description="Cases created per month (ET)."
                            Categories="@d.CreatedByMonth.Select(m => m.Label).ToList()" AxisLabels="@MonthAxis(d.CreatedByMonth)"
-                           Series="@([new ChartSeries("Cases created", d.CreatedByMonth.Select(m => (double)m.Count).ToList())])"
-                           Links="@d.CreatedByMonth.Select(m => (string?)CaseListLinks.CreatedIn(m.StartUtc, m.EndUtc)).ToList()"
-                           ValueNoun="cases" CategoryHeader="Month" TestId="chart-volume" />
+                           Series="@([new ChartSeries("Cases created", d.CreatedByMonth.Select(m => (double)m.Count).ToList(), "--accent-teal")])"
+                           Links="@d.CreatedByMonth.Select(m => (string?)WithFilters(CaseListLinks.CreatedIn(m.StartUtc, m.EndUtc), dates: false)).ToList()"
+                           ValueNoun="cases" CategoryHeader="Month" EmptyText="No cases were created in these months." TestId="chart-volume" />
                 </section>
-                <section class="card card--chart desktop-only" aria-labelledby="status-heading">
-                    <h2 id="status-heading" class="visually-hidden">Cases by status</h2>
-                    <Chart Id="chart-status" Title="Cases by status" Description="All cases, by their current status." Kind="ChartKind.Bar"
+                <section class="card card--chart" aria-labelledby="chart-status-caption">
+                    <Chart Id="chart-status" Title="Cases by status" Description="@($"All {UiText.Number(d.Total)} cases by their current status.")" Kind="ChartKind.Donut"
                            Categories="@d.ByStatus.Keys.Select(UiText.Status).ToList()"
                            Series="@([new ChartSeries("Cases", d.ByStatus.Values.Select(v => (double)v).ToList())])"
-                           Links="@d.ByStatus.Keys.Select(s => (string?)$"cases?status={s}").ToList()"
-                           ValueNoun="cases" CategoryHeader="Status" TestId="chart-status" />
+                           PointColors="@d.ByStatus.Keys.Select(StatusColor).ToList()"
+                           Links="@d.ByStatus.Keys.Select(s => (string?)ListHref([s])).ToList()"
+                           ValueNoun="cases" CategoryHeader="Status" EmptyText="No cases match the filters." TestId="chart-status" />
                 </section>
-                <section class="card card--chart desktop-only" aria-labelledby="resolution-heading">
-                    <h2 id="resolution-heading" class="visually-hidden">Monthly resolution trend</h2>
-                    <Chart Id="chart-resolution" Title="Monthly resolution trend"
-                           Description="Resolved or closed cases by the month of their last update (ET)."
+                <section class="card card--chart" aria-labelledby="chart-resolution-caption">
+                    <Chart Id="chart-resolution" Title="Monthly resolution trend" Kind="ChartKind.Line"
+                           Description="Resolved or closed cases by the month of their last update (ET). Approximation: the last update stands in for the completion date."
                            Categories="@d.CompletedByMonth.Select(m => m.Label).ToList()" AxisLabels="@MonthAxis(d.CompletedByMonth)"
-                           Series="@([new ChartSeries("Resolved or closed", d.CompletedByMonth.Select(m => (double)m.Count).ToList())])"
-                           Links="@d.CompletedByMonth.Select(m => (string?)CaseListLinks.CompletedIn(m.StartUtc, m.EndUtc)).ToList()"
-                           ValueNoun="cases" CategoryHeader="Month" TestId="chart-resolution" />
+                           Series="@([new ChartSeries("Resolved or closed", d.CompletedByMonth.Select(m => (double)m.Count).ToList(), "--accent-purple")])"
+                           PointColors="@d.CompletedByMonth.Select(m => m.Count > 0 ? "--accent-pink" : "--accent-teal").ToList()"
+                           Links="@d.CompletedByMonth.Select(m => (string?)WithFilters(CaseListLinks.CompletedIn(m.StartUtc, m.EndUtc), statuses: false)).ToList()"
+                           ValueNoun="cases" CategoryHeader="Month" EmptyText="No cases were resolved or closed in these months." TestId="chart-resolution" />
                 </section>
-                <section class="card card--chart desktop-only" aria-labelledby="priority-heading">
-                    <h2 id="priority-heading" class="visually-hidden">Open cases by priority</h2>
-                    <Chart Id="chart-priority" Title="Open cases by priority" Description="New, Triaged and In Progress cases, by priority." Kind="ChartKind.Bar"
+                <section class="card card--chart" aria-labelledby="chart-priority-caption">
+                    <Chart Id="chart-priority" Title="Open cases by priority" Description="New, Triaged and In Progress cases, by priority." Kind="ChartKind.Pie"
                            Categories="@d.OpenByPriority.Keys.Select(UiText.Priority).ToList()"
                            Series="@([new ChartSeries("Open cases", d.OpenByPriority.Values.Select(v => (double)v).ToList())])"
-                           Links="@d.OpenByPriority.Keys.Select(p => (string?)$"cases?{CaseDashboardService.OpenStatusQuery}&priority={p}").ToList()"
+                           PointColors="@d.OpenByPriority.Keys.Select(PriorityColor).ToList()"
+                           Links="@d.OpenByPriority.Keys.Select(p => (string?)ListHref(OpenStatuses, priority: p)).ToList()"
                            ValueNoun="cases" CategoryHeader="Priority" EmptyText="No open cases." TestId="chart-priority" />
                 </section>
-                <section class="card card--chart desktop-only" aria-labelledby="category-heading">
-                    <h2 id="category-heading" class="visually-hidden">Open cases by category</h2>
+                <section class="card card--chart" aria-labelledby="chart-category-caption">
                     <Chart Id="chart-category" Title="Open cases by category" Description="Categories with open cases, most first." Kind="ChartKind.Bar"
                            Categories="@TopCategories(d).Select(c => UiText.Category(c.Key)).ToList()"
                            Series="@([new ChartSeries("Open cases", TopCategories(d).Select(c => (double)c.Value).ToList())])"
-                           Links="@TopCategories(d).Select(c => (string?)$"cases?{CaseDashboardService.OpenStatusQuery}&category={c.Key}").ToList()"
+                           PointColors="@TopCategories(d).Select((_, i) => $"--series-{(i % 6) + 1}").ToList()"
+                           Links="@TopCategories(d).Select(c => (string?)ListHref(OpenStatuses, $"category={c.Key}")).ToList()"
                            ValueNoun="cases" CategoryHeader="Category" EmptyText="No open cases." TestId="chart-category" />
                 </section>
                 <section class="card" aria-labelledby="quick-heading">
-                    <div class="card__header"><h2 id="quick-heading">Quick actions</h2></div>
+                    <div class="card__header">
+                        <h2 id="quick-heading">Quick actions<span class="card__subtitle">Jump straight into common work</span></h2>
+                    </div>
                     <ul class="quick-actions" data-testid="quick-actions">
                         <AuthorizeView Policy="@Permissions.CasesCreate">
-                            <li><a class="quick-action" href="cases/new"><Icon Name="add" /> New case</a></li>
+                            <li><a class="btn btn--primary" href="cases/new"><Icon Name="add" Small="true" /> New case</a></li>
                         </AuthorizeView>
-                        <li><a class="quick-action" href="cases"><Icon Name="cases" /> All cases</a></li>
-                        <li><a class="quick-action" href="my-work"><Icon Name="tasks" /> My tasks</a></li>
-                        <li><a class="quick-action" href="reports"><Icon Name="reports" /> Reports</a></li>
+                        <li><a class="btn" href="cases"><Icon Name="folder-open" Small="true" /> All cases</a></li>
+                        <li><a class="btn" href="my-work"><Icon Name="list-todo" Small="true" /> My tasks</a></li>
+                        <li><a class="btn" href="reports"><Icon Name="chart-column" Small="true" /> Case reports</a></li>
+                        <li><a class="btn" href="@ExportHref" download data-enhance-nav="false" data-testid="quick-export"><Icon Name="download" Small="true" /> @(_filter.IsEmpty ? "Export CSV" : "Export filtered CSV")</a></li>
+                        <AuthorizeView Policy="@Permissions.UsersManage">
+                            <li><a class="btn" href="admin/users#add-user" data-testid="quick-add-user"><Icon Name="user-plus" Small="true" /> Add user</a></li>
+                        </AuthorizeView>
                         <AuthorizeView Policy="@Permissions.TestResultsView">
-                            <li><a class="quick-action" href="test-results"><Icon Name="beaker" /> Test results</a></li>
+                            <li><a class="btn" href="test-results"><Icon Name="beaker" Small="true" /> Test results</a></li>
                         </AuthorizeView>
                     </ul>
                 </section>
-            </div>
-
-            <div class="grid grid--3 grid--cards mt-4">
-                <CaseListCard Id="my-tasks" Title="My pending tasks" Cases="d.MyTasks" Meta="CaseListMeta.Updated" MoreHref="my-work"
-                              Empty="@(d.ActionableStatuses.Count == 0 ? "Your role has no status changes to make, so no case waits on you." : "Nothing is waiting for you.")" />
-                <CaseListCard Id="recent-activity" Title="Recent activity" Cases="d.RecentActivity" Meta="CaseListMeta.Updated" MoreHref="notifications"
-                              Empty="No recent activity." />
-                <CaseListCard Id="attention" Title="Cases requiring attention" Subtitle="Open and past their due date, most overdue first"
-                              Cases="d.RequiringAttention" Meta="CaseListMeta.Due" Today="d.Today" Class="desktop-only"
-                              MoreHref="cases?overdue=true&sort=DueOn&dir=asc" Empty="No overdue cases." />
-                <CaseListCard Id="recent-cases" Title="Recent cases" Subtitle="@($"New cases created in the last {d.NewCasesDays} days, newest first")"
-                              Cases="d.NewCases" Meta="CaseListMeta.Created" Class="desktop-only"
-                              MoreHref="@CaseListLinks.NewSince(d.GeneratedAtUtc.AddDays(-d.NewCasesDays))"
-                              Empty="@($"No new cases in the last {d.NewCasesDays} days.")" />
             </div>
         </div>
     }
@@ -153,19 +200,68 @@ else if (_data is { } d)
 
 @code {
     private static readonly TimeSpan MinimumRefreshFeedback = TimeSpan.FromMilliseconds(600);
+    private static readonly CaseStatus[] OpenStatuses = [CaseStatus.New, CaseStatus.Triaged, CaseStatus.InProgress];
 
     private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _loadCts;
+    private int _loadVersion;
     private CaseDashboard? _data;
+    private DashboardFilter _filter = DashboardFilter.None;
     private bool _loading = true;
     private bool _refreshing;
+    private bool _rangeRejected;
     private int _refreshGeneration;
     private string? _error;
+    private string? _announcement;
+    private string? _userName;
+
+    [SupplyParameterFromQuery(Name = "from")] private string? QueryFrom { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] private string? QueryTo { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] private string? QueryStatus { get; set; }
+    [SupplyParameterFromQuery(Name = "priority")] private string? QueryPriority { get; set; }
+
+    private string TodayText => EasternTime.From(Time.GetUtcNow()).ToString("dddd", CultureInfo.InvariantCulture) + ", " + UiText.Date(UiText.Today(Time));
+
+    private string Greeting
+    {
+        get
+        {
+            var hour = EasternTime.From(Time.GetUtcNow()).Hour;
+            var part = hour < 12 ? "morning" : hour < 17 ? "afternoon" : "evening";
+            return _userName is { Length: > 0 } name ? $"Good {part}, {name}" : $"Good {part}";
+        }
+    }
 
     private string Subtitle => _data is { } d
-        ? $"Cases you are allowed to see. Updated {UiText.ClockTime(d.GeneratedAtUtc)} on {UiText.Date(EasternTime.Date(d.GeneratedAtUtc))}."
-        : "Cases you are allowed to see.";
+        ? $"Cases you are allowed to see · Updated {UiText.ClockTime(d.GeneratedAtUtc)}"
+        : "Cases you are allowed to see";
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    /// <summary>The CSV export of the cases the dashboard counts (same filters as the Total cases card).</summary>
+    private string ExportHref => ListHref(null) is var list && list.StartsWith("cases?", StringComparison.Ordinal) ? "exports/cases.csv" + list["cases".Length..] : "exports/cases.csv";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _userName ??= FriendlyName(await Dashboard.CurrentUserNameAsync(_cts.Token));
+        var from = UiText.ParseDate(QueryFrom);
+        var to = UiText.ParseDate(QueryTo);
+        _filter = new DashboardFilter(
+            from,
+            to is not null && from is not null && to < from ? null : to,
+            Enum.TryParse<CaseStatus>(QueryStatus, out var status) && Enum.IsDefined(status) ? status : null,
+            Enum.TryParse<CasePriority>(QueryPriority, out var priority) && Enum.IsDefined(priority) ? priority : null);
+        await LoadAsync();
+    }
+
+    /// <summary>"supervisor@example.test" → "Supervisor".</summary>
+    private static string? FriendlyName(string? userName)
+    {
+        var local = userName?.Split('@')[0];
+        return string.IsNullOrWhiteSpace(local) ? null : char.ToUpperInvariant(local[0]) + local[1..];
+    }
+
+    private static string StatusColor(CaseStatus status) => "--status-" + status.ToString().ToLowerInvariant() + "-c";
+
+    private static string PriorityColor(CasePriority priority) => "--priority-" + priority.ToString().ToLowerInvariant() + "-c";
 
     /// <summary>Months as "Nov" with the year under the first month and every January ("Jan\n2026").</summary>
     private static IReadOnlyList<string> MonthAxis(IReadOnlyList<MonthCount> months) =>
@@ -175,11 +271,103 @@ else if (_data is { } d)
     private static IReadOnlyList<KeyValuePair<CaseCategory, int>> TopCategories(CaseDashboard d) =>
         [.. d.OpenByCategory.Where(c => c.Value > 0).OrderByDescending(c => c.Value).ThenBy(c => c.Key).Take(8)];
 
-    private static string MineHref(CaseDashboard d) => d.CurrentUserName is { } me
-        ? $"cases?{CaseDashboardService.OpenStatusQuery}&owner={Uri.EscapeDataString(me)}"
+    /// <summary>
+    /// A case list link for a KPI or chart point with the dashboard filters kept: the KPI's statuses narrowed by the
+    /// status filter, the priority filter (or the point's own priority) and the created-date range.
+    /// </summary>
+    private string ListHref(IReadOnlyCollection<CaseStatus>? statuses, string? extra = null, CasePriority? priority = null)
+    {
+        IEnumerable<CaseStatus>? wanted = statuses;
+        if (_filter.Status is { } only)
+        {
+            wanted = statuses is null || statuses.Contains(only) ? [only] : statuses;
+        }
+        var parts = new List<string>();
+        parts.AddRange((wanted ?? []).Select(s => $"status={s}"));
+        if ((priority ?? _filter.Priority) is { } p)
+        {
+            parts.Add($"priority={p}");
+        }
+        AddDates(parts);
+        if (!string.IsNullOrEmpty(extra))
+        {
+            parts.Add(extra);
+        }
+        return parts.Count == 0 ? "cases" : "cases?" + string.Join('&', parts);
+    }
+
+    private string MineHref(CaseDashboard d) => d.CurrentUserName is { } me
+        ? ListHref(OpenStatuses, $"owner={Uri.EscapeDataString(me)}")
         : "cases";
 
-    /// <summary>Refresh button: reloads, keeps the feedback visible briefly, announces and highlights the new figures.</summary>
+    /// <summary>Adds the dashboard filters to an existing case list link (for the chart months, which set their own dates or statuses).</summary>
+    private string WithFilters(string href, bool dates = true, bool statuses = true)
+    {
+        var parts = new List<string>();
+        if (statuses && _filter.Status is { } s)
+        {
+            parts.Add($"status={s}");
+        }
+        if (_filter.Priority is { } p)
+        {
+            parts.Add($"priority={p}");
+        }
+        if (dates)
+        {
+            AddDates(parts);
+        }
+        return parts.Count == 0 ? href : href + (href.Contains('?', StringComparison.Ordinal) && !href.EndsWith('?') ? "&" : "") + string.Join('&', parts);
+    }
+
+    private void AddDates(List<string> parts)
+    {
+        if (_filter.From is { } from)
+        {
+            parts.Add($"createdFrom={from.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}");
+        }
+        if (_filter.To is { } to)
+        {
+            parts.Add($"createdTo={to.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture)}");
+        }
+    }
+
+    private Task FromChangedAsync(DateOnly? from) => ApplyRangeAsync(from, _filter.To);
+
+    private Task ToChangedAsync(DateOnly? to) => ApplyRangeAsync(_filter.From, to);
+
+    private Task ApplyRangeAsync(DateOnly? from, DateOnly? to)
+    {
+        _rangeRejected = from is not null && to is not null && to < from;
+        return _rangeRejected ? Task.CompletedTask : ApplyAsync(_filter with { From = from, To = to });
+    }
+
+    private Task StatusChangedAsync(ChangeEventArgs e) =>
+        ApplyAsync(_filter with { Status = Enum.TryParse<CaseStatus>(e.Value?.ToString(), out var s) && Enum.IsDefined(s) ? s : null });
+
+    private Task PriorityChangedAsync(ChangeEventArgs e) =>
+        ApplyAsync(_filter with { Priority = Enum.TryParse<CasePriority>(e.Value?.ToString(), out var p) && Enum.IsDefined(p) ? p : null });
+
+    private Task ResetAsync()
+    {
+        _rangeRejected = false;
+        return ApplyAsync(DashboardFilter.None);
+    }
+
+    /// <summary>Puts the filters in the URL (replacing the history entry), which reloads the figures.</summary>
+    private Task ApplyAsync(DashboardFilter filter)
+    {
+        var uri = Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+        {
+            ["from"] = filter.From?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["to"] = filter.To?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["status"] = filter.Status?.ToString(),
+            ["priority"] = filter.Priority?.ToString(),
+        });
+        Navigation.NavigateTo(uri, replace: true);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>Refresh button: reloads, keeps the feedback visible briefly and announces the new figures.</summary>
     private async Task RefreshAsync()
     {
         _refreshing = true;
@@ -204,15 +392,25 @@ else if (_data is { } d)
 
     private async Task LoadAsync()
     {
+        var version = ++_loadVersion;
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _loadCts = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        var token = _loadCts.Token;
         using var busy = Activity.Begin();
         _loading = true;
         _error = null;
         try
         {
-            var result = await Dashboard.LoadAsync(_cts.Token);
+            var result = await Dashboard.LoadAsync(_filter, token);
+            if (version != _loadVersion)
+            {
+                return;   // a newer filter change superseded this load
+            }
             if (result.IsSuccess)
             {
                 _data = result.Value;
+                _announcement = _filter.IsEmpty ? null : $"Dashboard filtered: {UiText.Number(_data!.Total)} {(_data.Total == 1 ? "case" : "cases")}.";
             }
             else
             {
@@ -220,9 +418,8 @@ else if (_data is { } d)
                 _error = result.Error!.Message;
             }
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
         {
-            return;
         }
         catch (Exception ex)
         {
@@ -233,13 +430,17 @@ else if (_data is { } d)
         }
         finally
         {
-            _loading = false;
+            if (version == _loadVersion)
+            {
+                _loading = false;
+            }
         }
     }
 
     public void Dispose()
     {
         _cts.Cancel();
+        _loadCts?.Dispose();
         _cts.Dispose();
     }
 }

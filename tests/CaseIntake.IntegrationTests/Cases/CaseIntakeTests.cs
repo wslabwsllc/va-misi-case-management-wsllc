@@ -10,9 +10,11 @@ using Npgsql;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-S2/E2-S3: intake validation, persistence, audit information, permissions and logging.</summary>
-public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class CaseIntakeTests : ClassFixture<CaseIntakeTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public async Task Valid_intake_is_saved_as_New_with_utc_audit_fields_and_a_Created_entry()
     {
         var harness = new CaseTestHarness(database) { Actor = TestActors.CaseWorker };
@@ -44,7 +46,7 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal("cw-id", (await db.CaseAuditEntries.SingleAsync(a => a.CaseId == created.Id)).ActorId);
     }
 
-    [Fact]
+    [Test]
     public async Task Veteran_snapshot_is_stored_but_never_a_full_ssn()
     {
         var harness = new CaseTestHarness(database);
@@ -61,10 +63,9 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Contains("\"VeteranSsnLast4\":\"3456\"", row, StringComparison.Ordinal);
     }
 
-    [Theory]
-    [InlineData("abcd", null)]
-    [InlineData("", null)]
-    [InlineData("Valid title", "D4001")]
+    [TestCase("abcd", null)]
+    [TestCase("", null)]
+    [TestCase("Valid title", "D4001")]
     public async Task Invalid_intake_returns_field_errors_and_saves_nothing(string title, string? description)
     {
         description = description == "D4001" ? new string('d', 4001) : description;
@@ -77,7 +78,7 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(before, await CountCasesAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_veteran_snapshot_is_rejected_without_persistence()
     {
         var harness = new CaseTestHarness(database);
@@ -90,7 +91,7 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(before, await CountCasesAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task Users_without_create_permission_are_forbidden_and_nothing_is_saved()
     {
         var harness = new CaseTestHarness(database) { Actor = TestActors.ViewOnly };
@@ -104,7 +105,7 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(2, harness.Logs.Collector.GetSnapshot().Count(r => r.Id.Id == SecurityEvents.AuthorizationDeniedId));
     }
 
-    [Fact]
+    [Test]
     public async Task CaseCreated_is_logged_with_id_and_actor_but_no_case_text()
     {
         var harness = new CaseTestHarness(database);
@@ -127,7 +128,7 @@ public class CaseIntakeTests(PostgresDatabaseFixture database) : IClassFixture<P
     }
 
     /// <summary>E1-S3: a forced database failure commits neither the case nor its audit entry (one SaveChanges, one transaction).</summary>
-    [Fact]
+    [Test]
     public async Task Failed_save_commits_neither_the_case_nor_its_audit_entry()
     {
         var harness = new CaseTestHarness(database);

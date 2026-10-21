@@ -4,6 +4,8 @@
 @using CaseIntake.Contracts.TestResults
 @using CaseIntake.Domain.TestResults
 @using CaseIntake.Web.Services
+@using Microsoft.AspNetCore.WebUtilities
+@inject NavigationManager Navigation
 @inject ITestResultsService Results
 @inject CaseIntake.Web.Services.PageActivity Activity
 @inject ILogger<RunDetail> Logger
@@ -25,8 +27,8 @@ else
 {
     var r = _run.Run;
     <div class="command-bar" role="toolbar" aria-label="Run commands">
-        <a class="command" href="@TestResultRoutes.Export(r.Id, "html")" download data-enhance-nav="false" data-testid="export-html"><Icon Name="export" /> Report (HTML)</a>
-        <a class="command" href="@TestResultRoutes.Export(r.Id, "csv")" download data-enhance-nav="false" data-testid="export-csv"><Icon Name="export" /> Results (CSV)</a>
+        <a class="btn" href="@TestResultRoutes.Export(r.Id, "html")" download data-enhance-nav="false" data-testid="export-html"><Icon Name="download" Small="true" /> Report (HTML)</a>
+        <a class="btn" href="@TestResultRoutes.Export(r.Id, "csv")" download data-enhance-nav="false" data-testid="export-csv"><Icon Name="download" Small="true" /> All results (CSV)</a>
     </div>
 
     <div class="record-header" data-testid="record-header">
@@ -71,28 +73,44 @@ else
             </section>
 
             <section class="card card--flush" aria-labelledby="results-heading">
-                <div class="card__header"><h2 id="results-heading">Results</h2></div>
-                <form class="grid-toolbar" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter results" data-testid="execution-filters">
-                    <div class="field grid-toolbar__search">
+                <div class="table-toolbar">
+                    <h2 id="results-heading" class="table-toolbar__title">Results</h2>
+                    <a class="btn" href="@TestResultsQueryString.ExecutionsExportHref(_query)" download data-enhance-nav="false" data-testid="export-filtered-results">
+                        <Icon Name="download" Small="true" /> Export Filtered Results
+                    </a>
+                </div>
+                <div class="filter-grid grid-toolbar" role="search" aria-label="Filter results" data-testid="execution-filters">
+                    <div class="field">
                         <label class="field__label" for="execution-search">Test name</label>
-                        <input id="execution-search" type="search" @bind="_search" @bind:event="oninput" maxlength="200" autocomplete="off" />
+                        <span class="input-icon">
+                            <Icon Name="search" Small="true" />
+                            <input id="execution-search" type="search" value="@_search" @oninput="OnSearchInput" maxlength="200" autocomplete="off" />
+                        </span>
                     </div>
                     <div class="field">
-                        <label class="field__label" for="execution-outcome-filter">Outcome</label>
-                        <select id="execution-outcome-filter" @bind="_outcome">
-                            <option value="">Any outcome</option>
+                        <label class="field__label" for="execution-outcome-filter">Result</label>
+                        <select id="execution-outcome-filter" value="@(_query.Outcomes is [var only] ? only.ToString() : "")"
+                                @onchange="e => ApplyAsync(_query with { Outcomes = Enum.TryParse<TestOutcome>(e.Value?.ToString(), out var o) ? [o] : null })">
+                            <option value="">Any result</option>
                             @foreach (var outcome in Enum.GetValues<TestOutcome>())
                             {
                                 <option value="@outcome">@TestResultsText.Outcome(outcome)</option>
                             }
                         </select>
                     </div>
-                    <button type="submit" class="btn btn--primary"><Icon Name="filter" Small="true" /> Apply filters</button>
-                </form>
+                    <Section508Select Id="execution-508" Value="_query.Section508" ValueChanged="f => ApplyAsync(_query with { Section508 = f })" />
+                    <div class="field">
+                        <button type="button" class="btn btn--block" @onclick="ResetAsync" disabled="@(!HasFilters)" data-testid="reset-execution-filters">
+                            <Icon Name="close" Small="true" /> Reset filters
+                        </button>
+                    </div>
+                </div>
+                <p class="visually-hidden" role="status" aria-live="polite" data-testid="executions-announcement">@_announcement</p>
+                <div class="card__note mt-4"><ResultsSummary Id="execution-summary" Counts="_summary" TestId="execution-summary" /></div>
                 <ErrorAlert Message="@_executionsError" TestId="executions-error" />
                 @if (_executions is { TotalCount: 0 })
                 {
-                    <EmptyState Title="No results match" Message="Try a different outcome or name." IconName="search" TestId="executions-empty" />
+                    <EmptyState Title="No results match" Message="Try a different result, name or 508 filter." IconName="search" TestId="executions-empty" />
                 }
                 else if (_executions is { } page)
                 {
@@ -102,8 +120,9 @@ else
                             <thead>
                                 <tr>
                                     <th scope="col">Test</th>
-                                    <th scope="col">Outcome</th>
-                                    <th scope="col" class="desktop-only">Module</th>
+                                    <th scope="col">Result</th>
+                                    <th scope="col" class="desktop-only">Module and workflow</th>
+                                    <th scope="col" class="desktop-only">Standards</th>
                                     <th scope="col" class="num">Duration</th>
                                     <th scope="col" class="desktop-only">Message</th>
                                     <th scope="col" class="num desktop-only">Evidence</th>
@@ -112,10 +131,20 @@ else
                             <tbody>
                                 @foreach (var e in page.Items)
                                 {
-                                    <tr>
-                                        <td><a href="@TestResultsText.ExecutionHref(e.Id)">@e.TestTitle</a></td>
+                                    <tr data-testid="execution-row" data-a11y="@(e.Accessibility?.ToString() ?? "none")">
+                                        <td>
+                                            <a href="@TestResultsText.ExecutionHref(e.Id)">@e.TestTitle</a>
+                                            <span class="cell-sub"><AccessibilityBadge Classification="e.Accessibility" /></span>
+                                        </td>
                                         <td><OutcomePill Outcome="e.Outcome" /></td>
-                                        <td class="desktop-only">@e.Module</td>
+                                        <td class="desktop-only">@e.Module<span class="cell-sub">@e.Workflow</span></td>
+                                        <td class="desktop-only">
+                                            @if (e.Section508Provision is { } provision)
+                                            {
+                                                <span>508 @provision</span>
+                                            }
+                                            <span class="cell-sub">@TestResultsText.Wcag(e.WcagVersion, e.WcagCriterion, e.WcagLevel)</span>
+                                        </td>
                                         <td class="num nowrap">@UiText.Duration(e.Duration)</td>
                                         <td class="desktop-only">@e.FailureMessage</td>
                                         <td class="num desktop-only">@e.ArtifactCount</td>
@@ -124,7 +153,8 @@ else
                             </tbody>
                         </table>
                     </div>
-                    <PagerControl Page="_query.Page" PageSize="_query.PageSize" TotalCount="page.TotalCount" Noun="results" Label="Result pages" OnPageChanged="PageAsync" />
+                    <PagerControl Page="_query.Page" PageSize="_query.PageSize" TotalCount="page.TotalCount" Noun="results" Label="Result pages"
+                                  OnPageChanged="p => ApplyAsync(_query with { Page = p }, resetPage: false)" Announce="false" />
                 }
             </section>
         </div>
@@ -212,27 +242,51 @@ else
 }
 
 @code {
+    private static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(300);
     private readonly CancellationTokenSource _cts = new();
+    private CancellationTokenSource? _debounce;
+    private int _version;
     private TestRunDetailDto? _run;
     private TestRunComparisonDto? _comparison;
     private PagedList<TestExecutionRowDto>? _executions;
+    private TestOutcomeCounts? _summary;
     private TestExecutionQuery _query = new();
+    private long? _loadedRun;
     private string? _search;
-    private TestOutcome? _outcome;
     private bool _loading;
     private string? _error;
     private string? _executionsError;
+    private string? _announcement;
 
     [Parameter] public long RunId { get; set; }
 
+    // Declared so that the router re-supplies parameters when only the query string changes.
+    [SupplyParameterFromQuery(Name = "q")] private string? QuerySearch { get; set; }
+    [SupplyParameterFromQuery(Name = "outcome")] private string? QueryOutcome { get; set; }
+    [SupplyParameterFromQuery(Name = "a11y")] private string? QueryA11y { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] private string? QueryPage { get; set; }
+
     private string PageTitle => _run is { } r ? $"Run {r.Run.RunKey}" : "Test run";
+
+    private bool HasFilters => _query.Outcomes is { Count: > 0 } || _query.Search is not null || _query.Section508 != Section508Filter.All
+        || !string.IsNullOrWhiteSpace(_search);
 
     protected override async Task OnParametersSetAsync()
     {
+        var values = QueryHelpers.ParseQuery(new Uri(Navigation.Uri).Query);
+        _query = TestResultsQueryString.Executions(RunId, key => values.TryGetValue(key, out var v) ? v.FirstOrDefault() : null);
+        if (_debounce is null)
+        {
+            _search = _query.Search;
+        }
+        if (_loadedRun == RunId && _run is not null)
+        {
+            await LoadExecutionsAsync();   // only the filters changed
+            return;
+        }
         using var busy = Activity.Begin();
         _loading = true;
         _error = null;
-        _query = new TestExecutionQuery(RunId);
         try
         {
             var run = await Results.GetRunAsync(RunId, _cts.Token);
@@ -243,6 +297,7 @@ else
                 return;
             }
             _run = run.Value;
+            _loadedRun = RunId;
             var comparison = await Results.CompareWithPreviousAsync(RunId, _cts.Token);
             _comparison = comparison.IsSuccess ? comparison.Value : null;
             await LoadExecutionsAsync();
@@ -261,34 +316,58 @@ else
         }
     }
 
-    private Task ApplyAsync()
+    /// <summary>Every filter change goes through the URL (so returning from a result restores it) and resets paging.</summary>
+    private Task ApplyAsync(TestExecutionQuery query, bool resetPage = true)
     {
-        _query = _query with
-        {
-            Page = 1,
-            Outcomes = _outcome is { } o ? [o] : null,
-            Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
-        };
-        return LoadExecutionsAsync();
+        Navigation.NavigateTo(Navigation.GetUriWithQueryParameters(TestResultsQueryString.Parameters(resetPage ? query with { Page = 1 } : query)));
+        return Task.CompletedTask;
     }
 
-    private Task PageAsync(int page)
+    private Task ResetAsync()
     {
-        _query = _query with { Page = page };
-        return LoadExecutionsAsync();
+        _debounce?.Cancel();
+        _debounce = null;
+        _search = null;
+        return ApplyAsync(new TestExecutionQuery(RunId, PageSize: TestResultsQueryString.ExecutionPageSize));
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        _search = e.Value?.ToString();
+        _debounce?.Cancel();
+        var debounce = _debounce = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        try
+        {
+            await Task.Delay(SearchDelay, debounce.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        _debounce = null;
+        await ApplyAsync(_query with { Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim() });
     }
 
     private async Task LoadExecutionsAsync()
     {
+        var version = ++_version;
         using var busy = Activity.Begin();
         var result = await Results.ListExecutionsAsync(_query, _cts.Token);
+        var summary = await Results.SummarizeExecutionsAsync(_query, _cts.Token);
+        if (version != _version)
+        {
+            return;   // a newer filter change superseded this load
+        }
         _executions = result.IsSuccess ? result.Value : null;
+        _summary = summary.IsSuccess ? summary.Value : null;
         _executionsError = result.IsSuccess ? null : result.Error!.Message;
+        _announcement = _executions is null ? null : $"{UiText.Number(_executions.TotalCount)} {(_executions.TotalCount == 1 ? "result matches" : "results match")} the filters.";
     }
 
     public void Dispose()
     {
         _cts.Cancel();
+        _debounce?.Dispose();
         _cts.Dispose();
     }
 }

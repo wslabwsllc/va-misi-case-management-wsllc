@@ -54,6 +54,11 @@ else
                 <dt>Requirements</dt><dd>@(e.Requirements.Count == 0 ? "Not recorded" : string.Join(", ", e.Requirements))</dd>
                 <dt>Acceptance criteria</dt><dd class="pre-wrap">@(t.AcceptanceCriteria ?? "Not recorded")</dd>
                 <dt>Priority</dt><dd>@(t.Priority ?? "Not recorded")</dd>
+                <dt>Accessibility</dt><dd data-testid="a11y-classification">@TestResultsText.Classification(t.Accessibility) <AccessibilityBadge Classification="t.Accessibility" /></dd>
+                <dt>Section 508 provision</dt><dd data-testid="a11y-provision">@(t.Section508Provision ?? "Not mapped")</dd>
+                <dt>WCAG</dt><dd data-testid="a11y-wcag">@(TestResultsText.Wcag(t.WcagVersion, t.WcagCriterion, t.WcagLevel) ?? "Not mapped")</dd>
+                <dt>Test method</dt><dd data-testid="a11y-method">@TestResultsText.Method(t.Method)</dd>
+                <dt>Workflow</dt><dd>@(t.Workflow ?? "Not recorded")</dd>
                 <dt>Last status</dt><dd>@(t.LastOutcome is { } last ? TestResultsText.Outcome(last) : "Unknown")</dd>
             </dl>
         </section>
@@ -69,6 +74,8 @@ else
                 <dt>Git branch</dt><dd>@(e.Run.GitBranch ?? "unknown")</dd>
                 <dt>Commit SHA</dt><dd class="mono">@(e.Run.GitCommit ?? "unknown")</dd>
                 <dt>Build ID</dt><dd>@(e.Run.BuildId ?? "unknown")</dd>
+                <dt>Executed by</dt><dd data-testid="execution-tester">@(e.Tester ?? "Not recorded (automated runs record the runner)")</dd>
+                <dt>Assistive technology</dt><dd data-testid="execution-at">@(e.AssistiveTechnology ?? "None recorded")</dd>
                 <dt>Browser and viewport</dt><dd>@(e.Browser is null ? "Not a browser test" : $"{e.Browser}, {e.Viewport}")</dd>
                 <dt>Docker image</dt><dd>@(e.Run.ImageVersion ?? "unknown")</dd>
             </dl>
@@ -82,6 +89,8 @@ else
             <dt>Expected result</dt><dd class="pre-wrap">@(t.ExpectedResult ?? "Not recorded")</dd>
             <dt>Actual result</dt><dd class="pre-wrap" data-testid="actual-result">@(e.ActualResult ?? "Not recorded")</dd>
             <dt>Final status</dt><dd><OutcomePill Outcome="e.Outcome" /></dd>
+            <dt>Defect</dt><dd data-testid="execution-defect">@(e.DefectReference ?? "None recorded")</dd>
+            <dt>Remediation notes</dt><dd class="pre-wrap" data-testid="execution-remediation">@(e.RemediationNotes ?? "None recorded")</dd>
         </dl>
         @if (e.ErrorMessage is { } message)
         {

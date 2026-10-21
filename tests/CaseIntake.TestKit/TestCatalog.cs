@@ -1,13 +1,11 @@
 using System.Reflection;
 using System.Text.Json;
-using Xunit;
-using Xunit.Sdk;
 
 namespace CaseIntake.TestKit;
 
 /// <summary>
-/// Writes <c>&lt;TEST_RUN_DIR&gt;/catalog/&lt;assembly&gt;.json</c>: every test method with its xUnit <c>Category</c> traits
-/// (for example <c>Story:E5-S8</c>, <c>Req:R-4.2-11</c>, <c>Priority:High</c>). TRX files do not carry xUnit traits, so the
+/// Writes <c>&lt;TEST_RUN_DIR&gt;/catalog/&lt;assembly&gt;.json</c>: every test method with its NUnit <c>[Category]</c> values
+/// (for example <c>Story:E5-S8</c>, <c>Req:R-4.2-11</c>, <c>Priority:High</c>). the catalog keeps them available to the importer even when a TRX omits them, so the
 /// test results importer reads this catalog to link results to stories and requirements. Does nothing unless
 /// <c>TEST_RUN_DIR</c> is set (scripts/run-tests.sh sets it).
 /// </summary>
@@ -26,7 +24,7 @@ public static class TestCatalog
             var entries = assembly.GetTypes()
                 .Where(t => t is { IsClass: true, IsAbstract: false } && t.IsPublic)
                 .SelectMany(t => t.GetMethods(BindingFlags.Public | BindingFlags.Instance)
-                    .Where(m => m.GetCustomAttributes<FactAttribute>(inherit: true).Any())
+                    .Where(IsTest)
                     .Select(m => new
                     {
                         method = $"{t.FullName}.{m.Name}",
@@ -44,10 +42,10 @@ public static class TestCatalog
         }
     }
 
+    private static bool IsTest(MethodInfo method) =>
+        method.GetCustomAttributes<TestAttribute>(inherit: true).Any() || method.GetCustomAttributes<TestCaseAttribute>(inherit: true).Any()
+        || method.GetCustomAttributes<TestCaseSourceAttribute>(inherit: true).Any();
+
     private static IEnumerable<string> Categories(MemberInfo member) =>
-        member.GetCustomAttributesData()
-            .Where(a => a.AttributeType == typeof(TraitAttribute) && a.ConstructorArguments.Count == 2
-                && (string?)a.ConstructorArguments[0].Value == "Category")
-            .Select(a => (string?)a.ConstructorArguments[1].Value)
-            .OfType<string>();
+        member.GetCustomAttributes<CategoryAttribute>(inherit: true).Select(c => c.Name);
 }

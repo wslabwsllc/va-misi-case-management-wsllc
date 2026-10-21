@@ -1,6 +1,8 @@
 using CaseIntake.Contracts.Common;
 using CaseIntake.Contracts.Security;
+using CaseIntake.Contracts.TestResults;
 using CaseIntake.TestResults;
+using CaseIntake.Web.Components.Pages.TestResults;
 
 namespace CaseIntake.Web.Endpoints.TestResults;
 
@@ -29,6 +31,15 @@ public static class TestResultEndpoints
             .DisableCookieRedirect();
         endpoints.MapGet(ExportRoute, ExportAsync)
             .WithName("ExportTestRun")
+            .RequireAuthorization(Permissions.TestResultsView)
+            .DisableCookieRedirect();
+        // Filtered exports (QA 508 enhancement): the same query string and filters as the result and test case lists.
+        endpoints.MapGet(TestResultRoutes.ExecutionsExport, ExportExecutionsAsync)
+            .WithName("ExportFilteredTestResults")
+            .RequireAuthorization(Permissions.TestResultsView)
+            .DisableCookieRedirect();
+        endpoints.MapGet(TestResultRoutes.TestCasesExport, ExportTestCasesAsync)
+            .WithName("ExportFilteredTestCases")
             .RequireAuthorization(Permissions.TestResultsView)
             .DisableCookieRedirect();
         return endpoints;
@@ -64,6 +75,36 @@ public static class TestResultEndpoints
             return Failure(result.Error!);
         }
 
+        http.Response.Headers.CacheControl = "no-store";
+        var file = result.Value!;
+        return TypedResults.File(file.Content, file.ContentType, file.FileName);
+    }
+
+    internal static async Task<IResult> ExportExecutionsAsync(
+        [FromKeyedServices(CurrentUserSources.Http)] ICurrentUser currentUser,
+        ITestResultsServiceFactory results, HttpContext http, CancellationToken ct)
+    {
+        var q = http.Request.Query;
+        long? runId = long.TryParse(q["run"], System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) ? id : null;
+        var query = TestResultsQueryString.Executions(runId, key => q[key].FirstOrDefault());
+        return File(http, await results.Create(currentUser).ExportExecutionsAsync(query, ct));
+    }
+
+    internal static async Task<IResult> ExportTestCasesAsync(
+        [FromKeyedServices(CurrentUserSources.Http)] ICurrentUser currentUser,
+        ITestResultsServiceFactory results, HttpContext http, CancellationToken ct)
+    {
+        var q = http.Request.Query;
+        var query = TestResultsQueryString.Cases(key => q[key].FirstOrDefault());
+        return File(http, await results.Create(currentUser).ExportTestCasesAsync(query, ct));
+    }
+
+    private static IResult File(HttpContext http, Result<TestReportFile> result)
+    {
+        if (!result.IsSuccess)
+        {
+            return Failure(result.Error!);
+        }
         http.Response.Headers.CacheControl = "no-store";
         var file = result.Value!;
         return TypedResults.File(file.Content, file.ContentType, file.FileName);

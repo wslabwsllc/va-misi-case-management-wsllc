@@ -6,25 +6,24 @@ namespace CaseIntake.Identity.Tests;
 
 public class RequestSecurityTests
 {
-    [Theory]
-    [InlineData("/", "/")]
-    [InlineData("/cases/12", "/cases/12")]
-    [InlineData("/cases?status=New&page=2", "/cases?status=New&page=2")]
-    [InlineData(null, "/")]
-    [InlineData("", "/")]
-    [InlineData("cases", "/")]
-    [InlineData("//evil.example", "/")]
-    [InlineData("/\\evil.example", "/")]
-    [InlineData("/ok\\..\\x", "/")]
-    [InlineData("https://evil.example/", "/")]
-    [InlineData("javascript:alert(1)", "/")]
-    [InlineData("/x\r\nLocation: https://evil.example", "/")]
+    [TestCase("/", "/")]
+    [TestCase("/cases/12", "/cases/12")]
+    [TestCase("/cases?status=New&page=2", "/cases?status=New&page=2")]
+    [TestCase(null, "/")]
+    [TestCase("", "/")]
+    [TestCase("cases", "/")]
+    [TestCase("//evil.example", "/")]
+    [TestCase("/\\evil.example", "/")]
+    [TestCase("/ok\\..\\x", "/")]
+    [TestCase("https://evil.example/", "/")]
+    [TestCase("javascript:alert(1)", "/")]
+    [TestCase("/x\r\nLocation: https://evil.example", "/")]
     public void Return_urls_must_be_local(string? returnUrl, string expected)
     {
         Assert.Equal(expected, LocalReturnUrl.Sanitize(returnUrl));
     }
 
-    [Fact]
+    [Test]
     public void Csp_allows_own_scripts_and_the_same_host_SignalR_connection_only()
     {
         var csp = SecurityHeadersMiddleware.ContentSecurityPolicy(new HostString("localhost:8080"));
@@ -42,19 +41,17 @@ public class RequestSecurityTests
         Assert.DoesNotContain("upgrade-insecure-requests", csp);
     }
 
-    [Theory]
-    [InlineData("127.0.0.1:8080")]
-    [InlineData("[::1]:8080")]
-    [InlineData("web")]
+    [TestCase("127.0.0.1:8080")]
+    [TestCase("[::1]:8080")]
+    [TestCase("web")]
     public void Well_formed_hosts_are_added_to_connect_src(string host)
     {
         Assert.Contains($"ws://{host} ", SecurityHeadersMiddleware.ContentSecurityPolicy(new HostString(host)) + " ");
     }
 
-    [Theory]
-    [InlineData("evil.example; script-src *")]
-    [InlineData("a b")]
-    [InlineData("")]
+    [TestCase("evil.example; script-src *")]
+    [TestCase("a b")]
+    [TestCase("")]
     public void Malformed_hosts_never_reach_the_policy(string host)
     {
         var csp = SecurityHeadersMiddleware.ContentSecurityPolicy(new HostString(host));

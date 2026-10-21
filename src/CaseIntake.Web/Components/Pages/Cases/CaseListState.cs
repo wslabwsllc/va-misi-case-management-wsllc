@@ -8,7 +8,8 @@ namespace CaseIntake.Web.Components.Pages.Cases;
 /// The case list view state as it appears in the URL (E5-S3: reload or share the URL to restore the view). Parsing is
 /// lenient: unknown or out-of-range values fall back to the defaults (25 per page, Updated descending, OQ-4) instead of
 /// failing the page; the service validates the final query again. Issue #21/#22 added priority, category, owner,
-/// overdue and created/updated date-range filters (dates are inclusive Eastern days, yyyy-MM-dd).
+/// overdue and created/updated date-range filters; the redesign added the due-date range (dates are inclusive Eastern
+/// days, yyyy-MM-dd in the URL, MM-DD-YYYY on screen).
 /// </summary>
 public sealed record CaseListState(
     int Page,
@@ -18,7 +19,7 @@ public sealed record CaseListState(
     CaseSortField SortBy,
     SortDirection Direction)
 {
-    public static readonly int[] PageSizes = [10, 25, 50];
+    public static readonly int[] PageSizes = [10, 25, 50, 100];
     public const int DefaultPageSize = 25;
 
     public IReadOnlyList<CasePriority> Priorities { get; init; } = [];
@@ -31,12 +32,15 @@ public sealed record CaseListState(
     public DateOnly? CreatedTo { get; init; }
     public DateOnly? UpdatedFrom { get; init; }
     public DateOnly? UpdatedTo { get; init; }
+    public DateOnly? DueFrom { get; init; }
+    public DateOnly? DueTo { get; init; }
 
     public static CaseListState Default { get; } = new(1, DefaultPageSize, [], null, CaseSortField.UpdatedAt, SortDirection.Descending);
 
     /// <summary>True when any filter beyond status and search is set (the "more filters" are shown as chips).</summary>
     public bool HasExtraFilters => Priorities.Count > 0 || Categories.Count > 0 || Owner is not null || Overdue
-        || CreatedFrom is not null || CreatedTo is not null || UpdatedFrom is not null || UpdatedTo is not null;
+        || CreatedFrom is not null || CreatedTo is not null || UpdatedFrom is not null || UpdatedTo is not null
+        || DueFrom is not null || DueTo is not null;
 
     public static CaseListState Parse(int? page, int? size, string[]? statuses, string? search, string? sort, string? dir)
     {
@@ -78,6 +82,8 @@ public sealed record CaseListState(
             CreatedTo = Date(First("createdTo")),
             UpdatedFrom = Date(First("updatedFrom")),
             UpdatedTo = Date(First("updatedTo")),
+            DueFrom = Date(First("dueFrom")),
+            DueTo = Date(First("dueTo")),
         };
     }
 
@@ -105,7 +111,9 @@ public sealed record CaseListState(
         CreatedFromUtc: StartOfDay(CreatedFrom),
         CreatedToUtc: EndOfDay(CreatedTo),
         UpdatedFromUtc: StartOfDay(UpdatedFrom),
-        UpdatedToUtc: EndOfDay(UpdatedTo));
+        UpdatedToUtc: EndOfDay(UpdatedTo),
+        DueFrom: DueFrom,
+        DueTo: DueTo);
 
     private static DateTimeOffset? StartOfDay(DateOnly? day) =>
         day is { } d ? Domain.EasternTime.StartOfDay(d) : null;
@@ -130,13 +138,15 @@ public sealed record CaseListState(
         ["createdTo"] = Format(CreatedTo),
         ["updatedFrom"] = Format(UpdatedFrom),
         ["updatedTo"] = Format(UpdatedTo),
+        ["dueFrom"] = Format(DueFrom),
+        ["dueTo"] = Format(DueTo),
     };
 
     /// <summary>Removes every filter (status, search and the extra filters); keeps sort and page size.</summary>
     public CaseListState WithoutFilters() => this with
     {
         Page = 1, Statuses = [], Search = null, Priorities = [], Categories = [], Owner = null, Overdue = false,
-        CreatedFrom = null, CreatedTo = null, UpdatedFrom = null, UpdatedTo = null,
+        CreatedFrom = null, CreatedTo = null, UpdatedFrom = null, UpdatedTo = null, DueFrom = null, DueTo = null,
     };
 
     public CaseListState SortedBy(CaseSortField field) => SortBy == field

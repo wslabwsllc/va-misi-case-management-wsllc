@@ -7,8 +7,10 @@ using Microsoft.Extensions.Logging.Testing;
 
 namespace CaseIntake.IntegrationTests.Persistence;
 
-public class SeedRunnerTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class SeedRunnerTests : ClassFixture<SeedRunnerTests, PostgresDatabaseFixture>
 {
+    private static PostgresDatabaseFixture database => Shared;
+
 
     private ServiceProvider Build(Action<IServiceCollection> register)
     {
@@ -19,7 +21,7 @@ public class SeedRunnerTests(PostgresDatabaseFixture database) : IClassFixture<P
         return services.BuildServiceProvider();
     }
 
-    [Fact]
+    [Test]
     public async Task Contributors_run_in_Order_each_in_a_fresh_scope()
     {
         var order = new List<string>();
@@ -37,7 +39,7 @@ public class SeedRunnerTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.NotEqual(order[0].Split('|')[1], order[1].Split('|')[1]);   // distinct DI scopes
     }
 
-    [Fact]
+    [Test]
     public async Task Each_contributor_is_constructed_once_per_run()
     {
         var constructions = new ConstructionCounter();
@@ -52,7 +54,7 @@ public class SeedRunnerTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(1, constructions.Count);
     }
 
-    [Fact]
+    [Test]
     public async Task Running_twice_with_stable_keys_creates_no_duplicates()
     {
         await using var provider = Build(s => s.AddSeedContributor<RoleSeed>());
@@ -65,7 +67,7 @@ public class SeedRunnerTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(1, await db.Roles.CountAsync(r => r.Id == "seed-role-1"));
     }
 
-    [Fact]
+    [Test]
     public async Task A_failing_contributor_fails_the_run()
     {
         await using var provider = Build(s => s.AddSeedContributor<Failing>());

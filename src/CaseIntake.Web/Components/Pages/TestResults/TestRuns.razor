@@ -40,11 +40,11 @@
         </div>
         <div class="field">
             <label class="field__label" for="run-from">From (ET date)</label>
-            <input id="run-from" type="date" @bind="_from" />
+            <DateInput Id="run-from" @bind-Value="_from" />
         </div>
         <div class="field">
             <label class="field__label" for="run-to">To (ET date)</label>
-            <input id="run-to" type="date" @bind="_to" />
+            <DateInput Id="run-to" @bind-Value="_to" />
         </div>
         <button type="submit" class="btn btn--primary" data-testid="apply-run-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
     </form>
@@ -107,7 +107,7 @@
                     </div>
                     <div class="record-card__meta">
                         <span>@UiText.Time(run.StartedAtUtc)</span>
-                        <span>@run.Counts.Passed passed · @run.Counts.Failed failed · @run.Counts.NotExecuted not executed</span>
+                        <span>@run.Counts.Passed passed · @run.Counts.Failed failed · @run.Counts.NotExecuted not run</span>
                         <span>@UiText.Duration(run.Duration)</span>
                     </div>
                 </li>

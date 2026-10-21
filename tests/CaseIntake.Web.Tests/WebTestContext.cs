@@ -104,6 +104,13 @@ public abstract class WebTestContext : BunitContext
         CurrentUser.Actor = FakeCurrentUser.ForRole(role, $"id-{role}");
     }
 
+    /// <summary>Submits the case edit form and confirms "Are you sure you want to submit?" (nothing is sent before that).</summary>
+    protected static void SubmitEdit(IRenderedComponent<Components.Pages.Cases.CaseDetail> cut)
+    {
+        cut.Find("[data-testid=edit-form]").Submit();
+        cut.Find("[data-testid=confirm-edit-submit]").Click();
+    }
+
     /// <summary>Adds cases through the fake service as a temporary all-permissions actor, leaving the signed-in actor unchanged.</summary>
     protected async Task<CaseDetailDto> SeedCaseAsync(string title, CaseStatus status = CaseStatus.New, string? description = null, CaseTriage? triage = null)
     {

@@ -6,7 +6,7 @@ using CaseIntake.TestKit.Fakes;
 namespace CaseIntake.Cases.Tests;
 
 /// <summary>Who may change a case's owner: supervisors assign anyone; case workers take or hand back; nobody on Closed.</summary>
-[Trait("Category", "Story:Issue-22")]
+[Category("Story:Issue-22")]
 public class CaseAssignmentRulesTests
 {
     private const string Me = "caseworker@example.test";
@@ -14,41 +14,39 @@ public class CaseAssignmentRulesTests
 
     private static OperationActor Role(string role) => FakeCurrentUser.ForRole(role);
 
-    [Theory]
-    [InlineData(AppRoles.Supervisor, null, AssignmentRight.AssignAnyone)]
-    [InlineData(AppRoles.Supervisor, Other, AssignmentRight.AssignAnyone)]
-    [InlineData(AppRoles.CaseWorker, null, AssignmentRight.Take)]
-    [InlineData(AppRoles.CaseWorker, Me, AssignmentRight.HandBack)]
-    [InlineData(AppRoles.CaseWorker, Other, AssignmentRight.None)]
-    [InlineData(AppRoles.IntakeClerk, null, AssignmentRight.None)]
-    [InlineData(AppRoles.Auditor, null, AssignmentRight.None)]
-    [InlineData(AppRoles.QualityAnalyst, null, AssignmentRight.None)]
+    [TestCase(AppRoles.Supervisor, null, AssignmentRight.AssignAnyone)]
+    [TestCase(AppRoles.Supervisor, Other, AssignmentRight.AssignAnyone)]
+    [TestCase(AppRoles.CaseWorker, null, AssignmentRight.Take)]
+    [TestCase(AppRoles.CaseWorker, Me, AssignmentRight.HandBack)]
+    [TestCase(AppRoles.CaseWorker, Other, AssignmentRight.None)]
+    [TestCase(AppRoles.IntakeClerk, null, AssignmentRight.None)]
+    [TestCase(AppRoles.Auditor, null, AssignmentRight.None)]
+    [TestCase(AppRoles.QualityAnalyst, null, AssignmentRight.None)]
     public void Right_follows_the_role_and_the_current_owner(string role, string? owner, AssignmentRight expected)
     {
         Assert.Equal(expected, CaseAssignmentRules.RightFor(Role(role), Me, CaseStatus.InProgress, owner));
     }
 
-    [Fact]
+    [Test]
     public void Nobody_reassigns_a_closed_case_and_anonymous_users_have_no_right()
     {
         Assert.Equal(AssignmentRight.None, CaseAssignmentRules.RightFor(Role(AppRoles.Supervisor), Other, CaseStatus.Closed, null));
         Assert.Equal(AssignmentRight.None, CaseAssignmentRules.RightFor(FakeCurrentUser.Anonymous, null, CaseStatus.New, null));
     }
 
-    [Theory]
-    [InlineData(AssignmentRight.AssignAnyone, Other, "anyone@example.test", true)]
-    [InlineData(AssignmentRight.AssignAnyone, Other, null, true)]
-    [InlineData(AssignmentRight.Take, null, Me, true)]
-    [InlineData(AssignmentRight.Take, null, Other, false)]        // taking is for yourself only
-    [InlineData(AssignmentRight.HandBack, Me, null, true)]
-    [InlineData(AssignmentRight.HandBack, Me, Other, false)]      // handing back cannot pass the case to someone else
-    [InlineData(AssignmentRight.None, null, Me, false)]
+    [TestCase(AssignmentRight.AssignAnyone, Other, "anyone@example.test", true)]
+    [TestCase(AssignmentRight.AssignAnyone, Other, null, true)]
+    [TestCase(AssignmentRight.Take, null, Me, true)]
+    [TestCase(AssignmentRight.Take, null, Other, false)]        // taking is for yourself only
+    [TestCase(AssignmentRight.HandBack, Me, null, true)]
+    [TestCase(AssignmentRight.HandBack, Me, Other, false)]      // handing back cannot pass the case to someone else
+    [TestCase(AssignmentRight.None, null, Me, false)]
     public void Allows_only_the_moves_each_right_covers(AssignmentRight right, string? current, string? target, bool allowed)
     {
         Assert.Equal(allowed, CaseAssignmentRules.Allows(right, Me, current, target));
     }
 
-    [Fact]
+    [Test]
     public void Assign_changes_the_owner_once_and_reports_the_previous_one()
     {
         var created = new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.Zero);
@@ -63,10 +61,9 @@ public class CaseAssignmentRulesTests
         Assert.Null(entity.AssignedTo);
     }
 
-    [Theory]
-    [InlineData(null, "caseworker@example.test", "Assigned to caseworker@example.test")]
-    [InlineData("a@example.test", "b@example.test", "Assigned to b@example.test (was a@example.test)")]
-    [InlineData("a@example.test", null, "Unassigned (was a@example.test)")]
+    [TestCase(null, "caseworker@example.test", "Assigned to caseworker@example.test")]
+    [TestCase("a@example.test", "b@example.test", "Assigned to b@example.test (was a@example.test)")]
+    [TestCase("a@example.test", null, "Unassigned (was a@example.test)")]
     public void Assigned_audit_details_name_the_new_and_previous_owner(string? from, string? to, string details)
     {
         var e = AuditEvent.Assigned(DateTimeOffset.UnixEpoch, from, to);

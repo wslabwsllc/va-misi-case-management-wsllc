@@ -9,12 +9,12 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CaseIntake.Web.Tests;
 
 /// <summary>E5-S8 access-denied experience and the E3 sign-in page styled with the E5 kit.</summary>
-[Trait("Category", "Story:E5-S8")]
-[Trait("Category", "Req:R-4.2-11")]
-[Trait("Category", "Req:R-4.2-12")]
+[Category("Story:E5-S8")]
+[Category("Req:R-4.2-11")]
+[Category("Req:R-4.2-12")]
 public class AccessDeniedAndAccountTests : WebTestContext
 {
-    [Fact]
+    [Test]
     public void Access_denied_has_a_focusable_h1_a_clear_reason_and_a_back_to_case_list_action()
     {
         SignInAs(AppRoles.QualityAnalyst);
@@ -29,7 +29,7 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.Equal("cases", back.GetAttribute("href"));
     }
 
-    [Fact]
+    [Test]
     public void Access_denied_does_not_reveal_permission_or_policy_names()
     {
         SignInAs(AppRoles.QualityAnalyst);
@@ -39,12 +39,12 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.DoesNotContain("policy", cut.Markup, StringComparison.OrdinalIgnoreCase);
     }
 
-    [Fact]
+    [Test]
     public void Sign_in_page_labels_every_field_and_marks_them_required_in_text()
     {
         var cut = Render<Login>();
 
-        Assert.Equal("Sign in", cut.Find("h1").TextContent);
+        Assert.Equal("Welcome back", cut.Find("h1").TextContent);
         foreach (var (id, label) in new[] { ("login-email", "Email"), ("login-password", "Password") })
         {
             var labelElement = cut.Find($"label[for={id}]");
@@ -57,7 +57,7 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.Equal("Input.Email", cut.Find("#login-email").GetAttribute("name"));
     }
 
-    [Fact]
+    [Test]
     public void Sign_in_page_lists_the_demo_accounts_only_while_demo_seeding_is_configured()
     {
         Assert.Empty(Render<Login>().FindAll("[data-testid=demo-accounts]"));
@@ -71,7 +71,7 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.Contains("admin@example.test", accounts.TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Sign_in_page_confirms_a_sign_out()
     {
         Navigation.NavigateTo(AccountRoutes.SignedOut);
@@ -79,10 +79,10 @@ public class AccessDeniedAndAccountTests : WebTestContext
 
         var message = cut.Find("[data-testid=signed-out]");
         Assert.Equal("status", message.GetAttribute("role"));
-        Assert.Contains("You have signed out.", message.TextContent);
+        Assert.Contains("You have signed out", message.TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Sign_in_page_explains_a_redirect_from_a_protected_page_or_an_ended_session()
     {
         Navigation.NavigateTo("account/login?ReturnUrl=%2Fcases%2F5");
@@ -91,13 +91,13 @@ public class AccessDeniedAndAccountTests : WebTestContext
         Assert.Contains("Sign in to continue", cut.Find("[data-testid=sign-in-required]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Sign_out_endpoint_redirects_to_the_signed_out_confirmation()
     {
         Assert.Equal("/account/login?signedOut=true", AccountRoutes.SignedOut);
     }
 
-    [Fact]
+    [Test]
     public void Anonymous_navigation_to_a_protected_page_redirects_to_sign_in_with_the_return_url()
     {
         Auth.SetNotAuthorized();

@@ -9,12 +9,11 @@
 @inject NavigationManager Navigation
 @inject IConfiguration Configuration
 
-@* Static SSR (E3-S1): a plain HTTP form post with an antiforgery token; no circuit is needed to sign in. Styled with the
-   E5 kit (E5-S8). The existing Identity sign-in flow is unchanged. *@
+@* Static SSR (E3-S1, redesign): a plain HTTP form post with an antiforgery token; no circuit is needed to sign in. The
+   existing Identity sign-in flow is unchanged. Labels are visible (no placeholder-only fields); pasting is allowed; the
+   show-password button is a progressive enhancement from js/app.js (hidden until the script runs). Demo account tiles
+   are links that fill in the email (?email=) and are listed only while demo accounts are seeded. *@
 <PageTitle>Sign in - Case Intake and Triage</PageTitle>
-
-<h1>Sign in</h1>
-<p>Welcome back. Enter your email and password to open Case Management.</p>
 
 @if (errorMessage is not null)
 {
@@ -26,10 +25,7 @@
 }
 else if (SignedOut)
 {
-    <div class="message message--success" role="status" data-testid="signed-out">
-        <Icon Name="success" />
-        <div class="message__body">You have signed out.</div>
-    </div>
+    <p class="pill-note pill-note--success" role="status" data-testid="signed-out"><Icon Name="circle-check" Small="true" /> You have signed out.</p>
 }
 else if (IsReturnToProtectedPage)
 {
@@ -39,14 +35,26 @@ else if (IsReturnToProtectedPage)
     </div>
 }
 
+<h1>Welcome back</h1>
+<p>Sign in to open, triage and resolve cases with a complete record of who did what.</p>
+
 <EditForm Model="Input" method="post" OnValidSubmit="SignInAsync" FormName="login" novalidate>
     <DataAnnotationsValidator />
     <LabeledInputText Id="login-email" Label="Email address" Type="email" AutoComplete="username" Spellcheck="false"
-                      Required="true" @bind-Value="Input.Email" placeholder="Enter your email" />
+                      Required="true" @bind-Value="Input.Email" LeadingIcon="mail" />
     <LabeledInputText Id="login-password" Label="Password" Type="password" AutoComplete="current-password"
-                      Required="true" @bind-Value="Input.Password" placeholder="Enter your password" />
+                      Required="true" @bind-Value="Input.Password" LeadingIcon="lock" autofocus="@(PrefillEmail is not null && errorMessage is null)">
+        <LabelAside><a href="account/forgot-password" data-testid="forgot-password">Forgot password?</a></LabelAside>
+        <Trailing>
+            <button type="button" class="btn btn--subtle btn--icon input-action__button" data-password-toggle aria-controls="login-password"
+                    aria-pressed="false" hidden data-testid="password-toggle">
+                <span data-eye><Icon Name="eye" Small="true" /></span><span data-eye-off hidden><Icon Name="eye-off" Small="true" /></span>
+                <span class="visually-hidden">Show password</span>
+            </button>
+        </Trailing>
+    </LabeledInputText>
     <div class="form-actions">
-        <button type="submit" class="btn btn--primary">Sign in</button>
+        <button type="submit" class="btn btn--primary">Sign in <Icon Name="arrow-right" Small="true" /></button>
     </div>
 </EditForm>
 
@@ -54,13 +62,22 @@ else if (IsReturnToProtectedPage)
    without demo seeding reveals no account names. *@
 @if (!string.IsNullOrEmpty(Configuration[DemoUsers.PasswordKey]))
 {
-    <p class="account-divider" aria-hidden="true">or use a demo account</p>
-    <section class="demo-accounts" aria-labelledby="demo-accounts-heading" data-testid="demo-accounts">
-        <h2 id="demo-accounts-heading">Demo accounts</h2>
-        <ul>
+    <p class="account-divider" aria-hidden="true">Or try a demo account</p>
+    <section aria-labelledby="demo-accounts-heading" data-testid="demo-accounts">
+        <h2 id="demo-accounts-heading" class="visually-hidden">Demo accounts</h2>
+        <ul class="demo-tiles">
             @foreach (var demo in DemoUsers.All)
             {
-                <li><span class="mono">@demo.UserName</span> &ndash; @AppRoles.DisplayName(demo.Role): @RoleSummary(demo.Role)</li>
+                var selected = string.Equals(PrefillEmail, demo.UserName, StringComparison.OrdinalIgnoreCase);
+                <li>
+                    <a class="demo-tile" href="@($"account/login?email={Uri.EscapeDataString(demo.UserName)}")" aria-current="@(selected ? "true" : null)" data-testid="demo-tile">
+                        <span class="initials role-chip--@demo.Role.ToLowerInvariant()" aria-hidden="true">@Initials(demo.Role)</span>
+                        <span>
+                            <span class="demo-tile__name">@AppRoles.DisplayName(demo.Role)<span class="visually-hidden">: use @demo.UserName</span></span>
+                            <span class="demo-tile__role">@RoleSummary(demo.Role)</span>
+                        </span>
+                    </a>
+                </li>
             }
         </ul>
     </section>
@@ -75,12 +92,12 @@ else if (IsReturnToProtectedPage)
 
     private static string RoleSummary(string role) => role switch
     {
-        AppRoles.Auditor => "read-only review of cases, audit trails and documents",
-        AppRoles.IntakeClerk => "opens new cases, looks up veterans and attaches documents",
-        AppRoles.CaseWorker => "edits cases, starts and resolves them",
-        AppRoles.Supervisor => "case work plus triage, assigning cases, close and reopen, and managing users",
-        AppRoles.Administrator => "every permission, including managing users, roles and permissions",
-        AppRoles.QualityAnalyst => "reads cases; views and imports test results",
+        AppRoles.Auditor => "Read-only review",
+        AppRoles.IntakeClerk => "Opens new cases",
+        AppRoles.CaseWorker => "Edits and resolves",
+        AppRoles.Supervisor => "Full case access",
+        AppRoles.Administrator => "Every permission",
+        AppRoles.QualityAnalyst => "Test results",
         _ => "",
     };
 
@@ -96,7 +113,26 @@ else if (IsReturnToProtectedPage)
 
     private bool IsReturnToProtectedPage => LocalReturnUrl.IsLocal(ReturnUrl) && ReturnUrl != LocalReturnUrl.Default;
 
-    protected override void OnInitialized() => Input ??= new();
+    /// <summary>A demo tile's email (?email=), filled into the form on GET; never trusted beyond that.</summary>
+    [SupplyParameterFromQuery(Name = "email")]
+    private string? PrefillEmail { get; set; }
+
+    private static string Initials(string role) => role switch
+    {
+        AppRoles.CaseWorker => "CW",
+        AppRoles.IntakeClerk => "IC",
+        AppRoles.QualityAnalyst => "QA",
+        _ => role[..2].ToUpperInvariant(),
+    };
+
+    protected override void OnInitialized()
+    {
+        Input ??= new();
+        if (Input.Email is null && PrefillEmail is { Length: > 0 and <= 256 } email)
+        {
+            Input.Email = email;
+        }
+    }
 
     private async Task SignInAsync()
     {

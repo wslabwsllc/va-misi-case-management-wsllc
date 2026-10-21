@@ -7,9 +7,9 @@ namespace CaseIntake.E2E;
 /// Change 1, part 2 (ADR 0014), keyboard only: an administrator opens the audit log, filters it (focus stays on the
 /// form), opens an entry, follows a user's history, and exports the filtered log as CSV. Every page is scanned with axe.
 /// </summary>
-public sealed class AuditLogTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed class AuditLogTests : E2ETestBase
 {
-    [Fact]
+    [Test]
     public async Task Administrator_reads_filters_and_exports_the_audit_log_with_the_keyboard_only()
     {
         await using var s = await StartAsync(Meta("Administrator reads, filters and exports the audit log (keyboard only)", "Audit log",

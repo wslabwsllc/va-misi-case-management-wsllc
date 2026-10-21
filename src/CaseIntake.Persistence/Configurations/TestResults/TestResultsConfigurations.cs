@@ -29,7 +29,7 @@ internal sealed class TestRunConfiguration : IEntityTypeConfiguration<TestRun>
         builder.ToTable("TestRuns", t =>
         {
             t.HasCheckConstraint("CK_TestRun_Counts_NonNegative",
-                "\"Total\" >= 0 AND \"Passed\" >= 0 AND \"Failed\" >= 0 AND \"Skipped\" >= 0 AND \"Blocked\" >= 0 AND \"NotExecuted\" >= 0");
+                "\"Total\" >= 0 AND \"Passed\" >= 0 AND \"Failed\" >= 0 AND \"Skipped\" >= 0 AND \"Blocked\" >= 0 AND \"NotExecuted\" >= 0 AND \"NotApplicable\" >= 0");
             t.HasCheckConstraint("CK_TestRun_Status", "\"Status\" BETWEEN 0 AND 2");
         });
         builder.HasKey(r => r.Id);
@@ -67,6 +67,12 @@ internal sealed class TestCaseConfiguration : IEntityTypeConfiguration<TestCase>
         builder.Property(c => c.Priority).HasMaxLength(TestResultFieldLimits.PriorityMaxLength);
         builder.Property(c => c.Preconditions).HasMaxLength(TestResultFieldLimits.MessageMaxLength);
         builder.Property(c => c.ExpectedResult).HasMaxLength(TestResultFieldLimits.MessageMaxLength);
+        builder.Property(c => c.Section508Provision).HasMaxLength(TestResultFieldLimits.PriorityMaxLength);
+        builder.Property(c => c.WcagVersion).HasMaxLength(TestResultFieldLimits.PriorityMaxLength);
+        builder.Property(c => c.WcagCriterion).HasMaxLength(TestResultFieldLimits.PriorityMaxLength);
+        builder.Property(c => c.WcagLevel).HasMaxLength(TestResultFieldLimits.PriorityMaxLength);
+        builder.Property(c => c.Workflow).HasMaxLength(TestResultFieldLimits.ShortTextMaxLength);
+        builder.HasIndex(c => c.Accessibility);
         builder.HasIndex(c => c.Key).IsUnique();
         builder.HasIndex(c => new { c.Module, c.Type });
     }
@@ -76,7 +82,7 @@ internal sealed class TestExecutionConfiguration : IEntityTypeConfiguration<Test
 {
     public void Configure(EntityTypeBuilder<TestExecution> builder)
     {
-        builder.ToTable("TestExecutions", t => t.HasCheckConstraint("CK_TestExecution_Outcome", "\"Outcome\" BETWEEN 0 AND 4"));
+        builder.ToTable("TestExecutions", t => t.HasCheckConstraint("CK_TestExecution_Outcome", "\"Outcome\" BETWEEN 0 AND 5"));
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Browser).HasMaxLength(TestResultFieldLimits.BrowserMaxLength);
         builder.Property(e => e.Viewport).HasMaxLength(TestResultFieldLimits.BrowserMaxLength);
@@ -86,6 +92,10 @@ internal sealed class TestExecutionConfiguration : IEntityTypeConfiguration<Test
         builder.Property(e => e.StandardOutput).HasMaxLength(TestResultFieldLimits.LongTextMaxLength);
         builder.Property(e => e.ConsoleLog).HasMaxLength(TestResultFieldLimits.LongTextMaxLength);
         builder.Property(e => e.NetworkLog).HasMaxLength(TestResultFieldLimits.LongTextMaxLength);
+        builder.Property(e => e.Tester).HasMaxLength(TestResultFieldLimits.ShortTextMaxLength);
+        builder.Property(e => e.AssistiveTechnology).HasMaxLength(TestResultFieldLimits.ShortTextMaxLength);
+        builder.Property(e => e.DefectReference).HasMaxLength(TestResultFieldLimits.ShortTextMaxLength);
+        builder.Property(e => e.RemediationNotes).HasMaxLength(TestResultFieldLimits.MessageMaxLength);
 
         builder.HasOne(e => e.Run).WithMany(r => r.Executions).HasForeignKey(e => e.RunId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne(e => e.TestCase).WithMany().HasForeignKey(e => e.TestCaseId).OnDelete(DeleteBehavior.Restrict);

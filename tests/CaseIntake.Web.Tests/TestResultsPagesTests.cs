@@ -8,23 +8,22 @@ using Microsoft.AspNetCore.Authorization;
 namespace CaseIntake.Web.Tests;
 
 /// <summary>Test results pages: protected by testresults.view, metrics from service data, outcomes kept distinct.</summary>
-[Trait("Category", "Story:Test management")]
-[Trait("Category", "Req:R-4.2-13")]
+[Category("Story:Test management")]
+[Category("Req:R-4.2-13")]
 public class TestResultsPagesTests : WebTestContext
 {
     public TestResultsPagesTests() => SignInAs(AppRoles.QualityAnalyst);
 
     public static TheoryData<Type> Pages => [typeof(TestResultsDashboard), typeof(TestRuns), typeof(RunDetail), typeof(ExecutionDetail), typeof(TestCases), typeof(TestCaseDetail), typeof(Evidence), typeof(History)];
 
-    [Theory]
-    [MemberData(nameof(Pages))]
+    [TestCaseSource(nameof(Pages))]
     public void Every_page_requires_the_test_results_view_policy(Type page)
     {
         var policy = Assert.Single(page.GetCustomAttributes<AuthorizeAttribute>()).Policy;
         Assert.Equal(Permissions.TestResultsView, policy);
     }
 
-    [Fact]
+    [Test]
     public void Dashboard_without_runs_explains_how_to_produce_them()
     {
         var cut = Render<TestResultsDashboard>();
@@ -32,7 +31,7 @@ public class TestResultsPagesTests : WebTestContext
         Assert.Contains("scripts/run-all-tests.sh", cut.Find("[data-testid=tr-empty]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Dashboard_shows_metrics_of_the_latest_run_and_distinguishes_not_executed()
     {
         var latest = FakeTestResultsService.Run(2, passed: 40, failed: 2, skipped: 1, notExecuted: 5, status: TestRunStatus.Partial);
@@ -54,7 +53,7 @@ public class TestResultsPagesTests : WebTestContext
         Assert.Contains("chromium 1440x900", cut.Find("[data-testid=tr-chart-coverage] desc").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Import_is_offered_only_with_the_manage_permission()
     {
         var qa = Render<TestResultsDashboard>();
@@ -68,7 +67,7 @@ public class TestResultsPagesTests : WebTestContext
         Assert.Empty(viewer.FindAll("[data-testid=import-runs]"));
     }
 
-    [Fact]
+    [Test]
     public void Execution_detail_shows_failure_expected_actual_steps_and_screenshot_preview_controls()
     {
         var run = FakeTestResultsService.Run(3, passed: 1, failed: 1);
@@ -96,7 +95,7 @@ public class TestResultsPagesTests : WebTestContext
         Assert.Contains("Zoom in", cut.Find("[data-testid=evidence-preview]").InnerHtml);
     }
 
-    [Fact]
+    [Test]
     public void Run_list_and_failure_messages_come_from_the_service()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(4, passed: 3, failed: 1));
@@ -111,10 +110,10 @@ public class TestResultsPagesTests : WebTestContext
         Assert.Contains("1 failed", detail.Find("[data-testid=record-header]").TextContent);
     }
 
-    [Theory]
-    [InlineData(TestOutcome.NotExecuted, "Not executed")]
-    [InlineData(TestOutcome.Blocked, "Blocked")]
-    [InlineData(TestOutcome.Skipped, "Skipped")]
+    [TestCase(TestOutcome.NotExecuted, "Not Run")]
+    [TestCase(TestOutcome.NotApplicable, "Not Applicable")]
+    [TestCase(TestOutcome.Blocked, "Blocked")]
+    [TestCase(TestOutcome.Skipped, "Skipped")]
     public void Outcomes_are_labelled_distinctly(TestOutcome outcome, string label)
     {
         var cut = Render<OutcomePill>(p => p.Add(o => o.Outcome, outcome));

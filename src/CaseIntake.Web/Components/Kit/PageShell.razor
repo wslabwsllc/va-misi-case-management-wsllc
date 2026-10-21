@@ -7,13 +7,17 @@
 <div class="page-header">
     @if (ShowBackButton && (BackHref ?? Breadcrumbs.LastOrDefault(c => c.Href is not null)?.Href) is { } back)
     {
-        <a class="btn btn--subtle btn--icon page-header__back desktop-only" href="@back" data-testid="page-back"
-           aria-label="@($"Back to {Breadcrumbs.LastOrDefault(c => c.Href == back)?.Text ?? "previous page"}")" title="Back">
+        <a class="btn btn--icon page-header__back desktop-only" href="@back" data-testid="page-back"
+           aria-label="@($"Back to {Breadcrumbs.LastOrDefault(c => c.Href == back)?.Text ?? "previous page"}")" data-tooltip="Back" data-tooltip-align="start">
             <Icon Name="back" />
         </a>
     }
     <div class="page-header__titles">
-        <h1 tabindex="-1" id="page-title">@Title</h1>
+        @if (Eyebrow is not null)
+        {
+            <div class="page-header__eyebrow record-title__meta">@Eyebrow</div>
+        }
+        <h1 tabindex="-1" id="page-title">@(TitleContent ?? (RenderFragment)(b => b.AddContent(0, Title)))</h1>
         @if (!string.IsNullOrEmpty(Subtitle))
         {
             <p class="page-header__subtitle">@Subtitle</p>
@@ -29,6 +33,12 @@
     [Parameter] public string? DocumentTitle { get; set; }
     [Parameter] public string? Subtitle { get; set; }
     [Parameter] public RenderFragment? Actions { get; set; }
+
+    /// <summary>Optional line above the heading (record ID and badges).</summary>
+    [Parameter] public RenderFragment? Eyebrow { get; set; }
+
+    /// <summary>Optional heading markup (for example a visually hidden prefix); its text must match <see cref="Title"/>.</summary>
+    [Parameter] public RenderFragment? TitleContent { get; set; }
 
     /// <summary>Ancestors of this page (the current page is appended automatically).</summary>
     [Parameter] public IReadOnlyList<Crumb> Breadcrumbs { get; set; } = [];

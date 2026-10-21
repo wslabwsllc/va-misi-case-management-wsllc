@@ -13,8 +13,10 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// The tests keep the production timeouts (2 s per attempt, 5 s total); <see cref="InitializeAsync"/> first sends one
 /// lookup with a relaxed budget, so first-request start-up cost (JIT, dataset load) is never charged to that budget.
 /// </summary>
-public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<MockServiceFactory>, IAsyncLifetime
+public class ClientAgainstMockTests : ClassFixture<ClientAgainstMockTests, MockServiceFactory>, IAsyncLifetime
 {
+    private static MockServiceFactory factory => Shared;
+
     // Cold start under linux/amd64 emulation on Apple Silicon measured 1.5-1.9 s for the first request, against the
     // production 2 s attempt limit; 30 s leaves room for a slow or busy machine.
     private static readonly TimeSpan WarmUpBudget = TimeSpan.FromSeconds(30);
@@ -23,6 +25,7 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
     /// Warms the client pipeline and each mock with one lookup with a generous budget, through the same code path the tests
     /// use. The result is not asserted; the tests below check behavior with the production budget.
     /// </summary>
+    [SetUp]
     public async Task InitializeAsync()
     {
         foreach (var target in LookupTarget.Names())
@@ -31,6 +34,8 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
             await provider.GetRequiredService<IVeteranLookupClient>().LookupAsync(VeteranDatasetGenerator.KnownFoundSsn, CancellationToken.None);
         }
     }
+
+    [TearDown]
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -71,8 +76,7 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
         return services.BuildServiceProvider();
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_documented_demo_SSN_is_Found_with_the_dataset_values(string target)
     {
         var result = await LookupAsync(target, VeteranDatasetGenerator.KnownFoundSsn);
@@ -83,8 +87,7 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
 
     // Specification 4.6: the production client's wire request matches the Government definition, checked against the
     // definition itself (method, path, content type, request schema), and the real service answers it.
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_client_sends_the_request_the_spec_defines(string target)
     {
         var spec = await GovernmentSpec.GetAsync();
@@ -102,15 +105,13 @@ public class ClientAgainstMockTests(MockServiceFactory factory) : IClassFixture<
         GovernmentSpec.AssertConforms(body.RootElement, spec.RequestSchema);
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_documented_absent_SSN_is_NotFound(string target)
     {
         Assert.Equal(VeteranLookupOutcome.NotFound, (await LookupAsync(target, VeteranDatasetGenerator.KnownAbsentSsn)).Outcome);
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task Every_dataset_record_is_found_by_the_client_in_the_nine_digit_form(string target)
     {
         await using var provider = BuildProvider(target);

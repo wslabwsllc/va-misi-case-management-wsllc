@@ -12,8 +12,10 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// the document generated from the mock's endpoint declarations may differ from the definition only by the documented
 /// extensions in <see cref="Allowlist"/> (assumptions D11-D15, ADR 0008).
 /// </summary>
-public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture<MockServiceFactory>
+public class OpenApiConformanceTests : ClassFixture<OpenApiConformanceTests, MockServiceFactory>
 {
+    private static MockServiceFactory factory => Shared;
+
     private static readonly string Operation = $"/paths/{Escape(MockProgram.LookupRoute)}/post";
 
     /// <summary>
@@ -35,7 +37,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
         ($"{Operation}/responses/200/content/application~1json/schema/required{{address}}", "D14: the mock always returns address"),
     ];
 
-    [Fact]
+    [Test]
     public void The_Government_contract_file_is_unchanged()
     {
         Assert.True(GovernmentSpec.Sha256(GovernmentSpec.RawBytes()) == GovernmentSpec.PinnedSha256,
@@ -43,7 +45,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
             "byte for byte as supplied. Do not reformat or edit it; restore it from the specification.");
     }
 
-    [Fact]
+    [Test]
     public async Task The_Government_contract_parses_as_OpenAPI_3_0_3()
     {
         var result = await GovernmentSpec.ReadAsync();
@@ -53,8 +55,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
         Assert.StartsWith("openapi: 3.0.3\n", Encoding.UTF8.GetString(GovernmentSpec.RawBytes()), StringComparison.Ordinal);
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_mock_serves_the_Government_contract_byte_for_byte(string target)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -67,8 +68,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
     }
 
     // Run against the Compose container as well: it is the Release/Production build the evaluators run.
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_implementation_conforms_to_the_Government_contract(string target)
     {
         var spec = Flatten((await GovernmentSpec.GetAsync()).Root);
@@ -93,8 +93,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
             "The implementation does not conform to the Government definition (specification 4.6):\n" + string.Join("\n", problems));
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_implementation_document_is_OpenAPI_3_0_and_host_independent(string target)
     {
         using var generated = await GetGeneratedDocumentAsync(target);
@@ -103,7 +102,7 @@ public class OpenApiConformanceTests(MockServiceFactory factory) : IClassFixture
         Assert.False(generated.RootElement.TryGetProperty("servers", out _));
     }
 
-    [Fact]
+    [Test]
     public async Task Every_allowlist_entry_matches_the_generated_document()
     {
         using var generatedDocument = await GetGeneratedDocumentAsync(LookupTarget.InProcess);

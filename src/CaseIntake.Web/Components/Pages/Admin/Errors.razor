@@ -14,7 +14,7 @@
    who saw the error page can quote its reference, which is the operation ID searched here. Filters are in the query
    string (focus stays on the form when they change). *@
 <PageShell Title="Errors" Breadcrumbs="@([new Crumb("Dashboard", "")])"
-           Subtitle="Errors the application recorded, newest first. Times are US Eastern (EDT or EST)." />
+           Subtitle="Errors the application recorded, newest first. Times are US Eastern (ET)." />
 
 <ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The error log could not be loaded")" Message="@_error" TestId="errors-error" />
 
@@ -22,11 +22,11 @@
     <form class="filters" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter errors" data-testid="error-filters">
         <div class="field">
             <label class="field__label" for="errors-from">From (ET)</label>
-            <input id="errors-from" type="date" @bind="_from" />
+            <DateInput Id="errors-from" @bind-Value="_from" />
         </div>
         <div class="field">
             <label class="field__label" for="errors-to">To (ET)</label>
-            <input id="errors-to" type="date" @bind="_to" />
+            <DateInput Id="errors-to" @bind-Value="_to" />
         </div>
         <div class="field">
             <label class="field__label" for="errors-status">Status</label>

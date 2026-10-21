@@ -30,7 +30,7 @@ public class LoggingTests
         return [.. writer.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries).Where(l => l.StartsWith('{')).Select(l => JsonDocument.Parse(l))];
     }
 
-    [Fact]
+    [Test]
     public async Task Logs_are_json_with_utc_timestamp_level_category_eventid_and_operation_id()
     {
         var lines = await CaptureAsync(logger =>
@@ -48,7 +48,7 @@ public class LoggingTests
         Assert.Equal("unit-test", root.GetProperty("Scopes").GetProperty("Operation").GetString());
     }
 
-    [Fact]
+    [Test]
     public async Task Ssn_shaped_values_are_redacted_in_message_state_and_scopes()
     {
         var lines = await CaptureAsync(logger =>
@@ -63,7 +63,7 @@ public class LoggingTests
         Assert.Contains(SsnRedaction.Replacement, text);
     }
 
-    [Fact]
+    [Test]
     public async Task Exception_messages_are_never_written_only_the_type()
     {
         var lines = await CaptureAsync(logger =>
@@ -74,17 +74,16 @@ public class LoggingTests
         Assert.DoesNotContain("provider text", root.GetRawText());
     }
 
-    [Theory]
-    [InlineData("900-45-6789", true)]
-    [InlineData("900456789", true)]
-    [InlineData("ssn=900456789.", true)]
-    [InlineData("1234567890", false)]
-    [InlineData("12-345-6789", false)]
-    [InlineData("case 42", false)]
+    [TestCase("900-45-6789", true)]
+    [TestCase("900456789", true)]
+    [TestCase("ssn=900456789.", true)]
+    [TestCase("1234567890", false)]
+    [TestCase("12-345-6789", false)]
+    [TestCase("case 42", false)]
     public void Ssn_detector_matches_nine_digit_forms_only(string text, bool expected) =>
         Assert.Equal(expected, SsnRedaction.ContainsSsn(text));
 
-    [Fact]
+    [Test]
     public void FakeLogger_capture_can_assert_no_ssn_in_captured_records()
     {
         var logger = new FakeLogger();

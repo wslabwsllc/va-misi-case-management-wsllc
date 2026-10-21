@@ -26,8 +26,7 @@ public class CaseWorkflowTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(AllPairs))]
+    [TestCaseSource(nameof(AllPairs))]
     public void Exactly_the_five_specified_edges_are_allowed(CaseStatus from, CaseStatus to)
     {
         var expected = Allowed.Contains((from, to));
@@ -36,24 +35,23 @@ public class CaseWorkflowTests
         Assert.Equal(expected, CaseWorkflow.Instance.NextStatuses(from).Contains(to));
     }
 
-    [Fact]
+    [Test]
     public void All_25_pairs_are_covered_and_5_are_allowed()
     {
         Assert.Equal(25, AllPairs().Count());
         Assert.Equal(5, AllPairs().Count(row => CaseWorkflow.Instance.IsAllowed((CaseStatus)row[0], (CaseStatus)row[1])));
     }
 
-    [Fact]
+    [Test]
     public void Closed_is_terminal_and_new_cases_start_as_New()
     {
         Assert.Empty(CaseWorkflow.Instance.NextStatuses(CaseStatus.Closed));
         Assert.Equal(CaseStatus.New, CaseWorkflow.InitialStatus);
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(5)]
-    [InlineData(99)]
+    [TestCase(-1)]
+    [TestCase(5)]
+    [TestCase(99)]
     public void Undefined_enum_values_are_never_allowed(int value)
     {
         var undefined = (CaseStatus)value;
@@ -66,7 +64,7 @@ public class CaseWorkflowTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Only_Resolved_to_InProgress_is_a_reopen()
     {
         foreach (var (from, to) in Allowed)

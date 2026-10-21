@@ -2,9 +2,9 @@
 @using CaseIntake.Identity.CurrentUser
 @using CaseIntake.Web.Services
 
-@* Signed-in user's display name and role(s) plus the sign-out button (E3-S1; styled with the E5 kit, E5-S8). Roles
-   come from the authenticated identity's role claims through OperationActorFactory, never from the UI. Sign-out is a
-   plain HTTP form post carrying an antiforgery token to POST /account/logout. *@
+@* Signed-in user's display name and role(s) plus the sign-out button (E3-S1; redesigned header). Roles come from the
+   authenticated identity's role claims through OperationActorFactory, never from the UI. Sign-out is a plain HTTP
+   form post carrying an antiforgery token to POST /account/logout; the icon buttons carry text names. *@
 <AuthorizeView>
     <Authorized>
         <div class="user-status">
@@ -15,12 +15,12 @@
                     <span class="user-status__roles"><span class="visually-hidden">Role: </span><span data-testid="user-roles">@RoleText(context.User)</span></span>
                 </span>
             </div>
-            @* Icon-only so the header fits at tablet width; the profile sheet on phones shows the text. *@
-            <a class="btn btn--subtle btn--icon" href="account/change-password" aria-label="Change password" title="Change password"
-               data-testid="change-password-link"><Icon Name="lock" Small="true" /></a>
+            <a class="btn btn--icon" href="account/change-password" data-tooltip="Change password" data-tooltip-align="end" data-testid="change-password-link">
+                <Icon Name="key" Small="true" /><span class="visually-hidden">Change password</span>
+            </a>
             <form method="post" action="account/logout">
                 <AntiforgeryToken />
-                <button type="submit" class="btn" data-testid="sign-out"><Icon Name="signout" Small="true" /> Sign out</button>
+                <button type="submit" class="btn btn--icon" data-tooltip="Sign out" data-tooltip-align="end" data-testid="sign-out"><Icon Name="signout" Small="true" /><span class="visually-hidden">Sign out</span></button>
             </form>
         </div>
     </Authorized>

@@ -8,24 +8,43 @@
 @inject CaseActivitySignal ActivitySignal
 @inject PageActivity Activity
 @inject StatusAnnouncer Announcer
+@inject NavigationManager Navigation
 @inject ILogger<Notifications> Logger
 
-@* Notifications (issue #21): what other people did on cases you can see in the last two weeks, newest first. Entries
-   since you last marked them as read are unread: they are highlighted, counted in the navigation badge, and listed
-   with a "New" label (text, not colour alone). The list refreshes when cases change. *@
+@* Notifications (issue #21, redesign): what other people did on cases you can see in the last two weeks, newest first.
+   Tabs (links with aria-current) show All, Unread, or what concerns cases assigned to you. Unread entries are
+   highlighted and labelled "New" (text, not colour alone) and counted in the navigation badge; each can be marked as
+   read on its own, or all at once. Opening a notification marks it read and goes to the case's history. The list
+   refreshes when cases change. *@
 <PageShell Title="Notifications" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="@Subtitle">
     <Actions>
-        <div class="btn-row">
+        <div class="btn-row page-actions">
             <button type="button" class="btn" @onclick="ReloadAsync" disabled="@_busy" data-testid="notifications-refresh">
                 <Icon Name="refresh" Small="true" Class="@(_busy ? "icon--spin" : null)" /> Refresh
             </button>
-            <button type="button" class="btn btn--primary" @onclick="MarkAllReadAsync" disabled="@(_busy || _feed is not { UnreadCount: > 0 })"
+            <button type="button" class="btn" @onclick="MarkAllReadAsync" disabled="@(_busy || _feed is not { UnreadCount: > 0 })"
                     data-testid="mark-all-read">
-                <Icon Name="success" Small="true" /> Mark all as read
+                <Icon Name="check-all" Small="true" /> Mark all as read
             </button>
         </div>
     </Actions>
 </PageShell>
+
+<nav aria-label="Filter notifications" data-testid="notification-tabs">
+    <div class="pill-tabs">
+        @foreach (var tab in Tabs)
+        {
+            var t = tab;
+            <a href="@TabHref(t.Key)" aria-current="@(_tab == t.Key ? "page" : null)" data-testid="@($"notifications-tab-{t.Key}")">
+                @t.Text
+                @if (_feed is { } f && Count(f, t.Key) is > 0 and var n)
+                {
+                    <span class="badge">@n</span>
+                }
+            </a>
+        }
+    </div>
+</nav>
 
 <ErrorAlert Message="@_error" TestId="notifications-error" />
 
@@ -33,67 +52,122 @@
 {
     <LoadingIndicator Text="Loading notifications…" />
 }
-else if (_feed is { Items.Count: 0 })
-{
-    <div class="card"><EmptyState Title="No notifications" Message="Nobody else changed a case you can see in the last two weeks." IconName="bell" TestId="notifications-empty" /></div>
-}
 else if (_feed is { } feed)
 {
+    var items = Visible(feed).ToList();
     <p class="notifications-summary" role="status" data-testid="unread-summary">
         @(feed.UnreadCount == 0 ? "All caught up: no unread notifications." : $"{feed.UnreadCount} unread {(feed.UnreadCount == 1 ? "notification" : "notifications")}.")
     </p>
-    <div class="card card--flush">
-        <ul class="record-list" aria-label="Notifications, newest first" data-testid="notifications-list">
-            @foreach (var n in feed.Items)
-            {
-                <li class="record-card notification @(n.Unread ? "notification--unread" : null)" data-unread="@(n.Unread ? "true" : "false")">
-                    <div class="record-card__top">
-                        <div class="record-card__title">
+    @if (items.Count == 0)
+    {
+        <div class="card">
+            <EmptyState Title="@EmptyTitle" Message="@EmptyMessage" IconName="bell" Positive="true" TestId="notifications-empty">
+                <a class="btn btn--primary" href="my-work">Go to my tasks</a>
+                <a class="btn" href="cases">Browse cases</a>
+            </EmptyState>
+        </div>
+    }
+    else
+    {
+        <div class="card card--flush">
+            <ul class="record-list" aria-label="Notifications, newest first" data-testid="notifications-list">
+                @foreach (var n in items)
+                {
+                    var item = n;
+                    <li class="record-card notification @(n.Unread ? "notification--unread" : null)" data-unread="@(n.Unread ? "true" : "false")" data-testid="notification">
+                        <div class="record-card__top">
+                            <div class="record-card__title">
+                                @if (n.Unread)
+                                {
+                                    <span class="badge badge--new">New</span>
+                                }
+                                <a href="@($"cases/{n.CaseId}?tab=history")" @onclick="() => OpenAsync(item)">@n.CaseTitle</a>
+                            </div>
+                            @if (n.ToStatus is { } to)
+                            {
+                                <StatusPill Status="to" />
+                            }
+                        </div>
+                        <p class="notification__text">@Describe(n)</p>
+                        <div class="record-card__meta">
+                            <span class="case-id">#@n.CaseId</span>
+                            <span>@UiText.Time(n.OccurredAtUtc)</span>
+                            @if (n.AssignedToYou)
+                            {
+                                <span class="badge badge--new" data-testid="assigned-to-you">Assigned to you</span>
+                            }
+                            else if (n.AssignedToMe)
+                            {
+                                <span class="badge">Your case</span>
+                            }
                             @if (n.Unread)
                             {
-                                <span class="badge badge--new">New</span>
+                                <button type="button" class="btn btn--link row-raise" @onclick="() => MarkReadAsync(item)" disabled="@_busy" data-testid="mark-read">
+                                    <Icon Name="check" Small="true" /> Mark as read<span class="visually-hidden">: @n.CaseTitle, @UiText.Time(n.OccurredAtUtc)</span>
+                                </button>
                             }
-                            <a href="@($"cases/{n.CaseId}?tab=history")">@n.CaseTitle</a>
                         </div>
-                        @if (n.ToStatus is { } to)
-                        {
-                            <StatusPill Status="to" />
-                        }
-                    </div>
-                    <p class="notification__text">@Describe(n)</p>
-                    <div class="record-card__meta">
-                        <span>Case @n.CaseId</span>
-                        <span>@UiText.Time(n.OccurredAtUtc)</span>
-                        @if (n.AssignedToYou)
-                        {
-                            <span class="badge badge--new" data-testid="assigned-to-you">Assigned to you</span>
-                        }
-                        else if (n.AssignedToMe)
-                        {
-                            <span class="badge">Your case</span>
-                        }
-                    </div>
-                </li>
-            }
-        </ul>
-    </div>
+                    </li>
+                }
+            </ul>
+        </div>
+    }
 }
 
 @code {
+    private sealed record Tab(string Key, string Text);
+
+    private static readonly Tab[] Tabs = [new("all", "All"), new("unread", "Unread"), new("assigned", "Assigned to me")];
+
     private readonly CancellationTokenSource _cts = new();
     private CaseNotificationFeed? _feed;
     private string? _error;
     private bool _busy;
+    private string _tab = "all";
+
+    [SupplyParameterFromQuery(Name = "show")] private string? QueryShow { get; set; }
 
     private string Subtitle => _feed?.LastReadAtUtc is { } read
         ? $"Changes by other people in the last two weeks. Last marked as read {UiText.Time(read)}."
         : "Changes by other people in the last two weeks, newest first.";
+
+    private string EmptyTitle => _tab switch
+    {
+        "unread" => "No unread notifications",
+        "assigned" => "Nothing about your cases",
+        _ => "You're all caught up",
+    };
+
+    private string EmptyMessage => _tab switch
+    {
+        "unread" => "Everything in your feed has been read.",
+        "assigned" => "Nobody else changed a case assigned to you in the last two weeks.",
+        _ => "Nobody else changed a case you can see in the last two weeks. Updates appear here as soon as they happen.",
+    };
+
+    private IEnumerable<CaseNotificationDto> Visible(CaseNotificationFeed feed) => _tab switch
+    {
+        "unread" => feed.Items.Where(i => i.Unread),
+        "assigned" => feed.Items.Where(i => i.AssignedToMe || i.AssignedToYou),
+        _ => feed.Items,
+    };
+
+    private static int Count(CaseNotificationFeed feed, string tab) => tab switch
+    {
+        "unread" => feed.UnreadCount,
+        "assigned" => feed.Items.Count(i => (i.AssignedToMe || i.AssignedToYou) && i.Unread),
+        _ => 0,
+    };
+
+    private string TabHref(string key) => Navigation.GetUriWithQueryParameter("show", key == "all" ? null : key);
 
     protected override async Task OnInitializedAsync()
     {
         ActivitySignal.Changed += OnActivity;
         await ReloadAsync();
     }
+
+    protected override void OnParametersSet() => _tab = Tabs.Any(t => t.Key == QueryShow) ? QueryShow! : "all";
 
     private void OnActivity() => _ = InvokeAsync(ReloadAsync);
 
@@ -146,6 +220,55 @@ else if (_feed is { } feed)
         finally
         {
             _busy = false;
+        }
+    }
+
+    private async Task MarkReadAsync(CaseNotificationDto item)
+    {
+        using var busy = Activity.Begin();
+        _busy = true;
+        try
+        {
+            var result = await NotificationService.MarkReadAsync(item.Id, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _feed = result.Value;
+                Announcer.Announce($"Marked as read: {item.CaseTitle}");
+                ActivitySignal.Raise();
+            }
+            else
+            {
+                _error = result.Error!.Message;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    /// <summary>Opening a notification marks it read; the link's own navigation goes to the case.</summary>
+    private async Task OpenAsync(CaseNotificationDto item)
+    {
+        if (!item.Unread)
+        {
+            return;
+        }
+        try
+        {
+            // Not tied to this page's lifetime: the page is left while the call runs.
+            var result = await NotificationService.MarkReadAsync(item.Id, CancellationToken.None);
+            if (result.IsSuccess)
+            {
+                ActivitySignal.Raise();
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogWarning(new EventId(5013, "NotificationMarkReadFailed"), "Marking a notification read failed ({ExceptionType})", ex.GetType().Name);
         }
     }
 

@@ -1,32 +1,42 @@
 @inherits LabeledTextInputBase
 
 <div class="field">
-    <label class="field__label" for="@Id">
-        @Label
-        @if (Required)
-        {
-            <span class="field__required"><span class="field__asterisk" aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span></span>
-        }
-    </label>
+    <div class="@(LabelAside is null ? null : "field__label-row")">
+        <label class="field__label" for="@Id">
+            @Label
+            @if (Required)
+            {
+                <span class="field__required"><span class="field__asterisk" aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span></span>
+            }
+        </label>
+        @LabelAside
+    </div>
     @if (!string.IsNullOrEmpty(Hint))
     {
         <span class="field__hint" id="@HintId">@Hint</span>
     }
-    <input @attributes="AdditionalAttributes"
-           @ref="InputElement"
-           id="@Id"
-           name="@NameAttributeValue"
-           type="@Type"
-           class="@CssClass"
-           @bind="CurrentValueAsString"
-           @bind:event="oninput"
-           @bind:after="AfterInput"
-           inputmode="@InputMode"
-           autocomplete="@AutoComplete"
-           spellcheck="@(Spellcheck ? "true" : "false")"
-           aria-required="@(Required ? "true" : null)"
-           aria-invalid="@(IsInvalid ? "true" : null)"
-           aria-describedby="@DescribedBy" />
+    <span class="@WrapClass">
+        @if (LeadingIcon is not null)
+        {
+            <Icon Name="@LeadingIcon" Small="true" />
+        }
+        <input @attributes="AdditionalAttributes"
+               @ref="InputElement"
+               id="@Id"
+               name="@NameAttributeValue"
+               type="@Type"
+               class="@CssClass"
+               @bind="CurrentValueAsString"
+               @bind:event="oninput"
+               @bind:after="AfterInput"
+               inputmode="@InputMode"
+               autocomplete="@AutoComplete"
+               spellcheck="@(Spellcheck ? "true" : "false")"
+               aria-required="@(Required ? "true" : null)"
+               aria-invalid="@(IsInvalid ? "true" : null)"
+               aria-describedby="@DescribedBy" />
+        @Trailing
+    </span>
     @if (IsInvalid)
     {
         <div class="field__error" id="@ErrorId">
@@ -46,4 +56,15 @@
     [Parameter] public string? InputMode { get; set; }
     [Parameter] public string? AutoComplete { get; set; }
     [Parameter] public bool Spellcheck { get; set; } = true;
+
+    /// <summary>A decorative icon inside the start of the field (the label names the field).</summary>
+    [Parameter] public string? LeadingIcon { get; set; }
+
+    /// <summary>Content on the label's row, at the end (for example a "Forgot password?" link).</summary>
+    [Parameter] public RenderFragment? LabelAside { get; set; }
+
+    /// <summary>A control inside the end of the field (for example a show-password button).</summary>
+    [Parameter] public RenderFragment? Trailing { get; set; }
+
+    private string WrapClass => "input-wrap" + (LeadingIcon is null ? "" : " input-icon") + (Trailing is null ? "" : " input-action");
 }

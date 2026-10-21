@@ -264,6 +264,7 @@ internal sealed partial class TestResultImporter(
             suiteSummaries.Add(new { name = suite.Name, type = type.ToString(), status = suiteStatus, tests = results.Count, message = EvidenceRedactor.RedactAndCap(suite.Message, 500, secrets) });
         }
 
+        artifactCount += await ImportManualAsync(db, run, folder, cases, seenInRun, secrets, problems, ct);
         artifactCount += await AddServerLogsAsync(db, run, folder, manifest.ServerLogs, secrets, problems, ct);
 
         run.SuitesJson = JsonSerializer.Serialize(suiteSummaries);
@@ -273,6 +274,7 @@ internal sealed partial class TestResultImporter(
         run.Skipped = run.Executions.Count(e => e.Outcome == TestOutcome.Skipped);
         run.Blocked = run.Executions.Count(e => e.Outcome == TestOutcome.Blocked);
         run.NotExecuted = run.Executions.Count(e => e.Outcome == TestOutcome.NotExecuted);
+        run.NotApplicable = run.Executions.Count(e => e.Outcome == TestOutcome.NotApplicable);
         run.Status = DeriveStatus(manifest, suiteSummaries.Count, run);
 
         db.TestResultAuditEntries.Add(new TestResultAuditEntry
@@ -337,6 +339,151 @@ internal sealed partial class TestResultImporter(
         testCase.AcceptanceCriteria = Cap(ev?.AcceptanceCriteria, TestResultFieldLimits.MessageMaxLength) ?? testCase.AcceptanceCriteria;
         testCase.Preconditions = Cap(ev?.Preconditions, TestResultFieldLimits.MessageMaxLength) ?? testCase.Preconditions;
         testCase.ExpectedResult = Cap(ev?.Expected, TestResultFieldLimits.MessageMaxLength) ?? testCase.ExpectedResult;
+        DescribeAccessibility(testCase, result.Categories);
+    }
+
+    /// <summary>
+    /// Accessibility metadata from the test's own categories (QA 508 enhancement). Only explicit categories classify a
+    /// test: "A11y:Section508" or "A11y:Wcag22"; the standards mapping comes from "Section508:&lt;provision&gt;" and
+    /// "Wcag:&lt;version&gt;:&lt;criterion&gt;:&lt;level&gt;", the method from "Method:&lt;Automated|ManualKeyboard|ScreenReader|VisualOther&gt;"
+    /// and the workflow from "Workflow:&lt;name&gt;". Nothing is inferred from names or modules, and a test without these
+    /// categories keeps what it had (older records stay unclassified).
+    /// </summary>
+    internal static void DescribeAccessibility(TestCase testCase, IEnumerable<string> categories)
+    {
+        var list = categories.ToList();
+        string? Value(string prefix) => list.FirstOrDefault(c => c.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))?[prefix.Length..].Trim() is { Length: > 0 } v ? v : null;
+        testCase.Accessibility = Value("A11y:")?.ToUpperInvariant() switch
+        {
+            "SECTION508" or "508" => AccessibilityClassification.Section508,
+            "WCAG22" or "WCAG2.2" => AccessibilityClassification.Wcag22Project,
+            _ => testCase.Accessibility,
+        };
+        testCase.Section508Provision = Cap(Value("Section508:"), TestResultFieldLimits.PriorityMaxLength) ?? testCase.Section508Provision;
+        if (Value("Wcag:") is { } wcag)
+        {
+            var parts = wcag.Split(':', StringSplitOptions.TrimEntries);
+            testCase.WcagVersion = Cap(parts.ElementAtOrDefault(0), TestResultFieldLimits.PriorityMaxLength);
+            testCase.WcagCriterion = Cap(parts.ElementAtOrDefault(1), TestResultFieldLimits.PriorityMaxLength);
+            testCase.WcagLevel = Cap(parts.ElementAtOrDefault(2)?.ToUpperInvariant(), TestResultFieldLimits.PriorityMaxLength);
+        }
+        if (Value("Method:") is { } method && Enum.TryParse<TestMethod>(method, ignoreCase: true, out var m) && Enum.IsDefined(m))
+        {
+            testCase.Method = m;
+        }
+        testCase.Workflow = Cap(Value("Workflow:"), TestResultFieldLimits.ShortTextMaxLength) ?? testCase.Workflow;
+    }
+
+    /// <summary>Module of manual tests (keyboard, screen reader and visual checks).</summary>
+    public const string ManualModule = "Manual accessibility";
+
+    /// <summary>
+    /// Imports the run's manual tests (<c>manual/*.json</c>). Each becomes one execution: its recorded result when that
+    /// result is complete (a verdict, who executed it, when, and what they observed), otherwise Not Run with the reason.
+    /// A manual test is never given a passing result without that evidence. Existing runs are never touched.
+    /// </summary>
+    private async Task<int> ImportManualAsync(AppDbContext db, TestRun run, string folder, Dictionary<string, TestCase> cases,
+        HashSet<string> seenInRun, IReadOnlyCollection<string> secrets, List<string> problems, CancellationToken ct)
+    {
+        var root = Path.Combine(folder, "manual");
+        if (!Directory.Exists(root))
+        {
+            return 0;
+        }
+        var added = 0;
+        foreach (var file in Directory.EnumerateFiles(root, "*.json").Order(StringComparer.Ordinal))
+        {
+            List<ManualTestEntry> entries;
+            try
+            {
+                entries = await ReadJsonAsync<List<ManualTestEntry>>(file, ct) ?? [];
+            }
+            catch (Exception ex) when (ex is JsonException or InvalidDataException)
+            {
+                problems.Add("A manual test file could not be read.");
+                continue;
+            }
+            foreach (var entry in entries.Where(e => e.Id.Length > 0 && e.Title.Length > 0))
+            {
+                var fullName = Cap($"Manual.{entry.Id.Trim()}", TestResultFieldLimits.FullNameMaxLength)!;
+                var key = Key(fullName);
+                if (!seenInRun.Add(key))
+                {
+                    problems.Add($"Manual test {entry.Id}: listed twice in this run; the second entry was ignored.");
+                    continue;
+                }
+                var testCase = await db.TestCases.FirstOrDefaultAsync(c => c.Key == key, ct);
+                if (testCase is null)
+                {
+                    testCase = new TestCase { Key = key, FullName = fullName, FirstSeenAtUtc = run.StartedAtUtc };
+                    db.TestCases.Add(testCase);
+                }
+                cases[key] = testCase;
+                DescribeManual(testCase, entry);
+
+                var execution = new TestExecution { TestCase = testCase };
+                var result = entry.Result;
+                var outcome = result is null ? TestOutcome.NotExecuted : ParseOutcome(result.Outcome);
+                var complete = result is { ExecutedAtUtc: not null } && !string.IsNullOrWhiteSpace(result.Tester) && !string.IsNullOrWhiteSpace(result.Actual);
+                if ((outcome is TestOutcome.Passed or TestOutcome.Failed or TestOutcome.Blocked or TestOutcome.NotApplicable) && !complete)
+                {
+                    problems.Add($"Manual test {entry.Id}: a {outcome} result needs the tester, execution time and observed result; it was imported as Not Run.");
+                    outcome = TestOutcome.NotExecuted;
+                }
+                execution.Outcome = outcome is TestOutcome.Skipped ? TestOutcome.NotExecuted : outcome;
+                if (execution.Outcome == TestOutcome.NotExecuted)
+                {
+                    execution.ErrorMessage = "Not run: this manual test has no recorded execution in this run.";
+                }
+                else
+                {
+                    execution.StartedAtUtc = result!.ExecutedAtUtc!.Value.ToUniversalTime();
+                    execution.FinishedAtUtc = execution.StartedAtUtc;
+                    execution.Tester = Cap(EvidenceRedactor.Redact(result.Tester, secrets), TestResultFieldLimits.ShortTextMaxLength);
+                    execution.Browser = Cap(result.Browser, TestResultFieldLimits.BrowserMaxLength);
+                    execution.AssistiveTechnology = Cap(result.AssistiveTechnology, TestResultFieldLimits.ShortTextMaxLength);
+                    execution.ActualResult = EvidenceRedactor.RedactAndCap(result.Actual, TestResultFieldLimits.MessageMaxLength, secrets);
+                    execution.DefectReference = Cap(result.DefectReference, TestResultFieldLimits.ShortTextMaxLength);
+                    execution.RemediationNotes = EvidenceRedactor.RedactAndCap(result.RemediationNotes, TestResultFieldLimits.MessageMaxLength, secrets);
+                    if (execution.Outcome == TestOutcome.Failed)
+                    {
+                        execution.ErrorMessage = execution.ActualResult;
+                    }
+                    foreach (var evidence in result.Evidence)
+                    {
+                        var path = SafeChild(root, evidence.File);
+                        if (path is null || !File.Exists(path))
+                        {
+                            problems.Add($"Manual test {entry.Id}: evidence file missing or outside its folder.");
+                            continue;
+                        }
+                        added += AddArtifact(db, run, execution, ParseKind(evidence.Kind), path, Cap(evidence.Caption, TestResultFieldLimits.NameMaxLength), problems) ? 1 : 0;
+                    }
+                }
+                run.Executions.Add(execution);
+            }
+        }
+        return added;
+    }
+
+    private static void DescribeManual(TestCase testCase, ManualTestEntry entry)
+    {
+        testCase.Module = ManualModule;
+        testCase.Type = TestType.Manual;
+        testCase.Title = Cap(entry.Title.Trim(), TestResultFieldLimits.NameMaxLength)!;
+        testCase.Description = Cap(entry.Steps, TestResultFieldLimits.MessageMaxLength) ?? testCase.Description;
+        testCase.Preconditions = Cap(entry.Preconditions, TestResultFieldLimits.MessageMaxLength) ?? testCase.Preconditions;
+        testCase.ExpectedResult = Cap(entry.Expected, TestResultFieldLimits.MessageMaxLength) ?? testCase.ExpectedResult;
+        testCase.Priority = Cap(entry.Priority, TestResultFieldLimits.PriorityMaxLength) ?? testCase.Priority;
+        testCase.Requirements = Cap(entry.Requirements.Count > 0 ? string.Join(", ", entry.Requirements) : null, TestResultFieldLimits.NameMaxLength) ?? testCase.Requirements;
+        List<string> categories = [];
+        if (entry.Classification is { } c) categories.Add($"A11y:{c}");
+        if (entry.Section508Provision is { } p) categories.Add($"Section508:{p}");
+        if (entry.WcagVersion is { } v) categories.Add($"Wcag:{v}:{entry.WcagCriterion}:{entry.WcagLevel}");
+        if (entry.Method is { } m) categories.Add($"Method:{m}");
+        var workflow = string.Join(" · ", new[] { entry.Page, entry.Workflow }.Where(s => !string.IsNullOrWhiteSpace(s)));
+        if (workflow.Length > 0) categories.Add($"Workflow:{workflow}");
+        DescribeAccessibility(testCase, categories);
     }
 
     /// <summary>"Ns.Class.Some_behaviour_works(x: 1)" becomes "Some behaviour works (x: 1)".</summary>

@@ -11,9 +11,6 @@ public static class EasternTime
     /// <summary>The same instant with the Eastern offset of that moment.</summary>
     public static DateTimeOffset From(DateTimeOffset instant) => TimeZoneInfo.ConvertTime(instant, Zone);
 
-    /// <summary>"EDT" when daylight saving time is in effect in Eastern time at <paramref name="instant"/>, otherwise "EST".</summary>
-    public static string Abbreviation(DateTimeOffset instant) => Zone.IsDaylightSavingTime(instant) ? "EDT" : "EST";
-
     /// <summary>The Eastern calendar date of <paramref name="instant"/>.</summary>
     public static DateOnly Date(DateTimeOffset instant) => DateOnly.FromDateTime(From(instant).DateTime);
 

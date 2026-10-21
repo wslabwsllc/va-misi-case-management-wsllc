@@ -14,8 +14,10 @@ namespace CaseIntake.IntegrationTests.Identity;
 /// E3-S3 in the composed web host: each circuit scope sees only its own user, HTTP requests see their own principal,
 /// and revalidation revokes a circuit whose user's security stamp changed.
 /// </summary>
-public class CurrentUserIntegrationTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class CurrentUserIntegrationTests : ClassFixture<CurrentUserIntegrationTests, IdentityWebFixture>
 {
+    private static IdentityWebFixture fixture => Shared;
+
     private async Task<ClaimsPrincipal> PrincipalForAsync(string userName)
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
@@ -34,7 +36,7 @@ public class CurrentUserIntegrationTests(IdentityWebFixture fixture) : IClassFix
         return scope;
     }
 
-    [Fact]
+    [Test]
     public async Task Simultaneous_circuits_and_an_HTTP_request_each_observe_only_their_own_user()
     {
         await using var caseWorkerCircuit = await CircuitAsync(DemoUsers.CaseWorker.UserName);
@@ -55,7 +57,7 @@ public class CurrentUserIntegrationTests(IdentityWebFixture fixture) : IClassFix
         Assert.Contains("/account/access-denied", http.Headers.Location!.ToString());
     }
 
-    [Fact]
+    [Test]
     public async Task Services_in_a_circuit_act_as_the_circuit_user()
     {
         await using var circuit = await CircuitAsync(DemoUsers.CaseWorker.UserName);
@@ -70,7 +72,7 @@ public class CurrentUserIntegrationTests(IdentityWebFixture fixture) : IClassFix
         Assert.Equal(ErrorKind.Forbidden, triage.Error?.Kind);
     }
 
-    [Fact]
+    [Test]
     public async Task Revalidation_signs_out_a_circuit_whose_user_changed_so_later_operations_are_denied()
     {
         await using var circuit = await CircuitAsync(IdentityWebFixture.RevalidationUser);

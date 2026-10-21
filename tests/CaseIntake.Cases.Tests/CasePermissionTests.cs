@@ -30,19 +30,18 @@ public class CasePermissionTests
         Permissions.Transition(CaseStatus.Resolved, CaseStatus.InProgress),
     ]);
 
-    [Theory]
-    [InlineData(CaseStatus.New, new CaseStatus[0], new[] { CaseStatus.Triaged })]
-    [InlineData(CaseStatus.Triaged, new[] { CaseStatus.InProgress }, new[] { CaseStatus.InProgress })]
-    [InlineData(CaseStatus.InProgress, new[] { CaseStatus.Resolved }, new[] { CaseStatus.Resolved })]
-    [InlineData(CaseStatus.Resolved, new CaseStatus[0], new[] { CaseStatus.Closed, CaseStatus.InProgress })]
-    [InlineData(CaseStatus.Closed, new CaseStatus[0], new CaseStatus[0])]
+    [TestCase(CaseStatus.New, new CaseStatus[0], new[] { CaseStatus.Triaged })]
+    [TestCase(CaseStatus.Triaged, new[] { CaseStatus.InProgress }, new[] { CaseStatus.InProgress })]
+    [TestCase(CaseStatus.InProgress, new[] { CaseStatus.Resolved }, new[] { CaseStatus.Resolved })]
+    [TestCase(CaseStatus.Resolved, new CaseStatus[0], new[] { CaseStatus.Closed, CaseStatus.InProgress })]
+    [TestCase(CaseStatus.Closed, new CaseStatus[0], new CaseStatus[0])]
     public void Allowed_next_statuses_differ_by_role(CaseStatus status, CaseStatus[] caseWorker, CaseStatus[] supervisor)
     {
         Assert.Equal(caseWorker, CaseService.AllowedNextStatuses(status, CaseWorker, CaseWorkflow.Instance));
         Assert.Equal(supervisor, CaseService.AllowedNextStatuses(status, Supervisor, CaseWorkflow.Instance));
     }
 
-    [Fact]
+    [Test]
     public void Permissions_for_disallowed_edges_never_expose_them()
     {
         // Holding every transition permission (including unlisted pairs) still yields only workflow edges.
@@ -52,7 +51,7 @@ public class CasePermissionTests
         Assert.Empty(CaseService.AllowedNextStatuses(CaseStatus.Closed, everything, CaseWorkflow.Instance));
     }
 
-    [Fact]
+    [Test]
     public void Anonymous_actor_gets_no_next_statuses()
     {
         Assert.Empty(CaseService.AllowedNextStatuses(CaseStatus.New, FakeCurrentUser.Anonymous, CaseWorkflow.Instance));

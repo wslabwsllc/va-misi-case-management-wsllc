@@ -1,0 +1,86 @@
+﻿@using CaseIntake.Web.Services
+@* A calendar date typed as MM-DD-YYYY (the one display format, UiText.DateFormat). A text field instead of the native
+   date input, whose display follows the browser locale and cannot show MM-DD-YYYY: it is fully keyboard operable,
+   accepts paste, explains its format in visible text tied by aria-describedby, and validates on change. Typed text
+   that is not a real date stays in the field with an inline error (aria-invalid) and leaves the bound value unchanged,
+   so nothing is ever applied or submitted from a half-typed date. Parsing is calendar-only: no time zone, no day shift. *@
+<span class="field__hint" id="@FormatId">@UiText.DateHint</span>
+<input @attributes="AdditionalAttributes"
+       id="@Id"
+       type="text"
+       inputmode="numeric"
+       autocomplete="off"
+       spellcheck="false"
+       maxlength="10"
+       placeholder="MM-DD-YYYY"
+       value="@_text"
+       @onchange="OnChangeAsync"
+       aria-invalid="@(_invalid || Invalid ? "true" : null)"
+       aria-describedby="@DescribedByValue" />
+@if (_invalid)
+{
+    <div class="field__error" id="@LocalErrorId">
+        <Icon Name="error" Small="true" />
+        <span>Enter a real date as MM-DD-YYYY, for example 10-21-2026.</span>
+    </div>
+}
+
+@code {
+    private string _text = "";
+    private bool _invalid;
+    private DateOnly? _rendered;
+
+    [Parameter, EditorRequired] public string Id { get; set; } = "";
+    [Parameter] public DateOnly? Value { get; set; }
+    [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
+    [Parameter] public EventCallback AfterChange { get; set; }
+    /// <summary>Other descriptions (a page hint or a server error id) placed after the format hint.</summary>
+    [Parameter] public string? DescribedBy { get; set; }
+    /// <summary>Set by the owner when a server or form rule rejects the date.</summary>
+    [Parameter] public bool Invalid { get; set; }
+    [Parameter(CaptureUnmatchedValues = true)] public IReadOnlyDictionary<string, object>? AdditionalAttributes { get; set; }
+
+    private string FormatId => Id + "-format";
+    private string LocalErrorId => Id + "-format-error";
+    private string DescribedByValue => string.Join(' ', new[] { FormatId, _invalid ? LocalErrorId : null, DescribedBy }.Where(s => !string.IsNullOrEmpty(s)));
+
+    protected override void OnParametersSet()
+    {
+        // Re-render the text only when the bound value really changed (a reset, a restore from the URL), never while
+        // the user's invalid text is waiting to be corrected.
+        if (Value != _rendered)
+        {
+            _rendered = Value;
+            _text = Value is { } d ? UiText.Date(d) : "";
+            _invalid = false;
+        }
+    }
+
+    private async Task OnChangeAsync(ChangeEventArgs e)
+    {
+        _text = e.Value?.ToString()?.Trim() ?? "";
+        if (_text.Length == 0)
+        {
+            await CommitAsync(null);
+            return;
+        }
+        if (UiText.ParseDate(_text) is { } date)
+        {
+            _text = UiText.Date(date);
+            await CommitAsync(date);
+            return;
+        }
+        _invalid = true;
+    }
+
+    private async Task CommitAsync(DateOnly? date)
+    {
+        _invalid = false;
+        _rendered = date;
+        if (date != Value)
+        {
+            await ValueChanged.InvokeAsync(date);
+            await AfterChange.InvokeAsync();
+        }
+    }
+}

@@ -11,12 +11,12 @@ namespace CaseIntake.E2E;
 /// transitions including reopen, upload and download an attachment, sign out. Each step asserts the announced status or
 /// error text and the focus target, and every page is scanned with axe.
 /// </summary>
-public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed partial class PrimaryWorkflowTests : E2ETestBase
 {
     [GeneratedRegex(@"/cases/(\d+)$")]
     private static partial Regex CaseUrl();
 
-    [Fact]
+    [Test]
     public async Task Supervisor_completes_the_primary_workflow_by_keyboard()
     {
         await using var s = await StartAsync(Meta("Primary workflow by keyboard (Supervisor)", "E5-S9",
@@ -66,19 +66,19 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
             await ExpectPageAsync(page, "Cases");
             await Expect(page.GetByTestId("side-nav").Locator("[aria-current=page]")).ToHaveTextAsync("All cases");
         });
-        await s.StepAsync("Filter by status In Progress with Space and Enter; the result count is announced", async () =>
+        await s.StepAsync("Choose status In Progress with the keyboard: it applies at once and the result count is announced", async () =>
         {
-            var inProgress = page.GetByTestId("status-InProgress");
-            await PressAsync(inProgress, " ");
-            await Expect(inProgress).ToBeCheckedAsync();
-            await PressAsync(page.GetByTestId("apply-filters"));
+            var status = page.GetByTestId("filter-status");
+            await status.FocusAsync();
+            await E2ESession.ExpectFocusedAsync(status);
+            await status.SelectOptionAsync("InProgress");
             await Expect(page).ToHaveURLAsync(new Regex("status=InProgress"));
-            await Expect(page.GetByTestId("results-announcement")).ToContainTextAsync("Showing 1–");
+            await Expect(page.GetByTestId("results-announcement")).ToContainTextAsync("found. Showing 1–");
             // Auto-retrying: wait until the re-rendered rows show only In Progress cases.
             var rows = page.GetByTestId("case-table").Locator("tbody [data-status]");
             await Expect(page.GetByTestId("case-table").Locator("tbody [data-status]:not([data-status=InProgress])")).ToHaveCountAsync(0);
             await Expect(rows.First).ToHaveAttributeAsync("data-status", "InProgress");
-        }, expected: "Only In Progress cases; 'Showing 1–n of N cases' announced");
+        }, expected: "Only In Progress cases; 'N cases found. Showing 1–n of N cases' announced; no Apply button");
         await s.StepAsync("Sort by Title with Enter: aria-sort becomes ascending, then descending; focus stays on the header", async () =>
         {
             var sortTitle = page.GetByTestId("sort-Title");
@@ -114,7 +114,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         await s.StepAsync("Open New case; focus is on its h1", async () =>
         {
             await PressAsync(page.GetByTestId("new-case"));
-            await ExpectPageAsync(page, "New case");
+            await ExpectPageAsync(page, "Open a new case", "New case - Case Intake and Triage");
         });
         await s.StepAsync("Submitting an empty form focuses the error summary; the field is marked invalid", async () =>
         {
@@ -167,6 +167,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         await s.StepAsync("Create the case: the detail page opens, its h1 is focused and 'Case N created' is announced", async () =>
         {
             await PressAsync(page.GetByTestId("create-case"));
+            await ConfirmSubmitAsync(page, "confirm-intake");
             await Expect(page).ToHaveURLAsync(CaseUrl());
             caseId = long.Parse(CaseUrl().Match(page.Url).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
             await ExpectPageAsync(page, $"Case {caseId}: {title}");
@@ -194,6 +195,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
             await page.Keyboard.PressAsync("End");
             await page.Keyboard.TypeAsync(" edited");
             await PressAsync(page.GetByTestId("save-case"));
+            await ConfirmSubmitAsync(page, "confirm-edit");
             await Expect(Announcer(page)).ToHaveTextAsync("Changes saved");
             await Expect(page.GetByTestId("case-title")).ToHaveTextAsync(newTitle);
             await E2ESession.ExpectFocusedAsync(page.GetByTestId("edit-case"));
@@ -216,7 +218,6 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         {
             var overview = page.GetByTestId("tab-overview");
             await overview.FocusAsync();
-            await page.Keyboard.PressAsync("ArrowRight");
             await page.Keyboard.PressAsync("ArrowRight");
             var attachments = page.GetByTestId("tab-attachments");
             await E2ESession.ExpectFocusedAsync(attachments);
@@ -298,7 +299,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         }, expected: $"Status changed to {label}");
     }
 
-    [Fact]
+    [Test]
     public async Task A_stale_save_reports_a_conflict_keeps_the_text_and_offers_reload()
     {
         await using var s = await StartAsync(Meta("Edit conflict keeps unsaved text", "E5-S5", ["R-4.2-7", "R-4.2-12"],
@@ -311,6 +312,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
             await GotoAsync(page, "/cases/new");
             await page.Locator("#intake-title").FillAsync("E2E conflict " + Guid.NewGuid().ToString("N")[..8]);
             await PressAsync(page.GetByTestId("create-case"));
+            await ConfirmSubmitAsync(page, "confirm-intake");
             await Expect(page).ToHaveURLAsync(CaseUrl());
             id = long.Parse(CaseUrl().Match(page.Url).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
             // FocusOnNavigation moves focus to the new page's h1 after its first render. Wait for it, or it can take focus
@@ -335,11 +337,12 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
                 await otherPage.Locator("#login-email").FillAsync(DemoAccounts.Supervisor);
                 await otherPage.Locator("#login-password").FillAsync(E2ESettings.DemoPassword);
                 await otherPage.Locator("#login-password").PressAsync("Enter");
-                await Expect(otherPage.Locator("h1")).ToHaveTextAsync("Dashboard");
+                await Expect(otherPage.Locator("h1")).ToHaveTextAsync(DashboardHeading);
                 await GotoAsync(otherPage, $"/cases/{id}");
                 await otherPage.GetByTestId("edit-case").ClickAsync();
                 await otherPage.Locator("#edit-title").FillAsync($"Changed by the supervisor {id}");
                 await otherPage.GetByTestId("save-case").ClickAsync();
+                await otherPage.GetByTestId("confirm-edit-submit").ClickAsync();
                 await Expect(otherPage.GetByTestId("case-title")).ToHaveTextAsync($"Changed by the supervisor {id}");
             }
             finally
@@ -350,6 +353,7 @@ public sealed partial class PrimaryWorkflowTests(PlaywrightFixture fixture) : E2
         await s.StepAsync("Saving the stale version shows the conflict alert with Reload latest; focus moves to the alert", async () =>
         {
             await PressAsync(page.GetByTestId("save-case"));
+            await ConfirmSubmitAsync(page, "confirm-edit");
             var alert = page.GetByTestId("detail-error");
             await Expect(alert).ToContainTextAsync("Someone else changed this case");
             await E2ESession.ExpectFocusedAsync(alert);

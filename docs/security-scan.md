@@ -11,6 +11,9 @@ dotnet list CaseIntake.sln package --vulnerable --include-transitive
 
 Result: **no vulnerable packages** in any of the 20 projects (12 `src`, 8 `tests`), direct or transitive.
 
+Re-run: 2026-10-21 on branch `feat/redesign-and-508-results` (base `06f899b`, main), Windows Server 2025 x64, .NET SDK 10.0.402, same command. Result: **no vulnerable packages** in all 20 projects,
+direct or transitive.
+
 ## Container images
 
 `scripts/scan-images.sh` runs Trivy (pinned in [versions.md](versions.md)) in Docker against the images

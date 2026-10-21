@@ -56,7 +56,7 @@ public sealed class CaseNotificationService(
 
         await using var db = await contextFactory.CreateDbContextAsync(ct);
         var lastRead = await LastReadAsync(db, actor.UserId!, ct);
-        var count = await Unread(Activity(db, actor), lastRead).CountAsync(ct);
+        var count = await Unread(db, Activity(db, actor), lastRead, actor.UserId!).CountAsync(ct);
         return Result<int>.Success(count);
     }
 
@@ -91,7 +91,41 @@ public sealed class CaseNotificationService(
             existing.MarkReadAt(now);
             await db.SaveChangesAsync(ct);
         }
+        // The cursor now covers every single read made before it.
+        var userId = actor.UserId!;
+        await db.CaseNotificationReads.Where(r => r.UserId == userId && r.ReadAtUtc <= now).ExecuteDeleteAsync(ct);
 
+        return Result<CaseNotificationFeed>.Success(await ReadFeedAsync(db, actor, 50, ct));
+    }
+
+    public async Task<Result<CaseNotificationFeed>> MarkReadAsync(long notificationId, CancellationToken ct)
+    {
+        var actor = await currentUser.GetAsync(ct);
+        if (Denied(actor, nameof(MarkReadAsync)) is { } denied)
+        {
+            return Result<CaseNotificationFeed>.Failure(denied);
+        }
+
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        // Only an entry of this user's own feed can be marked (not their own changes, not outside the window).
+        if (!await Activity(db, actor).AnyAsync(a => a.Id == notificationId, ct))
+        {
+            return Result<CaseNotificationFeed>.Failure(new Error(ErrorKind.NotFound, "NotificationNotFound", "That notification is no longer in your feed."));
+        }
+        var userId = actor.UserId!;
+        if (!await db.CaseNotificationReads.AnyAsync(r => r.UserId == userId && r.AuditEntryId == notificationId, ct))
+        {
+            db.CaseNotificationReads.Add(CaseNotificationRead.Create(userId, notificationId, timeProvider.GetUtcNow()));
+            try
+            {
+                await db.SaveChangesAsync(ct);
+            }
+            catch (DbUpdateException)
+            {
+                // Marked read by another session of the same user at the same moment: already done.
+                db.ChangeTracker.Clear();
+            }
+        }
         return Result<CaseNotificationFeed>.Success(await ReadFeedAsync(db, actor, 50, ct));
     }
 
@@ -100,7 +134,9 @@ public sealed class CaseNotificationService(
         var lastRead = await LastReadAsync(db, actor.UserId!, ct);
         var me = AuditAppender.ActorName(actor);
         var activity = Activity(db, actor);
-        var unread = await Unread(activity, lastRead).CountAsync(ct);
+        var userId = actor.UserId!;
+        var unread = await Unread(db, activity, lastRead, userId).CountAsync(ct);
+        var readOne = await db.CaseNotificationReads.AsNoTracking().Where(r => r.UserId == userId).Select(r => r.AuditEntryId).ToListAsync(ct);
         var rows = await (
             from entry in activity
             join c in db.Cases on entry.CaseId equals c.Id
@@ -110,7 +146,7 @@ public sealed class CaseNotificationService(
             .ToListAsync(ct);
 
         var items = rows.Select(r => new CaseNotificationDto(r.Id, r.CaseId, r.Title, r.Action, r.FromStatus, r.ToStatus,
-                r.Actor, r.OccurredAtUtc, r.Details, Unread: lastRead is null || r.OccurredAtUtc > lastRead,
+                r.Actor, r.OccurredAtUtc, r.Details, Unread: (lastRead is null || r.OccurredAtUtc > lastRead) && !readOne.Contains(r.Id),
                 AssignedToMe: string.Equals(r.AssignedTo, me, StringComparison.Ordinal),
                 AssignedToYou: IsAssignmentTo(r.Action, r.Details, me)))
             .ToList();
@@ -130,8 +166,12 @@ public sealed class CaseNotificationService(
         return db.CaseAuditEntries.AsNoTracking().Where(a => a.OccurredAtUtc >= since && a.ActorId != userId);
     }
 
-    private static IQueryable<CaseAuditEntry> Unread(IQueryable<CaseAuditEntry> activity, DateTimeOffset? lastRead) =>
-        lastRead is { } read ? activity.Where(a => a.OccurredAtUtc > read) : activity;
+    /// <summary>Activity newer than the cursor that the user has not marked as read on its own.</summary>
+    private static IQueryable<CaseAuditEntry> Unread(AppDbContext db, IQueryable<CaseAuditEntry> activity, DateTimeOffset? lastRead, string userId)
+    {
+        var newer = lastRead is { } read ? activity.Where(a => a.OccurredAtUtc > read) : activity;
+        return newer.Where(a => !db.CaseNotificationReads.Any(r => r.UserId == userId && r.AuditEntryId == a.Id));
+    }
 
     private static async Task<DateTimeOffset?> LastReadAsync(AppDbContext db, string userId, CancellationToken ct) =>
         await db.CaseNotificationCursors.AsNoTracking()

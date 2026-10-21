@@ -1,0 +1,6 @@
+# Offline (no egress) check, review finding F07 / G3: the stack's network is internal, so no container can reach the
+# internet (no DNS beyond Compose service names, no outbound connections). Used by scripts/run-offline-check.sh with the
+# already built images; published ports do not work on an internal network, so the check runs inside the tests service.
+networks:
+  default:
+    internal: true

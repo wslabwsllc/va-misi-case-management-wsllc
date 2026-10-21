@@ -43,6 +43,20 @@ public sealed class FakeCaseNotificationService(TimeProvider time) : ICaseNotifi
         return Task.FromResult(Result<CaseNotificationFeed>.Success(Feed(50)));
     }
 
+    public List<long> MarkReadCalls { get; } = [];
+
+    public Task<Result<CaseNotificationFeed>> MarkReadAsync(long notificationId, CancellationToken ct)
+    {
+        MarkReadCalls.Add(notificationId);
+        var index = Items.FindIndex(i => i.Id == notificationId);
+        if (index < 0)
+        {
+            return Task.FromResult(Result<CaseNotificationFeed>.Failure(new Error(ErrorKind.NotFound, "NotificationNotFound", "That notification is no longer in your feed.")));
+        }
+        Items[index] = Items[index] with { Unread = false };
+        return Task.FromResult(Result<CaseNotificationFeed>.Success(Feed(50)));
+    }
+
     private CaseNotificationFeed Feed(int max) =>
         new([.. Items.OrderByDescending(i => i.OccurredAtUtc).Take(max)], Items.Count(i => i.Unread), LastReadAtUtc);
 }

@@ -1,26 +1,32 @@
-@* A KPI card. With Href it is one link whose accessible name reads label, value and hint in order. *@
+@* A KPI card. With Href it is one interactive card (a single native link, nothing interactive inside) whose accessible
+   name reads label, value and hint in order; on hover and keyboard focus it lifts, tints and shows "View details ›"
+   (decorative, in space that is always reserved). Without Href it is a static card with the same layout. The value is
+   bold and coloured by Accent, and always printed as text. *@
 @if (Href is not null)
 {
     <li class="@Class">
-        <a class="kpi @VariantClass" href="@Href" data-testid="@TestId">
-            <span class="kpi__label">@Label</span>
-            <span class="kpi__value">@Value</span>
+        <a class="icard kpi @AccentClass" href="@Href" data-testid="@TestId">
+            <span class="icard__icon" aria-hidden="true"><Icon Name="@IconName" Small="true" /></span>
+            <span class="icard__label kpi__label">@Label</span>
+            <span class="icard__value kpi__value">@Value</span>
             @if (!string.IsNullOrEmpty(Hint))
             {
-                <span class="kpi__hint">@Hint</span>
+                <span class="icard__hint kpi__hint">@Hint</span>
             }
+            <span class="icard__more" aria-hidden="true">View details <Icon Name="chevron-right" Small="true" /></span>
         </a>
     </li>
 }
 else
 {
     <li class="@Class">
-        <div class="kpi @VariantClass" data-testid="@TestId">
-            <span class="kpi__label">@Label</span>
-            <span class="kpi__value">@Value</span>
+        <div class="icard icard--static kpi @AccentClass" data-testid="@TestId">
+            <span class="icard__icon" aria-hidden="true"><Icon Name="@IconName" Small="true" /></span>
+            <span class="icard__label kpi__label">@Label</span>
+            <span class="icard__value kpi__value">@Value</span>
             @if (!string.IsNullOrEmpty(Hint))
             {
-                <span class="kpi__hint">@Hint</span>
+                <span class="icard__hint kpi__hint">@Hint</span>
             }
         </div>
     </li>
@@ -32,12 +38,32 @@ else
     [Parameter] public string? Hint { get; set; }
     [Parameter] public string? Href { get; set; }
 
-    /// <summary>brand (default), danger, success, warning or neutral: the coloured top border.</summary>
+    /// <summary>blue, teal, purple, red, green, orange, pink or neutral: the value, icon and hover accent colour.</summary>
+    [Parameter] public string? Accent { get; set; }
+
+    /// <summary>Older pages: brand, danger, success, warning or neutral (mapped to an accent).</summary>
     [Parameter] public string Variant { get; set; } = "brand";
+
+    [Parameter] public string? Icon { get; set; }
 
     /// <summary>Extra classes on the list item (for example desktop-only).</summary>
     [Parameter] public string? Class { get; set; }
     [Parameter] public string? TestId { get; set; }
 
-    private string? VariantClass => Variant == "brand" ? null : $"kpi--{Variant}";
+    private string IconName => Icon ?? (Variant switch
+    {
+        "danger" => "clock-alert",
+        "success" => "circle-check",
+        "warning" => "hourglass",
+        _ => "chart-column",
+    });
+
+    private string AccentClass => "icard--" + (Accent ?? Variant switch
+    {
+        "danger" => "red",
+        "success" => "green",
+        "warning" => "orange",
+        "neutral" => "neutral",
+        _ => "blue",
+    });
 }

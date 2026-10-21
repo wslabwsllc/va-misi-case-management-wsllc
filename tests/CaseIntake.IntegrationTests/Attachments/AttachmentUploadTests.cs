@@ -12,9 +12,11 @@ using static CaseIntake.IntegrationTests.Cases.CaseTestHarness;
 namespace CaseIntake.IntegrationTests.Attachments;
 
 /// <summary>E4-S4/S5 against PostgreSQL and a real filesystem root: upload, validation, compensation, list, durability.</summary>
-public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class AttachmentUploadTests : ClassFixture<AttachmentUploadTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public async Task An_upload_stores_the_bytes_under_a_server_key_and_commits_metadata_with_one_audit_entry()
     {
         using var h = new AttachmentTestHarness(database);
@@ -50,7 +52,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Contains(h.Logs.Collector.GetSnapshot(), r => r.Id.Id == 4101);
     }
 
-    [Fact]
+    [Test]
     public async Task An_upload_does_not_change_the_case_version_so_it_never_causes_an_edit_conflict()
     {
         using var h = new AttachmentTestHarness(database);
@@ -61,7 +63,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal(c.Version, (await h.Cases.LoadAsync(c.Id)).Version);
     }
 
-    [Fact]
+    [Test]
     public async Task A_user_without_upload_permission_is_Forbidden_and_nothing_is_stored()
     {
         using var h = new AttachmentTestHarness(database);
@@ -76,7 +78,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal(Permissions.AttachmentsUpload, denial.GetStructuredStateValue("Permission"));
     }
 
-    [Fact]
+    [Test]
     public async Task An_unknown_case_is_NotFound()
     {
         using var h = new AttachmentTestHarness(database);
@@ -87,7 +89,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Empty(h.FilesUnderRoot());
     }
 
-    [Fact]
+    [Test]
     public async Task A_closed_case_accepts_no_attachments()
     {
         using var h = new AttachmentTestHarness(database);
@@ -111,8 +113,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         { "short.pdf", "application/pdf", 20, 10, AttachmentErrors.SizeMismatchCode },     // fewer bytes than declared
     };
 
-    [Theory]
-    [MemberData(nameof(InvalidUploads))]
+    [TestCaseSource(nameof(InvalidUploads))]
     public async Task Invalid_uploads_are_rejected_with_a_clear_message_and_leave_nothing_committed_or_stored(
         string fileName, string contentType, long declaredSize, int actualSize, string expectedCode)
     {
@@ -136,7 +137,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         }
     }
 
-    [Fact]
+    [Test]
     public async Task An_interrupted_stream_is_rejected_and_leaves_no_temporary_file()
     {
         using var h = new AttachmentTestHarness(database);
@@ -148,7 +149,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Empty(h.FilesUnderRoot());
     }
 
-    [Fact]
+    [Test]
     public async Task Cancellation_before_commit_propagates_and_leaves_nothing_behind()
     {
         using var h = new AttachmentTestHarness(database);
@@ -164,7 +165,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal(before, await h.CountAttachmentsAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task A_database_failure_after_the_file_is_written_commits_nothing_and_removes_the_file()
     {
         using var h = new AttachmentTestHarness(database);
@@ -182,7 +183,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Contains(h.Logs.Collector.GetSnapshot(), r => r.Id.Id == 4107);
     }
 
-    [Fact]
+    [Test]
     public async Task When_the_compensating_delete_fails_it_is_logged_and_the_reconciler_removes_the_file_later()
     {
         using var h = new AttachmentTestHarness(database);
@@ -202,7 +203,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Empty(h.FilesUnderRoot());
     }
 
-    [Fact]
+    [Test]
     public async Task A_failure_reported_after_the_commit_is_recognized_as_a_successful_upload()
     {
         using var h = new AttachmentTestHarness(database);
@@ -218,7 +219,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Contains(h.Logs.Collector.GetSnapshot(), r => r.Id.Id == 4108);
     }
 
-    [Fact]
+    [Test]
     public async Task When_the_commit_cannot_be_confirmed_the_file_is_kept_and_the_outcome_is_reported_as_unknown()
     {
         using var h = new AttachmentTestHarness(database);
@@ -234,7 +235,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Contains(h.Logs.Collector.GetSnapshot(), r => r.Id.Id == 4106);
     }
 
-    [Fact]
+    [Test]
     public async Task A_storage_failure_before_commit_commits_nothing_and_leaves_no_temporary_file()
     {
         using var h = new AttachmentTestHarness(database);
@@ -249,7 +250,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal(before, await h.CountAttachmentsAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task A_case_closed_while_the_file_is_streaming_does_not_get_the_attachment()
     {
         using var h = new AttachmentTestHarness(database);
@@ -266,7 +267,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Empty(h.FilesUnderRoot());
     }
 
-    [Fact]
+    [Test]
     public async Task When_a_retry_finds_the_case_closed_after_its_first_commit_landed_the_upload_is_reported_as_done()
     {
         using var h = new AttachmentTestHarness(database);
@@ -283,7 +284,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
             r => r.Id.Id == 4102 && (string?)r.GetStructuredStateValue("ErrorCode") == AttachmentErrors.CaseClosedCode);
     }
 
-    [Fact]
+    [Test]
     public async Task When_a_retry_finds_the_case_closed_and_the_commit_cannot_be_confirmed_the_file_is_kept()
     {
         using var h = new AttachmentTestHarness(database);
@@ -298,7 +299,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Contains(h.Logs.Collector.GetSnapshot(), r => r.Id.Id == 4106);
     }
 
-    [Fact]
+    [Test]
     public async Task A_storage_failure_while_receiving_is_logged_as_a_server_error_not_blamed_on_the_client()
     {
         var file = Path.Combine(Path.GetTempPath(), "caseintake-not-a-dir-" + Guid.NewGuid().ToString("N"));
@@ -321,7 +322,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         }
     }
 
-    [Fact]
+    [Test]
     public async Task A_source_stream_that_times_out_is_reported_as_an_incomplete_upload()
     {
         using var h = new AttachmentTestHarness(database);
@@ -341,8 +342,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         { "letter.docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "MZ executable"u8.ToArray() },
     };
 
-    [Theory]
-    [MemberData(nameof(MismatchedContent))]
+    [TestCaseSource(nameof(MismatchedContent))]
     public async Task Content_that_does_not_start_like_its_claimed_type_is_rejected(string fileName, string contentType, byte[] bytes)
     {
         using var h = new AttachmentTestHarness(database);
@@ -364,8 +364,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         { "notes.txt", "text/plain", "any text, no signature"u8.ToArray() },
     };
 
-    [Theory]
-    [MemberData(nameof(GenuineContent))]
+    [TestCaseSource(nameof(GenuineContent))]
     public async Task Content_that_starts_like_its_type_is_accepted(string fileName, string contentType, byte[] bytes)
     {
         using var h = new AttachmentTestHarness(database);
@@ -376,7 +375,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal(contentType, dto.ContentType);
     }
 
-    [Fact]
+    [Test]
     public async Task Stored_content_whose_size_no_longer_matches_is_not_served()
     {
         using var h = new AttachmentTestHarness(database);
@@ -392,7 +391,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal("1000", corrupt.GetStructuredStateValue("ExpectedBytes"));
     }
 
-    [Fact]
+    [Test]
     public async Task The_list_is_newest_first_and_needs_cases_view()
     {
         using var h = new AttachmentTestHarness(database);
@@ -411,7 +410,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Fail(await h.Service.ListAsync(long.MaxValue, CancellationToken.None), ErrorKind.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Content_is_read_back_only_through_its_own_case()
     {
         using var h = new AttachmentTestHarness(database);
@@ -434,7 +433,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Fail(await h.Service.OpenReadAsync(c.Id, dto.Id, CancellationToken.None), ErrorKind.Forbidden);
     }
 
-    [Fact]
+    [Test]
     public async Task Missing_stored_content_is_NotFound_with_a_diagnostic_event_and_no_path()
     {
         using var h = new AttachmentTestHarness(database);
@@ -448,7 +447,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.DoesNotContain(h.Root, missing.Message, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public async Task Uploads_survive_a_restart_of_the_service_and_store()
     {
         using var first = new AttachmentTestHarness(database);
@@ -466,7 +465,7 @@ public class AttachmentUploadTests(PostgresDatabaseFixture database) : IClassFix
         Assert.Equal(AttachmentTestHarness.Sha256(bytes), AttachmentTestHarness.Sha256(copy.ToArray()));
     }
 
-    [Fact]
+    [Test]
     public async Task Logs_and_audit_never_contain_the_file_name_or_an_SSN_from_it()
     {
         using var h = new AttachmentTestHarness(database);

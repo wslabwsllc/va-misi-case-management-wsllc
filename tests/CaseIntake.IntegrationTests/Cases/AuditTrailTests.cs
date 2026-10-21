@@ -9,9 +9,11 @@ using Microsoft.EntityFrameworkCore;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-S4: one entry per committed change, oldest first, and no way to change or delete entries through the application.</summary>
-public class AuditTrailTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class AuditTrailTests : ClassFixture<AuditTrailTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public async Task Every_action_type_appends_one_entry_in_order()
     {
         var harness = new CaseTestHarness(database);
@@ -33,7 +35,7 @@ public class AuditTrailTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(detail.UpdatedAtUtc, trail[^1].OccurredAtUtc);
     }
 
-    [Fact]
+    [Test]
     public async Task Rejected_operations_append_nothing()
     {
         var harness = new CaseTestHarness(database);
@@ -47,7 +49,7 @@ public class AuditTrailTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(1, await harness.CountAuditAsync(detail.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Saved_entries_cannot_be_modified_or_deleted_through_the_context()
     {
         var detail = await new CaseTestHarness(database).CreateAsync();
@@ -78,7 +80,7 @@ public class AuditTrailTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Null(stored.Details);
     }
 
-    [Fact]
+    [Test]
     public async Task AuditAppender_adds_to_the_callers_context_without_saving()
     {
         var detail = await new CaseTestHarness(database).CreateAsync();
@@ -100,7 +102,7 @@ public class AuditTrailTests(PostgresDatabaseFixture database) : IClassFixture<P
             new AuditEvent(AuditActions.Edited, CaseTestHarness.StartTime)));
     }
 
-    [Fact]
+    [Test]
     public async Task Audit_trail_requires_view_permission_and_an_existing_case()
     {
         var harness = new CaseTestHarness(database);

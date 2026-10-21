@@ -47,8 +47,7 @@ public class RolePermissionMapTests
         { Permissions.SystemHealth,                                            No,      No,     No,         No,         No,   Yes },
     };
 
-    [Theory]
-    [MemberData(nameof(Matrix))]
+    [TestCaseSource(nameof(Matrix))]
     public void Each_role_gets_exactly_its_listed_permissions(
         string permission, bool auditor, bool intakeClerk, bool caseWorker, bool supervisor, bool qualityAnalyst, bool administrator)
     {
@@ -60,7 +59,7 @@ public class RolePermissionMapTests
         }
     }
 
-    [Fact]
+    [Test]
     public void The_matrix_rows_are_exactly_the_registered_permissions_and_nothing_else_is_granted()
     {
         var rows = Matrix.Select(r => (string)r[0]).ToHashSet();
@@ -72,7 +71,7 @@ public class RolePermissionMapTests
     }
 
     /// <summary>The case permissions build up along the chain; oversight (audit.view) is outside it (ADR 0014).</summary>
-    [Fact]
+    [Test]
     public void Each_case_role_adds_to_the_case_permissions_of_the_one_before_it()
     {
         static HashSet<string> CasePermissions(string role) =>
@@ -84,7 +83,7 @@ public class RolePermissionMapTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Supervisor_has_every_case_permission_but_roles_and_quality_analyst_sits_outside_the_case_chain()
     {
         var supervisor = RolePermissionMap.PermissionsFor([AppRoles.Supervisor]);
@@ -100,7 +99,7 @@ public class RolePermissionMapTests
         });
     }
 
-    [Fact]
+    [Test]
     public void Transition_permissions_are_exactly_the_five_workflow_edges()
     {
         var edges = Enum.GetValues<CaseStatus>()
@@ -109,32 +108,31 @@ public class RolePermissionMapTests
         Assert.Equal(edges.Order(), RolePermissionMap.TransitionPermissions.Order());
     }
 
-    [Fact]
+    [Test]
     public void Roles_lists_the_six_built_in_roles()
     {
         Assert.Equal(Columns, RolePermissionMap.Roles.ToArray());
     }
 
-    [Theory]
-    [InlineData(AppRoles.Auditor, "Auditor")]
-    [InlineData(AppRoles.IntakeClerk, "Intake clerk")]
-    [InlineData(AppRoles.CaseWorker, "Case worker")]
-    [InlineData(AppRoles.Supervisor, "Supervisor")]
-    [InlineData(AppRoles.QualityAnalyst, "Quality analyst")]
-    [InlineData("Unknown", "Unknown")]
+    [TestCase(AppRoles.Auditor, "Auditor")]
+    [TestCase(AppRoles.IntakeClerk, "Intake clerk")]
+    [TestCase(AppRoles.CaseWorker, "Case worker")]
+    [TestCase(AppRoles.Supervisor, "Supervisor")]
+    [TestCase(AppRoles.QualityAnalyst, "Quality analyst")]
+    [TestCase("Unknown", "Unknown")]
     public void Display_names_are_readable(string role, string expected)
     {
         Assert.Equal(expected, AppRoles.DisplayName(role));
     }
 
-    [Fact]
+    [Test]
     public void Describe_lists_display_names_in_a_stable_order_or_no_role()
     {
         Assert.Equal("no role", AppRoles.Describe([]));
         Assert.Equal("Case worker, Supervisor", AppRoles.Describe([AppRoles.Supervisor, AppRoles.CaseWorker]));
     }
 
-    [Fact]
+    [Test]
     public void Multiple_roles_get_the_union()
     {
         var union = RolePermissionMap.PermissionsFor([AppRoles.CaseWorker, AppRoles.Supervisor, "Unknown"]);
@@ -144,17 +142,16 @@ public class RolePermissionMapTests
         Assert.Equal(RolePermissionMap.AllPermissions.Except(AdministratorOnly).Order(), RolePermissionMap.PermissionsFor([AppRoles.Supervisor, AppRoles.QualityAnalyst]).Order());
     }
 
-    [Theory]
-    [InlineData("Unknown")]
-    [InlineData("supervisor")]   // role names are case-sensitive
-    [InlineData("")]
+    [TestCase("Unknown")]
+    [TestCase("supervisor")]   // role names are case-sensitive
+    [TestCase("")]
     public void Unknown_roles_grant_nothing(string role)
     {
         Assert.Empty(RolePermissionMap.PermissionsFor([role]));
         Assert.All(RolePermissionMap.AllPermissions, p => Assert.False(RolePermissionMap.Grants([role], p)));
     }
 
-    [Fact]
+    [Test]
     public void No_roles_grant_nothing()
     {
         Assert.Empty(RolePermissionMap.PermissionsFor([]));
@@ -164,7 +161,7 @@ public class RolePermissionMapTests
 /// <summary>The permission catalog describes exactly the registered permissions, in the same order (ADR 0013).</summary>
 public class PermissionCatalogTests
 {
-    [Fact]
+    [Test]
     public void The_catalog_describes_every_registered_permission_in_order()
     {
         Assert.Equal(RolePermissionMap.AllPermissions, PermissionCatalog.All.Select(p => p.Name));
@@ -177,7 +174,7 @@ public class PermissionCatalogTests
         Assert.Equal(PermissionCatalog.All.Length, PermissionCatalog.All.Select(p => p.Label).Distinct().Count());
     }
 
-    [Fact]
+    [Test]
     public void Unknown_names_have_no_definition_and_show_as_stored()
     {
         Assert.False(PermissionCatalog.Contains("cases.delete"));
@@ -192,13 +189,13 @@ public class EffectivePermissionsTests
 {
     private static readonly string[] FromRoles = [Permissions.CasesView, Permissions.CasesEdit];
 
-    [Fact]
+    [Test]
     public void Without_overrides_the_role_permissions_are_the_result()
     {
         Assert.Equal(FromRoles.Order(), EffectivePermissions.Compute(true, FromRoles, new Dictionary<string, PermissionEffect>()).Order());
     }
 
-    [Fact]
+    [Test]
     public void Allow_adds_and_deny_removes()
     {
         var result = EffectivePermissions.Compute(true, FromRoles, new Dictionary<string, PermissionEffect>
@@ -210,7 +207,7 @@ public class EffectivePermissionsTests
         Assert.Equal([Permissions.CasesAssign, Permissions.CasesView], result.Order());
     }
 
-    [Fact]
+    [Test]
     public void Deny_wins_over_every_role_that_grants_the_permission()
     {
         var result = EffectivePermissions.Compute(true, [.. FromRoles, Permissions.CasesView],
@@ -219,7 +216,7 @@ public class EffectivePermissionsTests
         Assert.DoesNotContain(Permissions.CasesView, result);
     }
 
-    [Fact]
+    [Test]
     public void An_inactive_user_holds_nothing_even_with_allow_overrides()
     {
         var result = EffectivePermissions.Compute(false, FromRoles,

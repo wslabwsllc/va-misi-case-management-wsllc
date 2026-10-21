@@ -70,6 +70,11 @@ else
                 <dt>Story</dt><dd>@(t.Story ?? "Not recorded")</dd>
                 <dt>Requirements</dt><dd>@(t.Requirements ?? "Not recorded")</dd>
                 <dt>Priority</dt><dd>@(t.Priority ?? "Not recorded")</dd>
+                <dt>Accessibility</dt><dd data-testid="a11y-classification">@TestResultsText.Classification(t.Accessibility) <AccessibilityBadge Classification="t.Accessibility" /></dd>
+                <dt>Section 508 provision</dt><dd data-testid="a11y-provision">@(t.Section508Provision ?? "Not mapped")</dd>
+                <dt>WCAG</dt><dd data-testid="a11y-wcag">@(TestResultsText.Wcag(t.WcagVersion, t.WcagCriterion, t.WcagLevel) ?? "Not mapped")</dd>
+                <dt>Test method</dt><dd data-testid="a11y-method">@TestResultsText.Method(t.Method)</dd>
+                <dt>Workflow</dt><dd>@(t.Workflow ?? "Not recorded")</dd>
                 <dt>First seen</dt><dd>@UiText.Time(t.FirstSeenAtUtc)</dd>
             </dl>
         </section>

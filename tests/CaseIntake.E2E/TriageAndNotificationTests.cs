@@ -9,12 +9,12 @@ namespace CaseIntake.E2E;
 /// workflow stepper and tabs; notifications reaching another signed-in user live (badge and unread list); and dashboard
 /// charts that show values on hover and drill through to the case list.
 /// </summary>
-public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed partial class TriageAndNotificationTests : E2ETestBase
 {
     [GeneratedRegex(@"/cases/(\d+)$")]
     private static partial Regex CaseUrl();
 
-    [Fact]
+    [Test]
     public async Task Triage_fields_notifications_and_chart_drill_through_work_end_to_end()
     {
         await using var s = await StartAsync(Meta("Triage fields, live notifications and chart drill-through", "Issue-21/22",
@@ -37,7 +37,7 @@ public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture
                 await worker.Locator("#login-email").FillAsync(DemoAccounts.CaseWorker);
                 await worker.Locator("#login-password").FillAsync(E2ESettings.DemoPassword);
                 await worker.Locator("#login-password").PressAsync("Enter");
-                await Expect(worker.Locator("h1")).ToHaveTextAsync("Dashboard");
+                await Expect(worker.Locator("h1")).ToHaveTextAsync(DashboardHeading);
                 await GotoAsync(worker, "/notifications");
                 var markAll = worker.GetByTestId("mark-all-read");
                 if (await markAll.IsEnabledAsync())
@@ -52,10 +52,11 @@ public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture
             {
                 await GotoAsync(page, "/cases/new");
                 await page.Locator("#intake-title").FillAsync(title);
-                await page.Locator("#intake-priority").SelectOptionAsync("Urgent");
+                await page.GetByTestId("intake-priority-Urgent").CheckAsync();   // the priority radio group (segmented buttons)
                 await Expect(page.Locator("#intake-due-hint")).ToContainTextAsync("Urgent priority: 2 days");
                 await page.Locator("#intake-category").SelectOptionAsync("Claims");
                 await PressAsync(page.GetByTestId("create-case"));
+                await ConfirmSubmitAsync(page, "confirm-intake");
                 await Expect(page).ToHaveURLAsync(CaseUrl());
                 caseId = long.Parse(CaseUrl().Match(page.Url).Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture);
                 await E2ESession.ExpectFocusedAsync(page.Locator("h1"));   // after-navigation focus first, then Assign (next step)
@@ -110,18 +111,18 @@ public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture
                 await Expect(worker.GetByTestId("nav-unread")).ToHaveCountAsync(0);
                 await Expect(worker.GetByTestId("unread-summary")).ToHaveTextAsync("All caught up: no unread notifications.");
             });
-            await s.StepAsync("The Workflow tab shows the status history", async () =>
+            await s.StepAsync("The History tab shows the status history", async () =>
             {
-                await PressAsync(page.GetByTestId("tab-workflow"));
+                await PressAsync(page.GetByTestId("tab-history"));
                 await Expect(page.GetByTestId("status-history")).ToContainTextAsync("Triaged");
                 await Expect(page.GetByTestId("status-history")).ToContainTextAsync("Current status");
             });
 
-            await s.StepAsync("Dashboard: hovering a bar shows its value, Escape hides it; the bar opens the matching case list", async () =>
+            await s.StepAsync("Dashboard: hovering a slice shows its value, Escape hides it; the legend link opens the matching case list", async () =>
             {
                 await GotoAsync(page, "/");
-                var triaged = page.GetByTestId("chart-status").Locator("a.chart__point").Nth(1);
-                await triaged.Locator(".chart__hit").HoverAsync(new() { Force = true });   // the bar scales on hover, so skip the stability wait
+                var triaged = page.GetByTestId("chart-status").Locator(".chart__point--link[data-href='cases?status=Triaged']");
+                await triaged.Locator(".chart__slice").HoverAsync(new() { Force = true });   // the slice grows on hover, so skip the stability wait
                 // The tooltip is in the chart's top layer (named by data-tip), shown by js/app.js; Escape hides it (WCAG 1.4.13).
                 var tip = page.Locator($"#{await triaged.GetAttributeAsync("data-tip")}");
                 await Expect(tip).ToHaveCSSAsync("opacity", "1");
@@ -129,11 +130,17 @@ public sealed partial class TriageAndNotificationTests(PlaywrightFixture fixture
                 await Expect(page.GetByTestId("chart-status").Locator(".chart__tip.is-shown")).ToHaveCountAsync(1);
                 await page.Keyboard.PressAsync("Escape");
                 await Expect(tip).ToHaveCSSAsync("opacity", "0");
-                await PressAsync(triaged);
+                // The keyboard path is the legend link (the slices are mouse targets out of the tab order).
+                await PressAsync(page.GetByTestId("chart-status-legend").GetByRole(AriaRole.Link, new() { NameRegex = new Regex("^Triaged:") }));
                 await Expect(page).ToHaveURLAsync(new Regex("cases\\?status=Triaged$"));
                 await Expect(page.Locator("h1")).ToHaveTextAsync("Cases");
                 await Expect(page.GetByTestId("case-table").Locator("tbody [data-status]:not([data-status=Triaged])")).ToHaveCountAsync(0);
-            }, expected: "Tooltip visible, hidden by Escape; Cases page filtered to Triaged");
+                // A mouse click on the slice opens the same list (data-href, js/app.js; the slice itself is not a link).
+                await GotoAsync(page, "/");
+                await page.GetByTestId("chart-status").Locator(".chart__point--link[data-href='cases?status=Triaged'] .chart__slice").ClickAsync(new() { Force = true });
+                await Expect(page).ToHaveURLAsync(new Regex("cases\\?status=Triaged$"));
+                await Expect(page.Locator("h1")).ToHaveTextAsync("Cases");
+            }, expected: "Tooltip visible, hidden by Escape; legend link and slice click both open Cases filtered to Triaged");
             await s.StepAsync("The Overdue card opens the overdue list sorted by due date", async () =>
             {
                 await GotoAsync(page, "/");

@@ -98,8 +98,10 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
         if (query.CreatedToUtc is { } ct2) rows = rows.Where(r => r.CreatedAtUtc <= ct2);
         if (query.UpdatedFromUtc is { } uf) rows = rows.Where(r => r.UpdatedAtUtc >= uf);
         if (query.UpdatedToUtc is { } ut) rows = rows.Where(r => r.UpdatedAtUtc <= ut);
+        if (query.DueFrom is { } df) rows = rows.Where(r => r.Triage.DueOn >= df);
+        if (query.DueTo is { } dt) rows = rows.Where(r => r.Triage.DueOn is { } due && due <= dt);
         if (!string.IsNullOrWhiteSpace(query.Search))
-            rows = rows.Where(r => r.Title.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
+            rows = rows.Where(r => r.Id == CaseSearch.IdOf(query.Search) || r.Title.Contains(query.Search, StringComparison.OrdinalIgnoreCase)
                                    || (r.Description?.Contains(query.Search, StringComparison.OrdinalIgnoreCase) ?? false));
         Func<Row, object> key = query.SortBy switch
         {
@@ -116,7 +118,8 @@ public sealed class InMemoryCaseService(ICurrentUser currentUser, TimeProvider t
         var ordered = query.Direction == SortDirection.Ascending ? rows.OrderBy(key).ThenBy(r => r.Id) : rows.OrderByDescending(key).ThenBy(r => r.Id);
         var list = ordered.ToList();
         var page = list.Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
-            .Select(r => new CaseSummaryDto(r.Id, r.Title, r.Status, r.CreatedAtUtc, r.UpdatedAtUtc, r.Triage.Priority, r.Triage.Category, r.Triage.AssignedTo, r.Triage.DueOn)).ToList();
+            .Select(r => new CaseSummaryDto(r.Id, r.Title, r.Status, r.CreatedAtUtc, r.UpdatedAtUtc, r.Triage.Priority, r.Triage.Category, r.Triage.AssignedTo, r.Triage.DueOn,
+                r.Description is { Length: > CaseSummaryDto.PreviewLength } d ? d[..CaseSummaryDto.PreviewLength] : r.Description)).ToList();
         return Result<PagedResult<CaseSummaryDto>>.Success(new PagedResult<CaseSummaryDto>(page, query.Page, query.PageSize, list.Count));
     }
 

@@ -1,16 +1,17 @@
 @inherits LayoutComponentBase
 
-@* Layout of the static SSR account pages (sign-in, access denied): a split screen with the brand, the page and the
-   footer in a white column, and a decorative leaf illustration beside it (aria-hidden; hidden on phones and in forced
-   colours). No site map: nothing is permitted before sign-in. Uses the same tokens and kit as the app. *@
+@* Layout of the static SSR account pages (sign-in, password help, access denied): a split screen with the brand, the
+   page and the footer in a white column, and a deep navy panel beside it with a decorative case card and the product
+   promise (the card is aria-hidden; the panel is hidden on phones and in forced colours). No site map: nothing is
+   permitted before sign-in. Uses the same tokens and kit as the app. *@
 <div class="account-layout">
     <div class="account-layout__column">
         <a class="skip-link" href="#main">Skip to main content</a>
-        <header class="account-layout__brand app-header--account">
-            <img class="brand__mark" src="@Assets["icons/icon.svg"]" alt="" />
+        <header class="account-layout__brand">
+            <span class="sidebar-brand__mark" aria-hidden="true"><img src="@Assets["icons/icon.svg"]" alt="" width="36" height="36" /></span>
             <span class="brand__name">Case Management</span>
             <span class="brand__divider" aria-hidden="true"></span>
-            <span class="app-title">Case Intake and Triage</span>
+            <span class="app-title">Intake and triage</span>
         </header>
         <main id="main" class="account-layout__main" tabindex="-1">
             <div class="account-card">
@@ -19,5 +20,23 @@
         </main>
         <footer class="account-footer">Synthetic demonstration data only. No Government systems or data are used.</footer>
     </div>
-    <div class="account-art" aria-hidden="true" data-testid="account-art"></div>
+    <aside class="account-art" aria-label="About Case Management" data-testid="account-art">
+        <div class="account-art__rings" aria-hidden="true"></div>
+        <div class="account-art__cards" aria-hidden="true">
+            <div class="account-art__card account-art__card--1"></div>
+            <div class="account-art__card account-art__card--2"></div>
+            <div class="account-art__front">
+                <div class="account-art__front-top"><span>CASE 001</span><span class="status-pill status-resolved">Resolved</span></div>
+                <strong>Water damage – callback requested</strong>
+                <div class="account-art__progress"><span></span><span></span><span></span><span></span><span></span></div>
+                <span class="account-art__check"><Icon Name="check" /></span>
+            </div>
+        </div>
+        <h2>Every case, from first call to closed — in one place.</h2>
+        <ul class="landing-features">
+            <li><span class="feature-icon" aria-hidden="true"><Icon Name="add" /></span><span><strong>Intake</strong>Open a case, look up the veteran and attach documents.</span></li>
+            <li><span class="feature-icon" aria-hidden="true"><Icon Name="list-todo" /></span><span><strong>Triage and assignment</strong>Set priority and due dates, assign owners and move cases through the workflow.</span></li>
+            <li><span class="feature-icon" aria-hidden="true"><Icon Name="chart-column" /></span><span><strong>Oversight</strong>Dashboards, reports and an audit trail that cannot be changed.</span></li>
+        </ul>
+    </aside>
 </div>

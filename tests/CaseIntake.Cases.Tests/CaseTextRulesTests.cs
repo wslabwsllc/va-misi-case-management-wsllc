@@ -8,12 +8,11 @@ public class CaseTextRulesTests
 {
     private const string Supplementary = "\U0001D538";   // MATHEMATICAL DOUBLE-STRUCK CAPITAL A: one scalar, two UTF-16 units
 
-    [Theory]
-    [InlineData(0, false)]
-    [InlineData(4, false)]
-    [InlineData(5, true)]
-    [InlineData(200, true)]
-    [InlineData(201, false)]
+    [TestCase(0, false)]
+    [TestCase(4, false)]
+    [TestCase(5, true)]
+    [TestCase(200, true)]
+    [TestCase(201, false)]
     public void Title_length_boundaries(int length, bool valid)
     {
         var error = CaseRequestValidator.Validate(new CreateCaseRequest(new string('t', length), null, null));
@@ -21,9 +20,8 @@ public class CaseTextRulesTests
         AssertTitle(valid, error);
     }
 
-    [Theory]
-    [InlineData(4000, true)]
-    [InlineData(4001, false)]
+    [TestCase(4000, true)]
+    [TestCase(4001, false)]
     public void Description_length_boundaries(int length, bool valid)
     {
         var error = CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", new string('d', length), null));
@@ -41,15 +39,13 @@ public class CaseTextRulesTests
         }
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
+    [TestCase(null)]
+    [TestCase("")]
     public void Description_is_optional(string? description) =>
         Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", description, null)));
 
-    [Theory]
-    [InlineData("     ")]
-    [InlineData("\t\n  ")]
+    [TestCase("     ")]
+    [TestCase("\t\n  ")]
     public void Whitespace_only_title_is_required_error(string title)
     {
         var error = CaseRequestValidator.Validate(new CreateCaseRequest(title, null, null));
@@ -57,7 +53,7 @@ public class CaseTextRulesTests
         Assert.Equal([CaseTextRules.TitleRequiredMessage], error!.FieldErrors![CaseFieldNames.Title]);
     }
 
-    [Fact]
+    [Test]
     public void Title_is_trimmed_before_counting()
     {
         Assert.NotNull(CaseRequestValidator.Validate(new CreateCaseRequest("   abcd   ", null, null)));
@@ -66,7 +62,7 @@ public class CaseTextRulesTests
         Assert.Equal("abcde", CaseTextRules.NormalizeTitle("  abcde \t"));
     }
 
-    [Fact]
+    [Test]
     public void Lengths_count_unicode_scalar_values_not_utf16_units()
     {
         var five = string.Concat(Enumerable.Repeat(Supplementary, 5));          // 10 UTF-16 units
@@ -87,8 +83,7 @@ public class CaseTextRulesTests
         (char)0xDC00 + "Valid title",    // unpaired low surrogate
     };
 
-    [Theory]
-    [MemberData(nameof(MalformedText), DisableDiscoveryEnumeration = true)]
+    [TestCaseSource(nameof(MalformedText))]
     public void Malformed_utf16_and_nul_are_rejected(string text)
     {
         Assert.Null(CaseTextRules.CountScalarValues(text));
@@ -96,7 +91,7 @@ public class CaseTextRulesTests
         Assert.True(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", text, null))!.FieldErrors!.ContainsKey(CaseFieldNames.Description));
     }
 
-    [Fact]
+    [Test]
     public void Update_requests_use_the_same_rules()
     {
         Assert.NotNull(CaseRequestValidator.Validate(new UpdateCaseRequest("abcd", null, 1)));
@@ -104,7 +99,7 @@ public class CaseTextRulesTests
         Assert.Null(CaseRequestValidator.Validate(new UpdateCaseRequest("  Valid title  ", "", 1)));
     }
 
-    [Fact]
+    [Test]
     public void Multiple_field_errors_are_reported_together()
     {
         var error = CaseRequestValidator.Validate(new CreateCaseRequest("", new string('d', 4001), null));
@@ -113,14 +108,13 @@ public class CaseTextRulesTests
         Assert.Equal([CaseFieldNames.Description, CaseFieldNames.Title], error.FieldErrors!.Keys.Order(StringComparer.Ordinal));
     }
 
-    [Theory]
-    [InlineData("Pat Example", "1 Example Way", "1234", null)]
-    [InlineData("", "1 Example Way", "1234", CaseFieldNames.VeteranName)]
-    [InlineData("Pat Example", " ", "1234", CaseFieldNames.VeteranAddress)]
-    [InlineData("Pat Example", "1 Example Way", "123", CaseFieldNames.VeteranSsnLast4)]
-    [InlineData("Pat Example", "1 Example Way", "12345", CaseFieldNames.VeteranSsnLast4)]
-    [InlineData("Pat Example", "1 Example Way", "12a4", CaseFieldNames.VeteranSsnLast4)]
-    [InlineData("Pat Example", "1 Example Way", "١٢٣٤", CaseFieldNames.VeteranSsnLast4)]   // non-ASCII digits
+    [TestCase("Pat Example", "1 Example Way", "1234", null)]
+    [TestCase("", "1 Example Way", "1234", CaseFieldNames.VeteranName)]
+    [TestCase("Pat Example", " ", "1234", CaseFieldNames.VeteranAddress)]
+    [TestCase("Pat Example", "1 Example Way", "123", CaseFieldNames.VeteranSsnLast4)]
+    [TestCase("Pat Example", "1 Example Way", "12345", CaseFieldNames.VeteranSsnLast4)]
+    [TestCase("Pat Example", "1 Example Way", "12a4", CaseFieldNames.VeteranSsnLast4)]
+    [TestCase("Pat Example", "1 Example Way", "١٢٣٤", CaseFieldNames.VeteranSsnLast4)]   // non-ASCII digits
     public void Veteran_snapshot_rules(string name, string address, string last4, string? failingField)
     {
         var error = CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", null, new VeteranSnapshot(name, address, last4)));
@@ -135,7 +129,7 @@ public class CaseTextRulesTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Veteran_name_and_address_limits_are_200_and_500_scalar_values()
     {
         Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", null,
@@ -161,7 +155,7 @@ public class CaseTextRulesTests
         Assert.True(message == CaseTextRules.TitleLengthMessage || message == CaseTextRules.TitleRequiredMessage, message);
     }
 
-    [Fact]
+    [Test]
     public void Actor_truncation_never_splits_a_surrogate_pair()
     {
         var name = new string('a', CaseFieldLimits.ActorMaxLength - 1) + "\ud83d\ude00" + "tail";

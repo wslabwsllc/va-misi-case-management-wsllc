@@ -1,0 +1,15 @@
+@using CaseIntake.Domain.TestResults
+@* The accessibility classification of a test as a text badge (never colour alone). Only explicitly classified tests get
+   one: "508 Accessibility" for the Section 508 baseline, "WCAG 2.2 AA" for project checks beyond it. *@
+@if (Classification == AccessibilityClassification.Section508)
+{
+    <span class="badge badge--a11y" data-testid="badge-508"><Icon Name="accessibility" Small="true" /> 508 Accessibility</span>
+}
+else if (Classification == AccessibilityClassification.Wcag22Project)
+{
+    <span class="badge" data-testid="badge-wcag22">WCAG 2.2 AA</span>
+}
+
+@code {
+    [Parameter] public AccessibilityClassification? Classification { get; set; }
+}

@@ -58,7 +58,7 @@ public class AccessDeniedMessageTests
         [new Claim(ClaimTypes.NameIdentifier, "user-7"), new Claim(ClaimTypes.Name, "u@example.test"),
          .. roles.Select(r => new Claim(ClaimTypes.Role, r))], "Identity.Application"));
 
-    [Fact]
+    [Test]
     public async Task Interactive_denial_renders_an_accessible_message_and_logs_user_permission_and_resource()
     {
         var (html, logs) = await RenderAsync(User(), typeof(Home));
@@ -73,7 +73,7 @@ public class AccessDeniedMessageTests
         Assert.Equal("/cases/5?tab=audit", denial.GetStructuredStateValue("ResourceId"));
     }
 
-    [Fact]
+    [Test]
     public async Task The_HTTP_access_denied_page_variant_does_not_log_again()
     {
         var (html, logs) = await RenderAsync(User(), pageType: null);

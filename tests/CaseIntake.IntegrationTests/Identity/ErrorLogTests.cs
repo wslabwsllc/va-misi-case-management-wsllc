@@ -60,8 +60,10 @@ public sealed partial class ErrorLogWebFixture : PostgresDatabaseFixture, IAsync
 }
 
 /// <summary>ADR 0015: capture, safe storage, reference matching, status handling, retention and System Health.</summary>
-public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<ErrorLogWebFixture>
+public partial class ErrorLogTests : ClassFixture<ErrorLogTests, ErrorLogWebFixture>
 {
+    private static ErrorLogWebFixture fixture => Shared;
+
     private IServiceProvider Services => fixture.Factory.Services;
     private ErrorLogWriter Writer => Services.GetRequiredService<ErrorLogWriter>();
 
@@ -74,7 +76,7 @@ public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<E
     [GeneratedRegex("Reference: <code>([0-9a-f]+)</code>")]
     private static partial Regex ReferencePattern();
 
-    [Fact]
+    [Test]
     public async Task An_unhandled_request_error_is_stored_under_the_reference_the_error_page_shows_without_its_message()
     {
         using var session = fixture.NewSession();
@@ -101,7 +103,7 @@ public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<E
             || e.Message.Contains("900-45-6789") || (e.StackTrace ?? "").Contains("900-45-6789")));
     }
 
-    [Fact]
+    [Test]
     public async Task Only_errors_are_stored_redacted_with_the_operation_id_and_never_while_suppressed()
     {
         var logger = Services.GetRequiredService<ILoggerFactory>().CreateLogger("CaseIntake.Probe");
@@ -129,7 +131,7 @@ public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<E
         Assert.DoesNotContain("hidden message", critical.StackTrace ?? "");
     }
 
-    [Fact]
+    [Test]
     public async Task Same_errors_share_a_fingerprint_and_status_changes_are_audited_and_version_checked()
     {
         var logger = Services.GetRequiredService<ILoggerFactory>().CreateLogger("CaseIntake.Repeat");
@@ -158,7 +160,7 @@ public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<E
         Assert.Single((await service.ListAsync(new ErrorQuery(Search: $"repeat {tag}", Status: ErrorStatus.Resolved), CancellationToken.None)).Value!.Items);
     }
 
-    [Fact]
+    [Test]
     public async Task Reading_needs_errors_view_and_changing_status_needs_errors_manage()
     {
         var viewer = FakeCurrentUser.Authenticated("viewer", "viewer", "Custom", [Permissions.ErrorsView]);
@@ -169,7 +171,7 @@ public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<E
         Assert.Equal(ErrorKind.Forbidden, (await ErrorsAs(viewer).SetStatusAsync(1, new SetErrorStatusRequest(ErrorStatus.Resolved, null, 0), CancellationToken.None)).Error!.Kind);
     }
 
-    [Fact]
+    [Test]
     public async Task Retention_deletes_only_entries_older_than_the_configured_days()
     {
         var logger = Services.GetRequiredService<ILoggerFactory>().CreateLogger("CaseIntake.Retention");
@@ -189,7 +191,7 @@ public partial class ErrorLogTests(ErrorLogWebFixture fixture) : IClassFixture<E
         Assert.Equal([$"retention {tag} new"], left.Select(e => e.Message));
     }
 
-    [Fact]
+    [Test]
     public async Task System_health_reports_the_database_migrations_checks_and_counts_to_permitted_users_only()
     {
         SystemHealthService Health(OperationActor actor) => new(

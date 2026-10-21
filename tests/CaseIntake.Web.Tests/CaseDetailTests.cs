@@ -9,18 +9,18 @@ using Microsoft.AspNetCore.Components.Forms;
 namespace CaseIntake.Web.Tests;
 
 /// <summary>E5-S5 detail and edit (view/edit toggling, focus, conflict), E5-S6 status controls per role, E5-S7 attachments.</summary>
-[Trait("Category", "Story:E5-S5")]
-[Trait("Category", "Story:E5-S6")]
-[Trait("Category", "Story:E5-S7")]
-[Trait("Category", "Req:R-4.2-6")]
-[Trait("Category", "Req:R-4.2-7")]
-[Trait("Category", "Req:R-4.2-8")]
-[Trait("Category", "Req:R-4.2-11")]
+[Category("Story:E5-S5")]
+[Category("Story:E5-S6")]
+[Category("Story:E5-S7")]
+[Category("Req:R-4.2-6")]
+[Category("Req:R-4.2-7")]
+[Category("Req:R-4.2-8")]
+[Category("Req:R-4.2-11")]
 public class CaseDetailTests : WebTestContext
 {
     private IRenderedComponent<CaseDetail> RenderCase(long id) => Render<CaseDetail>(p => p.Add(c => c.Id, id));
 
-    [Fact]
+    [Test]
     public async Task Shows_id_title_description_status_audit_fields_and_the_audit_trail()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -33,7 +33,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Contains("(read-only)", cut.Find("[data-testid=details-section]").TextContent);
         Assert.Equal("Line one\nLine two", cut.Find("[data-testid=case-description]").TextContent);
         // Times are Eastern: the label carries the zone, the value does not.
-        Assert.Contains("Modified", cut.Find("[data-testid=record-header]").TextContent);
+        Assert.Contains("Last modified (ET)", cut.Find("[data-testid=record-header]").TextContent);
         Assert.DoesNotContain("UTC", cut.Find("[data-testid=record-header]").TextContent);
         Assert.Contains("Created", cut.Find("[data-testid=audit-list]").TextContent);
         Assert.Empty(cut.Find("[data-testid=audit-error]").TextContent.Trim());
@@ -41,7 +41,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal("Status: New", cut.Find("[data-testid=status-heading]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Edit_moves_focus_to_title_and_Cancel_restores_values_and_focus()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -60,7 +60,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Empty(CaseService.Updates);
     }
 
-    [Fact]
+    [Test]
     public async Task Save_persists_announces_changes_saved_and_sends_the_version()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -69,14 +69,14 @@ public class CaseDetailTests : WebTestContext
         cut.WaitForElement("[data-testid=edit-case]").Click();
         cut.Find("#edit-title").Input("Updated title");
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         cut.WaitForAssertion(() => Assert.Equal("Updated title", cut.Find("[data-testid=case-title]").TextContent));
         Assert.Equal("Changes saved", Announcer.Message);
         Assert.Equal(created.Version, CaseService.Updates.Single().Version);
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_edit_shows_the_summary_and_does_not_save()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -91,7 +91,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Empty(CaseService.Updates);
     }
 
-    [Fact]
+    [Test]
     public async Task Conflict_explains_offers_reload_and_keeps_the_unsaved_text()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -101,7 +101,7 @@ public class CaseDetailTests : WebTestContext
         cut.Find("#edit-title").Input("My unsaved title");
         CaseService.NextUpdateError = new Error(ErrorKind.Conflict, "VersionConflict", "This case was changed by someone else.");
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         Assert.Contains("Someone else changed this case", cut.Find("[data-testid=detail-error]").TextContent);
         Assert.Equal("My unsaved title", cut.Find("#edit-title").GetAttribute("value"));
@@ -114,7 +114,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal("My unsaved title", cut.Find("#edit-title").GetAttribute("value"));
     }
 
-    [Fact]
+    [Test]
     public async Task Saving_after_someone_else_closed_the_case_leaves_edit_mode_and_shows_read_only()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -124,7 +124,7 @@ public class CaseDetailTests : WebTestContext
         cut.Find("#edit-title").Input("Edit that can no longer be saved");
         await CloseAsAnotherUserAsync(created);
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=edit-form]")));
         Assert.Contains("Closed cases cannot be edited", cut.Find("[data-testid=detail-error]").TextContent);
@@ -133,7 +133,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal("Closed while editing", cut.Find("[data-testid=case-title]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task No_edit_button_without_cases_edit_or_on_a_closed_case()
     {
         SignInAs(AppRoles.QualityAnalyst);
@@ -150,7 +150,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=edit-case]"));
     }
 
-    [Fact]
+    [Test]
     public void A_missing_case_shows_the_not_found_page()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -164,7 +164,7 @@ public class CaseDetailTests : WebTestContext
 
     // ---- E5-S6 status controls per role ----
 
-    [Fact]
+    [Test]
     public async Task Supervisor_sees_Move_to_Triaged_on_a_new_case()
     {
         SignInAs(AppRoles.Supervisor);
@@ -176,7 +176,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal("Change status", cut.Find("#change-status-label").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task CaseWorker_sees_no_status_change_on_a_new_case()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -187,7 +187,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=transition-Triaged]"));
     }
 
-    [Fact]
+    [Test]
     public async Task Resolved_case_offers_close_and_reopen_to_the_supervisor_but_nothing_to_the_case_worker()
     {
         SignInAs(AppRoles.Supervisor);
@@ -201,7 +201,7 @@ public class CaseDetailTests : WebTestContext
         worker.WaitForAssertion(() => Assert.Equal("No status changes available", worker.Find("[data-testid=no-transitions]").TextContent));
     }
 
-    [Fact]
+    [Test]
     public async Task Confirmed_transition_updates_status_refreshes_audit_focuses_the_heading_and_announces()
     {
         SignInAs(AppRoles.Supervisor);
@@ -220,7 +220,7 @@ public class CaseDetailTests : WebTestContext
         JSInterop.VerifyFocusAsyncInvoke();
     }
 
-    [Fact]
+    [Test]
     public async Task Cancelling_the_dialog_returns_focus_to_the_trigger_and_changes_nothing()
     {
         SignInAs(AppRoles.Supervisor);
@@ -235,10 +235,9 @@ public class CaseDetailTests : WebTestContext
         Assert.Null(Announcer.Message);
     }
 
-    [Theory]
-    [InlineData(ErrorKind.Conflict, "changed by someone else")]
-    [InlineData(ErrorKind.Forbidden, "not allowed to make this status change")]
-    [InlineData(ErrorKind.InvalidTransition, "cannot move to that status")]
+    [TestCase(ErrorKind.Conflict, "changed by someone else")]
+    [TestCase(ErrorKind.Forbidden, "not allowed to make this status change")]
+    [TestCase(ErrorKind.InvalidTransition, "cannot move to that status")]
     public async Task Rejected_transition_shows_an_alert_and_refreshes_the_status(ErrorKind kind, string text)
     {
         SignInAs(AppRoles.Supervisor);
@@ -255,7 +254,7 @@ public class CaseDetailTests : WebTestContext
 
     // ---- E5-S7 attachments ----
 
-    [Fact]
+    [Test]
     public async Task Attachments_panel_states_allowed_types_and_size_and_lists_uploads_with_download_links()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -279,7 +278,7 @@ public class CaseDetailTests : WebTestContext
         Assert.Equal("notes.txt", link.GetAttribute("download"));
     }
 
-    [Fact]
+    [Test]
     public async Task Upload_without_a_file_or_over_the_limit_explains_why_and_returns_focus_to_the_input()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -291,7 +290,7 @@ public class CaseDetailTests : WebTestContext
         JSInterop.VerifyFocusAsyncInvoke();
     }
 
-    [Fact]
+    [Test]
     public async Task Upload_controls_are_hidden_without_upload_permission_but_the_list_remains()
     {
         SignInAs(AppRoles.QualityAnalyst);

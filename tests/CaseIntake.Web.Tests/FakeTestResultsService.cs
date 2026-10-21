@@ -37,7 +37,8 @@ public sealed class FakeTestResultsService : ITestResultsService
 
     public Task<Result<PagedList<TestExecutionRowDto>>> ListExecutionsAsync(TestExecutionQuery query, CancellationToken ct)
     {
-        var rows = Executions.Where(e => query.Outcomes is null || query.Outcomes.Contains(e.Outcome)).ToList();
+        var rows = Matching(query);
+        LastExecutionQuery = query;
         return Task.FromResult(Respond(new PagedList<TestExecutionRowDto>(rows, query.Page, query.PageSize, rows.Count)));
     }
 
@@ -46,8 +47,12 @@ public sealed class FakeTestResultsService : ITestResultsService
             ? Respond(d)
             : Result<TestExecutionDetailDto>.Failure(new Error(ErrorKind.NotFound, "TestExecutionNotFound", "The test result was not found.")));
 
-    public Task<Result<PagedList<TestCaseDto>>> ListTestCasesAsync(TestCaseQuery query, CancellationToken ct) =>
-        Task.FromResult(Respond(new PagedList<TestCaseDto>([], 1, 50, 0)));
+    public Task<Result<PagedList<TestCaseDto>>> ListTestCasesAsync(TestCaseQuery query, CancellationToken ct)
+    {
+        LastCaseQuery = query;
+        var items = MatchingCases(query);
+        return Task.FromResult(Respond(new PagedList<TestCaseDto>(items, query.Page, query.PageSize, items.Count)));
+    }
 
     public Task<Result<TestCaseHistoryDto>> GetTestCaseHistoryAsync(long testCaseId, int maxRuns, CancellationToken ct) =>
         Task.FromResult(Result<TestCaseHistoryDto>.Failure(new Error(ErrorKind.NotFound, "TestCaseNotFound", "Not found.")));
@@ -66,6 +71,38 @@ public sealed class FakeTestResultsService : ITestResultsService
 
     public Task<Result<TestReportFile>> ExportRunAsync(long runId, string format, CancellationToken ct) => throw new NotSupportedException();
 
+
+    public List<TestCaseDto> Cases { get; } = [];
+    public TestExecutionQuery? LastExecutionQuery { get; private set; }
+    public TestCaseQuery? LastCaseQuery { get; private set; }
+
+    /// <summary>The same Section 508 rule as the real service: only explicitly classified tests match "Only".</summary>
+    private static bool Matches(AccessibilityClassification? a, Section508Filter filter) => filter switch
+    {
+        Section508Filter.Section508Only => a == AccessibilityClassification.Section508,
+        Section508Filter.ExcludeSection508 => a != AccessibilityClassification.Section508,
+        _ => true,
+    };
+
+    private List<TestExecutionRowDto> Matching(TestExecutionQuery query) =>
+        [.. Executions.Where(e => (query.Outcomes is null || query.Outcomes.Contains(e.Outcome)) && Matches(e.Accessibility, query.Section508))];
+
+    private List<TestCaseDto> MatchingCases(TestCaseQuery query) =>
+        [.. Cases.Where(c => (query.LastOutcome is null || (c.LastOutcome ?? TestOutcome.NotExecuted) == query.LastOutcome) && Matches(c.Accessibility, query.Section508))];
+
+    private static TestOutcomeCounts Count(IReadOnlyCollection<TestOutcome> outcomes) => new(outcomes.Count,
+        outcomes.Count(o => o == TestOutcome.Passed), outcomes.Count(o => o == TestOutcome.Failed), outcomes.Count(o => o == TestOutcome.Skipped),
+        outcomes.Count(o => o == TestOutcome.Blocked), outcomes.Count(o => o == TestOutcome.NotExecuted), outcomes.Count(o => o == TestOutcome.NotApplicable));
+
+    public Task<Result<TestOutcomeCounts>> SummarizeExecutionsAsync(TestExecutionQuery query, CancellationToken ct) =>
+        Task.FromResult(Respond(Count([.. Matching(query).Select(e => e.Outcome)])));
+
+    public Task<Result<TestOutcomeCounts>> SummarizeTestCasesAsync(TestCaseQuery query, CancellationToken ct) =>
+        Task.FromResult(Respond(Count([.. MatchingCases(query).Select(c => c.LastOutcome ?? TestOutcome.NotExecuted)])));
+
+    public Task<Result<TestReportFile>> ExportExecutionsAsync(TestExecutionQuery query, CancellationToken ct) => throw new NotSupportedException();
+
+    public Task<Result<TestReportFile>> ExportTestCasesAsync(TestCaseQuery query, CancellationToken ct) => throw new NotSupportedException();
     public Task<Result<ImportSummaryDto>> ImportAsync(CancellationToken ct)
     {
         ImportCalls++;

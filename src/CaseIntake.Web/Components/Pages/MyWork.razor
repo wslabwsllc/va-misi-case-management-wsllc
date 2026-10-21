@@ -11,10 +11,13 @@
 @inject ICaseWorkflow Workflow
 @inject ICurrentUser CurrentUser
 @inject NavigationManager Navigation
+@inject TimeProvider Time
 
-@* My tasks: cases waiting for a status change the signed-in user's role may make, longest waiting first ("My pending
-   tasks" on the dashboard; owned cases are "Assigned to me"). Defined by the user's transition permissions (ADR 0011).
-   Server-side paging. *@
+@* My tasks (redesign): cases waiting for a status change the signed-in user's role may make, longest waiting first
+   ("My pending tasks" on the dashboard; owned cases are "Assigned to me"). Defined by the user's transition permissions
+   (ADR 0011). Status tabs are links with counts (each a real URL, the current one marked aria-current). Each row shows
+   the description, how long the case has waited since its last change, and its next step, which opens the case where
+   the change is confirmed. Server-side paging. *@
 <PageShell Title="My tasks" Breadcrumbs="@([new Crumb("Dashboard", "")])"
            Subtitle="Cases waiting for a status change your role can make, longest waiting first." />
 
@@ -28,59 +31,96 @@
 else if (_actionable.Count == 0)
 {
     <div class="card">
-        <EmptyState Title="No tasks for your role" Message="Your role does not change case statuses, so no case waits on you." IconName="tasks" TestId="mywork-none" />
+        <EmptyState Title="No tasks for your role" Message="Your role does not change case statuses, so no case waits on you." IconName="list-todo" TestId="mywork-none">
+            <a class="btn" href="cases">Browse cases</a>
+        </EmptyState>
     </div>
 }
 else if (_page is { } page)
 {
+    <nav aria-label="Filter tasks by status" data-testid="mywork-tabs">
+        <div class="pill-tabs">
+            <a href="@TabHref(null)" aria-current="@(_status is null ? "page" : null)" data-testid="mywork-tab-all">
+                All <span class="badge">@_counts.Values.Sum()</span>
+            </a>
+            @foreach (var status in Ordered(_actionable))
+            {
+                var s = status;
+                <a href="@TabHref(s)" aria-current="@(_status == s ? "page" : null)" data-testid="@($"mywork-tab-{s}")">
+                    @UiText.Status(s) <span class="badge">@_counts.GetValueOrDefault(s)</span>
+                </a>
+            }
+        </div>
+    </nav>
+
     <div class="card card--flush">
         @if (page.TotalCount == 0)
         {
-            <EmptyState Title="You're all caught up" Message="No case is waiting for an action you can take." IconName="success" TestId="mywork-empty" />
+            <EmptyState Title="You're all caught up" Message="No case is waiting for an action you can take." IconName="list-todo" Positive="true" TestId="mywork-empty">
+                <a class="btn" href="cases">Browse cases</a>
+            </EmptyState>
         }
         else
         {
-            <ul class="record-list" aria-label="Cases waiting for you" data-testid="mywork-list">
+            <div class="task-list__head" aria-hidden="true"><span>Case and next step</span><span>Waiting</span></div>
+            <ul class="task-list" aria-label="Cases waiting for you" data-testid="mywork-list">
                 @foreach (var c in page.Items)
                 {
-                    <li class="record-card">
-                        <div class="record-card__top">
-                            <div class="record-card__title"><a href="@($"cases/{c.Id}")">@c.Title</a></div>
-                            <StatusPill Status="c.Status" Large="true" />
+                    var waited = Now - c.UpdatedAtUtc;
+                    var next = NextStep(c.Status);
+                    <li class="task-row" data-testid="mywork-row">
+                        <span class="initials @UiText.StatusCss(c.Status)" aria-hidden="true">@Abbreviation(c.Status)</span>
+                        <div class="task-row__main">
+                            <a class="task-row__title" href="@($"cases/{c.Id}")">@c.Title</a>
+                            <div class="task-row__meta">
+                                <span class="case-id">#@c.Id</span>
+                                <StatusPill Status="c.Status" />
+                                <span>Since @UiText.Time(c.UpdatedAtUtc)</span>
+                            </div>
+                            <span class="row-desc @(string.IsNullOrWhiteSpace(c.DescriptionPreview) ? "row-desc--empty" : null)">@(string.IsNullOrWhiteSpace(c.DescriptionPreview) ? "No description provided." : c.DescriptionPreview)</span>
                         </div>
-                        <div class="record-card__meta">
-                            <span>Case @c.Id</span>
-                            <span>Next step: @NextStep(c.Status)</span>
-                            <span>Waiting since @UiText.Time(c.UpdatedAtUtc)</span>
-                        </div>
+                        <span class="task-row__wait" data-testid="mywork-waiting">
+                            <span class="visually-hidden">Waiting </span>@Waiting(waited)
+                            <span class="meter" style="width: @MeterWidth(waited)" aria-hidden="true"></span>
+                        </span>
+                        @if (next is { } target)
+                        {
+                            <a class="btn row-raise" href="@($"cases/{c.Id}")" data-testid="mywork-next">
+                                @UiText.TransitionLabel(c.Status, target)<span class="visually-hidden">: case @c.Id</span> <Icon Name="arrow-right" Small="true" />
+                            </a>
+                        }
                     </li>
                 }
             </ul>
-            <nav class="pager" aria-label="Pagination">
-                <a class="btn" href="@PageHref(_pageNumber - 1)" aria-disabled="@(_pageNumber <= 1 ? "true" : null)"
-                   aria-label="Go to previous page" @onclick:preventDefault="@(_pageNumber <= 1)">Previous</a>
-                <span class="pager__info">@UiText.ShowingRange(_pageNumber, PageSize, page.TotalCount, "cases") · Page @_pageNumber of @PageCount</span>
-                <a class="btn" href="@PageHref(_pageNumber + 1)" aria-disabled="@(_pageNumber >= PageCount ? "true" : null)"
-                   aria-label="Go to next page" @onclick:preventDefault="@(_pageNumber >= PageCount)">Next</a>
-            </nav>
+            <PagerControl Page="_pageNumber" PageSize="PageSize" TotalCount="page.TotalCount" Noun="cases" Label="Task pages"
+                          OnPageChanged="GoToPage" Announce="false" TestIdPrefix="mywork-pager" IdPrefix="mywork-pager" />
         }
     </div>
 }
 
 @code {
     private const int PageSize = 25;
+    private static readonly CaseStatus[] StatusOrder = [CaseStatus.New, CaseStatus.Triaged, CaseStatus.InProgress, CaseStatus.Resolved, CaseStatus.Closed];
     private readonly CancellationTokenSource _cts = new();
     private IReadOnlySet<CaseStatus> _actionable = new HashSet<CaseStatus>();
+    private Dictionary<CaseStatus, int> _counts = [];
     private OperationActor? _actor;
     private PagedResult<CaseSummaryDto>? _page;
+    private CaseStatus? _status;
     private bool _loading = true;
     private string? _error;
     private string? _announcement;
     private int _pageNumber = 1;
+    private TimeSpan _longest;
 
     [SupplyParameterFromQuery(Name = "page")] private int? QueryPage { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] private string? QueryStatus { get; set; }
+
+    private DateTimeOffset Now => Time.GetUtcNow();
 
     private int PageCount => _page is { TotalCount: > 0 } p ? (int)Math.Ceiling(p.TotalCount / (double)PageSize) : 1;
+
+    private static IEnumerable<CaseStatus> Ordered(IEnumerable<CaseStatus> statuses) => StatusOrder.Where(statuses.Contains);
 
     protected override async Task OnParametersSetAsync()
     {
@@ -90,21 +130,56 @@ else if (_page is { } page)
         _error = null;
         _actor = await CurrentUser.GetAsync(_cts.Token);
         _actionable = await Dashboard.ActionableStatusesAsync(_cts.Token);
+        _status = Enum.TryParse<CaseStatus>(QueryStatus, out var s) && _actionable.Contains(s) ? s : null;
         if (_actionable.Count > 0)
         {
-            var result = await Cases.ListAsync(new CaseListQuery(_pageNumber, PageSize, [.. _actionable], null, CaseSortField.UpdatedAt, SortDirection.Ascending), _cts.Token);
+            // One count per tab (page size 1: only the total is read).
+            _counts = [];
+            foreach (var status in _actionable)
+            {
+                var count = await Cases.ListAsync(new CaseListQuery(1, 1, [status]), _cts.Token);
+                _counts[status] = count.IsSuccess ? count.Value!.TotalCount : 0;
+            }
+            IReadOnlyCollection<CaseStatus> wanted = _status is { } only ? [only] : [.. _actionable];
+            var result = await Cases.ListAsync(new CaseListQuery(_pageNumber, PageSize, wanted, null, CaseSortField.UpdatedAt, SortDirection.Ascending), _cts.Token);
             _page = result.IsSuccess ? result.Value : null;
             _error = result.IsSuccess ? null : result.Error!.Message;
-            _announcement = _page is null ? null : $"{_page.TotalCount} cases are waiting for you. Page {_pageNumber} of {PageCount}.";
+            _longest = _page is { Items.Count: > 0 } p ? p.Items.Max(c => Now - c.UpdatedAtUtc) : TimeSpan.Zero;
+            _announcement = _page is null ? null : $"{_page.TotalCount} {(_page.TotalCount == 1 ? "case is" : "cases are")} waiting for you. Page {_pageNumber} of {PageCount}.";
         }
         _loading = false;
     }
 
-    private string NextStep(CaseStatus status) => string.Join(" or ", Workflow.NextStatuses(status)
-        .Where(to => _actor?.HasPermission(Permissions.Transition(status, to)) == true)
-        .Select(to => UiText.TransitionLabel(status, to)));
+    /// <summary>The first permitted forward move (else any permitted move), the action the row offers.</summary>
+    private CaseStatus? NextStep(CaseStatus status)
+    {
+        var allowed = Workflow.NextStatuses(status).Where(to => _actor?.HasPermission(Permissions.Transition(status, to)) == true).ToList();
+        return allowed.Where(to => to > status).Select(to => (CaseStatus?)to).FirstOrDefault() ?? allowed.Select(to => (CaseStatus?)to).FirstOrDefault();
+    }
 
-    private string PageHref(int page) => Navigation.GetUriWithQueryParameter("page", page <= 1 ? null : page);
+    private static string Abbreviation(CaseStatus status) => status switch
+    {
+        CaseStatus.InProgress => "IP",
+        _ => UiText.Status(status)[..1],
+    };
+
+    private static string Waiting(TimeSpan waited) => waited.TotalHours switch
+    {
+        < 1 => "Under an hour",
+        < 24 => $"{(int)waited.TotalHours} {((int)waited.TotalHours == 1 ? "hour" : "hours")}",
+        _ => $"{(int)waited.TotalDays} {((int)waited.TotalDays == 1 ? "day" : "days")}",
+    };
+
+    private string MeterWidth(TimeSpan waited) =>
+        _longest <= TimeSpan.Zero ? "0" : $"{Math.Max(8, Math.Round(80 * waited / _longest)).ToString(System.Globalization.CultureInfo.InvariantCulture)}px";
+
+    private string TabHref(CaseStatus? status) => Navigation.GetUriWithQueryParameters(new Dictionary<string, object?>
+    {
+        ["status"] = status?.ToString(),
+        ["page"] = null,
+    });
+
+    private void GoToPage(int page) => Navigation.NavigateTo(Navigation.GetUriWithQueryParameter("page", page <= 1 ? null : page));
 
     public void Dispose()
     {

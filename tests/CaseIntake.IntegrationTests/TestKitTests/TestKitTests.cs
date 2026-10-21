@@ -17,7 +17,7 @@ namespace CaseIntake.IntegrationTests.TestKitTests;
 
 public class TestKitTests
 {
-    [Fact]
+    [Test]
     public async Task Each_fixture_gets_its_own_database_that_is_dropped_on_disposal()
     {
         var a = new PostgresDatabaseFixture();
@@ -35,7 +35,7 @@ public class TestKitTests
         Assert.Equal(0L, await cmd.ExecuteScalarAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task Reset_removes_data_but_keeps_the_schema()
     {
         var fixture = new PostgresDatabaseFixture();
@@ -58,7 +58,7 @@ public class TestKitTests
         finally { await fixture.DisposeAsync(); }
     }
 
-    [Fact]
+    [Test]
     public async Task TestAuthHandler_authenticates_by_header_and_is_anonymous_without_one()
     {
         var builder = WebApplication.CreateBuilder();
@@ -79,7 +79,7 @@ public class TestKitTests
         Assert.Equal("True|sup-1|True", await supervisor.GetStringAsync("/who"));
     }
 
-    [Fact]
+    [Test]
     public async Task Fake_modules_follow_the_workflow_edges_and_permissions()
     {
         var time = new FakeTimeProvider(new DateTimeOffset(2026, 10, 16, 0, 0, 0, TimeSpan.Zero));
@@ -101,7 +101,7 @@ public class TestKitTests
         Assert.False(user.Actor.HasPermission(Permissions.CasesView));
     }
 
-    [Fact]
+    [Test]
     public async Task Fake_lookup_returns_scripted_answers_and_NotFound_otherwise()
     {
         var fake = new FakeVeteranLookupClient().Returns("900223333", new VeteranLookupResult(VeteranLookupOutcome.Found, "Pat Example", "1 Way"));

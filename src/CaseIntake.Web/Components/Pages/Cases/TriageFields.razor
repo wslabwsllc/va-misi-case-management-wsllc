@@ -2,25 +2,35 @@
 @using CaseIntake.Domain.Cases
 @using CaseIntake.Web.Services
 
-@* Priority, category, owner and due date inputs (issue #22), shared by intake and edit. Each input has a programmatic
-   label, an optional hint and its server error linked with aria-describedby / aria-invalid, like the text inputs of
-   the kit. The owner list holds the users who can work cases; without CanAssign it is shown read-only. *@
-<div class="form-grid" data-testid="@($"{IdPrefix}-triage")">
-    <div class="field">
-        <label class="field__label" for="@($"{IdPrefix}-priority")">Priority</label>
-        <select id="@($"{IdPrefix}-priority")" @bind="Model.Priority" @bind:after="OnChangedAsync"
-                aria-invalid="@Invalid(nameof(ITriageForm.Priority))" aria-describedby="@Described(nameof(ITriageForm.Priority), hint: false)">
-            @foreach (var priority in Enum.GetValues<CasePriority>().OrderDescending())
-            {
-                <option value="@priority">@UiText.Priority(priority)</option>
-            }
-        </select>
-        @Error(nameof(ITriageForm.Priority))
+@* Priority, category, owner and due date inputs (issue #22, redesign), shared by intake and edit. Priority is a radio
+   group shown as segmented buttons (native radios: arrow keys move the choice; the colour swatch repeats the label).
+   Each input has a programmatic label, an optional hint and its server error linked with aria-describedby /
+   aria-invalid, like the text inputs of the kit. The owner list holds the users who can work cases; without CanAssign
+   it is shown read-only. *@
+<fieldset class="field segmented-field" aria-describedby="@Described(nameof(ITriageForm.Priority), hint: true)" data-testid="@($"{IdPrefix}-priority-group")">
+    <legend class="field__label">Priority</legend>
+    <span class="field__hint" id="@($"{IdPrefix}-priority-hint")">@UiText.Priority(Model.Priority) cases are due in @CaseTriageRules.TargetDays(Model.Priority) days by default.</span>
+    <div class="segmented">
+        @foreach (var priority in Enum.GetValues<CasePriority>().OrderDescending())
+        {
+            var p = priority;
+            var first = p == Enum.GetValues<CasePriority>().Max();
+            <label class="segmented__option">
+                <input type="radio" name="@($"{IdPrefix}-priority")" id="@(first ? $"{IdPrefix}-priority" : $"{IdPrefix}-priority-{p}")" value="@p"
+                       checked="@(Model.Priority == p)" @onchange="() => SetPriorityAsync(p)"
+                       aria-invalid="@Invalid(nameof(ITriageForm.Priority))" data-testid="@($"{IdPrefix}-priority-{p}")" />
+                <span><span class="swatch" style="background: var(--priority-@(p.ToString().ToLowerInvariant())-c)" aria-hidden="true"></span>@UiText.Priority(p)</span>
+            </label>
+        }
     </div>
+    @Error(nameof(ITriageForm.Priority))
+</fieldset>
+<div class="form-grid form-grid--3" data-testid="@($"{IdPrefix}-triage")">
     <div class="field">
         <label class="field__label" for="@($"{IdPrefix}-category")">Category</label>
+        <span class="field__hint" id="@($"{IdPrefix}-category-hint")">Helps route the case.</span>
         <select id="@($"{IdPrefix}-category")" @bind="Model.Category" @bind:after="OnChangedAsync"
-                aria-invalid="@Invalid(nameof(ITriageForm.Category))" aria-describedby="@Described(nameof(ITriageForm.Category), hint: false)">
+                aria-invalid="@Invalid(nameof(ITriageForm.Category))" aria-describedby="@Described(nameof(ITriageForm.Category), hint: true)">
             @foreach (var category in Enum.GetValues<CaseCategory>().OrderBy(UiText.Category))
             {
                 <option value="@category">@UiText.Category(category)</option>
@@ -32,6 +42,7 @@
         <label class="field__label" for="@($"{IdPrefix}-owner")">Owner</label>
         @if (CanAssign)
         {
+            <span class="field__hint" id="@($"{IdPrefix}-owner-hint")">People who can work cases.</span>
             <select id="@($"{IdPrefix}-owner")" @bind="Model.AssignedTo" @bind:after="OnChangedAsync"
                     aria-invalid="@Invalid(nameof(ITriageForm.AssignedTo))" aria-describedby="@Described(nameof(ITriageForm.AssignedTo), hint: true)">
                 <option value="">Unassigned</option>
@@ -44,25 +55,23 @@
                     <option value="@current">@current</option>
                 }
             </select>
-            <span class="field__hint" id="@($"{IdPrefix}-owner-hint")">People who can work cases.</span>
         }
         else
         {
+            <span class="field__hint" id="@($"{IdPrefix}-owner-hint")">@ReadOnlyOwnerHint</span>
             <input id="@($"{IdPrefix}-owner")" type="text" readonly value="@UiText.Owner(Model.AssignedTo)"
                    aria-describedby="@($"{IdPrefix}-owner-hint")" />
-            <span class="field__hint" id="@($"{IdPrefix}-owner-hint")">@ReadOnlyOwnerHint</span>
         }
         @Error(nameof(ITriageForm.AssignedTo))
     </div>
     <div class="field">
         <label class="field__label" for="@($"{IdPrefix}-due")">Due date (ET) <span class="field__required">(optional)</span></label>
-        <input id="@($"{IdPrefix}-due")" type="date" @bind="Model.DueOn" @bind:format="yyyy-MM-dd" @bind:after="OnChangedAsync"
-               min="2000-01-01" max="2100-12-31"
-               aria-invalid="@Invalid(nameof(ITriageForm.DueOn))" aria-describedby="@Described(nameof(ITriageForm.DueOn), hint: DueHint is not null)" />
         @if (DueHint is not null)
         {
             <span class="field__hint" id="@($"{IdPrefix}-due-hint")">@DueHint</span>
         }
+        <DateInput Id="@($"{IdPrefix}-due")" Value="Model.DueOn" ValueChanged="SetDueAsync"
+                   Invalid="@(Invalid(nameof(ITriageForm.DueOn)) is not null)" DescribedBy="@Described(nameof(ITriageForm.DueOn), hint: DueHint is not null)" />
         @Error(nameof(ITriageForm.DueOn))
     </div>
 </div>
@@ -83,6 +92,18 @@
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private Task OnChangedAsync() => OnChanged.InvokeAsync();
+
+    private Task SetPriorityAsync(CasePriority priority)
+    {
+        Model.Priority = priority;
+        return OnChangedAsync();
+    }
+
+    private Task SetDueAsync(DateOnly? due)
+    {
+        Model.DueOn = due;
+        return OnChangedAsync();
+    }
 
     private IReadOnlyList<string> Messages(string field) =>
         EditContext is null ? [] : EditContext.GetValidationMessages(new FieldIdentifier(EditContext.Model, field)).ToList();

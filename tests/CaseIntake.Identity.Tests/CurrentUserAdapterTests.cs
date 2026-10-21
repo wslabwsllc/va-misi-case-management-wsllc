@@ -29,7 +29,7 @@ public class CurrentUserAdapterTests
     private static HttpCurrentUser Http(ClaimsPrincipal user) =>
         new(new HttpContextAccessor { HttpContext = new DefaultHttpContext { User = user } }, InMemoryPermissionStore.DefaultResolver);
 
-    [Fact]
+    [Test]
     public async Task Circuit_adapter_reflects_the_circuit_principal()
     {
         var actor = await CircuitUser(Circuit(Principals.User("sv-1", "supervisor@example.test", AppRoles.Supervisor)))
@@ -40,7 +40,7 @@ public class CurrentUserAdapterTests
         Assert.True(actor.HasPermission(Permissions.Transition(CaseStatus.New, CaseStatus.Triaged)));
     }
 
-    [Fact]
+    [Test]
     public async Task Http_adapter_reflects_HttpContext_User()
     {
         var actor = await Http(Principals.User("cw-1", "caseworker@example.test", AppRoles.CaseWorker)).GetAsync(CancellationToken.None);
@@ -50,7 +50,7 @@ public class CurrentUserAdapterTests
         Assert.False(actor.HasPermission(Permissions.Transition(CaseStatus.New, CaseStatus.Triaged)));
     }
 
-    [Fact]
+    [Test]
     public async Task Anonymous_contexts_return_an_actor_without_permissions()
     {
         ICurrentUser[] adapters = [CircuitUser(Circuit(Principals.Anonymous)), Http(Principals.Anonymous)];
@@ -63,7 +63,7 @@ public class CurrentUserAdapterTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Http_adapter_outside_a_request_fails_instead_of_guessing()
     {
         var adapter = new HttpCurrentUser(new HttpContextAccessor(), InMemoryPermissionStore.DefaultResolver);
@@ -71,7 +71,7 @@ public class CurrentUserAdapterTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => adapter.GetAsync(CancellationToken.None));
     }
 
-    [Fact]
+    [Test]
     public async Task Simultaneous_circuits_and_an_HTTP_download_each_observe_only_their_own_principal()
     {
         var first = new DeferredStateProvider();
@@ -94,7 +94,7 @@ public class CurrentUserAdapterTests
         Assert.Equal([AppRoles.CaseWorker], actors[2].Roles);
     }
 
-    [Fact]
+    [Test]
     public async Task A_revalidated_or_signed_out_circuit_denies_later_operations()
     {
         var provider = Circuit(Principals.User("sv-1", "sv", AppRoles.Supervisor));
@@ -110,7 +110,7 @@ public class CurrentUserAdapterTests
         Assert.False(after.HasPermission(Permissions.CasesView));
     }
 
-    [Fact]
+    [Test]
     public async Task Circuit_adapter_honors_cancellation_while_authentication_is_pending()
     {
         using var cts = new CancellationTokenSource();

@@ -16,7 +16,7 @@ public class AttachmentOptionsTests
         return provider.GetRequiredService<IOptions<AttachmentOptions>>().Value;
     }
 
-    [Fact]
+    [Test]
     public void Defaults_are_10_MiB_and_the_five_adopted_types()
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = "/tmp/a" });
@@ -26,7 +26,7 @@ public class AttachmentOptionsTests
             "application/vnd.openxmlformats-officedocument.wordprocessingml.document"], options.AllowedTypes.Select(t => t.ContentType));
     }
 
-    [Fact]
+    [Test]
     public void Configured_limits_replace_the_defaults()
     {
         var options = Resolve(new()
@@ -44,19 +44,18 @@ public class AttachmentOptionsTests
         Assert.Null(options.MatchAllowedType("application/pdf", ".pdf"));
     }
 
-    [Theory]
-    [InlineData("application/pdf", ".pdf", "application/pdf")]
-    [InlineData("APPLICATION/PDF", ".pdf", "application/pdf")]
-    [InlineData("text/plain; charset=utf-8", ".txt", "text/plain")]
-    [InlineData("image/jpeg", ".jpg", "image/jpeg")]
-    [InlineData("image/jpeg", ".jpeg", "image/jpeg")]
-    [InlineData("image/png", ".pdf", null)]            // the pair must match
-    [InlineData("application/pdf", ".exe", null)]
-    [InlineData("text/html", ".html", null)]
-    [InlineData("application/octet-stream", ".pdf", null)]
-    [InlineData("", ".pdf", null)]
-    [InlineData(null, ".pdf", null)]
-    [InlineData("application/pdf", "", null)]
+    [TestCase("application/pdf", ".pdf", "application/pdf")]
+    [TestCase("APPLICATION/PDF", ".pdf", "application/pdf")]
+    [TestCase("text/plain; charset=utf-8", ".txt", "text/plain")]
+    [TestCase("image/jpeg", ".jpg", "image/jpeg")]
+    [TestCase("image/jpeg", ".jpeg", "image/jpeg")]
+    [TestCase("image/png", ".pdf", null)]            // the pair must match
+    [TestCase("application/pdf", ".exe", null)]
+    [TestCase("text/html", ".html", null)]
+    [TestCase("application/octet-stream", ".pdf", null)]
+    [TestCase("", ".pdf", null)]
+    [TestCase(null, ".pdf", null)]
+    [TestCase("application/pdf", "", null)]
     public void Content_type_and_extension_must_match_an_allowed_pair(string? contentType, string extension, string? expected)
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = "/tmp/a" });
@@ -82,8 +81,7 @@ public class AttachmentOptionsTests
         },
     };
 
-    [Theory]
-    [MemberData(nameof(InvalidConfigurations))]
+    [TestCaseSource(nameof(InvalidConfigurations))]
     public void Inconsistent_configuration_is_rejected(Dictionary<string, string?> settings, string expectedMessage)
     {
         var failure = Assert.Throws<OptionsValidationException>(() => Resolve(settings));
@@ -91,10 +89,9 @@ public class AttachmentOptionsTests
         Assert.Contains(failure.Failures, f => f.Contains(expectedMessage, StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
     public void Without_a_configured_root_one_fixed_folder_per_machine_is_used(string? rootPath)
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = rootPath });
@@ -102,7 +99,7 @@ public class AttachmentOptionsTests
         Assert.Equal(Path.Combine(Path.GetTempPath(), "caseintake-attachments"), options.RootPath);
     }
 
-    [Fact]
+    [Test]
     public void Configured_types_are_normalized_so_padding_and_case_still_match()
     {
         var options = Resolve(new()
@@ -115,7 +112,7 @@ public class AttachmentOptionsTests
         Assert.Equal("application/pdf", options.MatchAllowedType("application/pdf", ".pdf"));
     }
 
-    [Fact]
+    [Test]
     public void A_content_type_longer_than_the_column_fails_at_startup()
     {
         var failure = Assert.Throws<OptionsValidationException>(() => Resolve(new()
@@ -128,11 +125,10 @@ public class AttachmentOptionsTests
         Assert.Contains(failure.Failures, f => f.Contains("invalid content type", StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData(10_485_760, "10 MiB")]
-    [InlineData(1_572_864, "1.5 MiB")]
-    [InlineData(1024, "1 KiB")]
-    [InlineData(500, "500 bytes")]
+    [TestCase(10_485_760, "10 MiB")]
+    [TestCase(1_572_864, "1.5 MiB")]
+    [TestCase(1024, "1 KiB")]
+    [TestCase(500, "500 bytes")]
     public void The_size_limit_is_described_in_a_readable_unit(long maxBytes, string expected)
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = "/tmp/a", ["Attachments:MaxBytes"] = maxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture) });
@@ -140,7 +136,7 @@ public class AttachmentOptionsTests
         Assert.EndsWith($"Maximum size: {expected}.", options.Describe(), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public void Registering_both_the_module_and_the_maintenance_does_not_duplicate_configured_types()
     {
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
@@ -156,7 +152,7 @@ public class AttachmentOptionsTests
         Assert.Single(provider.GetRequiredService<IOptions<AttachmentOptions>>().Value.AllowedTypes);
     }
 
-    [Fact]
+    [Test]
     public void The_description_states_the_allowed_extensions_and_the_limit()
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = "/tmp/a" });
