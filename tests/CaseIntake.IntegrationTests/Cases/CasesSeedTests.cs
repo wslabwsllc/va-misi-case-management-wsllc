@@ -15,7 +15,11 @@ public sealed class CasesSeedTests : IAsyncLifetime
     private readonly PostgresDatabaseFixture _first = new();
     private readonly PostgresDatabaseFixture _second = new();
 
+    [SetUp]
+
     public Task InitializeAsync() => Task.WhenAll(_first.InitializeAsync(), _second.InitializeAsync());
+
+    [TearDown]
 
     public Task DisposeAsync() => Task.WhenAll(_first.DisposeAsync(), _second.DisposeAsync());
 
@@ -29,7 +33,7 @@ public sealed class CasesSeedTests : IAsyncLifetime
         await new SeedRunner(provider, new FakeLogger<SeedRunner>()).RunAsync(CancellationToken.None);
     }
 
-    [Fact]
+    [Test]
     public async Task Seed_creates_at_least_60_cases_in_every_status_with_consistent_audit_trails()
     {
         await SeedAsync(_first);
@@ -55,7 +59,7 @@ public sealed class CasesSeedTests : IAsyncLifetime
         Assert.Contains(audit, a => a.Actor == "supervisor@example.test" && a.ToStatus == CaseStatus.Closed);
     }
 
-    [Fact]
+    [Test]
     public async Task Reseeding_adds_nothing_and_keeps_user_edits()
     {
         await SeedAsync(_first);
@@ -76,7 +80,7 @@ public sealed class CasesSeedTests : IAsyncLifetime
         Assert.Equal("Edited by an evaluator", (await check.Cases.SingleAsync(c => c.Id == editedId)).Title);
     }
 
-    [Fact]
+    [Test]
     public async Task Partially_seeded_database_is_completed_not_skipped()
     {
         await SeedAsync(_first);
@@ -92,7 +96,7 @@ public sealed class CasesSeedTests : IAsyncLifetime
         Assert.Equal(CaseSeedData.CaseCount, (await CountsAsync(_first)).Cases);
     }
 
-    [Fact]
+    [Test]
     public async Task Two_fresh_databases_receive_identical_business_data()
     {
         await Task.WhenAll(SeedAsync(_first), SeedAsync(_second));
@@ -100,7 +104,7 @@ public sealed class CasesSeedTests : IAsyncLifetime
         Assert.Equal(await SnapshotAsync(_first), await SnapshotAsync(_second));
     }
 
-    [Fact]
+    [Test]
     public async Task Audit_entries_reference_seeded_Identity_users_when_present()
     {
         await using (var db = _first.CreateContext())

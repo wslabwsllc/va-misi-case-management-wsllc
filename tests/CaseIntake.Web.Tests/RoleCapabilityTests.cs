@@ -9,13 +9,12 @@ namespace CaseIntake.Web.Tests;
 /// than hand-picked permissions: Auditor is read-only, IntakeClerk opens cases and attaches documents, CaseWorker edits
 /// and moves them.
 /// </summary>
-[Trait("Category", "Req:R-4.2-6")]
+[Category("Req:R-4.2-6")]
 public class RoleCapabilityTests : WebTestContext
 {
-    [Theory]
-    [InlineData(AppRoles.Auditor, false)]
-    [InlineData(AppRoles.IntakeClerk, true)]
-    [InlineData(AppRoles.CaseWorker, true)]
+    [TestCase(AppRoles.Auditor, false)]
+    [TestCase(AppRoles.IntakeClerk, true)]
+    [TestCase(AppRoles.CaseWorker, true)]
     public void New_case_command_follows_the_role(string role, bool shown)
     {
         SignInAs(role);
@@ -25,10 +24,9 @@ public class RoleCapabilityTests : WebTestContext
         Assert.Equal(shown ? 1 : 0, cut.FindAll("[data-testid=new-case]").Count);
     }
 
-    [Theory]
-    [InlineData(AppRoles.Auditor, false, false, false)]
-    [InlineData(AppRoles.IntakeClerk, false, false, true)]
-    [InlineData(AppRoles.CaseWorker, true, true, true)]
+    [TestCase(AppRoles.Auditor, false, false, false)]
+    [TestCase(AppRoles.IntakeClerk, false, false, true)]
+    [TestCase(AppRoles.CaseWorker, true, true, true)]
     public async Task Case_detail_controls_follow_the_role(string role, bool canEdit, bool canMove, bool canUpload)
     {
         var seeded = await SeedCaseAsync("Role capability case", CaseStatus.Triaged);

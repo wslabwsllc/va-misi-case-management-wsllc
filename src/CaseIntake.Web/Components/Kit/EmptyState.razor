@@ -1,18 +1,39 @@
-@* A meaningful empty state: what is missing and what to do next. *@
+@* A meaningful empty state: a decorative illustration, what is missing and what to do next. *@
 <div class="empty-state" data-testid="@TestId">
-    <Icon Name="@IconName" />
-    <h3>@Title</h3>
+    <span class="empty-state__art" aria-hidden="true">
+        <span class="icon-tile"><Icon Name="@IconName" /></span>
+        @if (Positive)
+        {
+            <span class="empty-state__check"><Icon Name="check" /></span>
+        }
+    </span>
+    @if (HeadingLevel == 3)
+    {
+        <h3>@Title</h3>
+    }
+    else
+    {
+        <h2>@Title</h2>
+    }
     @if (!string.IsNullOrEmpty(Message))
     {
         <p>@Message</p>
     }
-    @ChildContent
+    @if (ChildContent is not null)
+    {
+        <div class="btn-row">@ChildContent</div>
+    }
 </div>
 
 @code {
     [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
     [Parameter] public string? Message { get; set; }
-    [Parameter] public string IconName { get; set; } = "empty";
+    [Parameter] public string IconName { get; set; } = "inbox";
+    /// <summary>Adds a check mark for "all done" states (nothing waiting, everything read).</summary>
+    [Parameter] public bool Positive { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
     [Parameter] public string TestId { get; set; } = "empty-state";
+
+    /// <summary>2 (default: never skips a level after the page h1) or 3 inside a section that has its own h2.</summary>
+    [Parameter] public int HeadingLevel { get; set; } = 2;
 }

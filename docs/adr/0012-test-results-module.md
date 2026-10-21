@@ -13,7 +13,7 @@ values redacted, history kept across container rebuilds, and tests must not star
 ## Decision
 
 **Producing results.** `scripts/run-tests.sh` (the `tests` service) writes every run to its own folder on the
-`testresults` volume and never deletes earlier runs: `runs/<runKey>/<Project>.trx`, `catalog/<assembly>.json` (xUnit
+`testresults` volume and never deletes earlier runs: `runs/<runKey>/<Project>.trx`, `catalog/<assembly>.json` (NUnit
 `Category` traits, written by `TestKit.TestCatalog`, because TRX does not carry traits), `evidence/<test>/` (Playwright:
 `evidence.json` with steps, browser, viewport, expected/actual, console errors and network failures, plus screenshots
 with password and SSN inputs masked, a trace on failure and an optional video), and `run.json` last. A suite that cannot

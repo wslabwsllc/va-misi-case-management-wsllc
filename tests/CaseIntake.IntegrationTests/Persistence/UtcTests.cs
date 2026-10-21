@@ -8,9 +8,11 @@ using Npgsql;
 
 namespace CaseIntake.IntegrationTests.Persistence;
 
-public class UtcTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class UtcTests : ClassFixture<UtcTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public void DateTimeOffset_converter_normalizes_any_offset_to_utc()
     {
         var local = new DateTimeOffset(2026, 10, 16, 12, 0, 0, TimeSpan.FromHours(5));
@@ -24,9 +26,8 @@ public class UtcTests(PostgresDatabaseFixture database) : IClassFixture<Postgres
         Assert.Null(new UtcNullableDateTimeOffsetConverter().ConvertToProvider(null));
     }
 
-    [Theory]
-    [InlineData(DateTimeKind.Local)]
-    [InlineData(DateTimeKind.Unspecified)]
+    [TestCase(DateTimeKind.Local)]
+    [TestCase(DateTimeKind.Unspecified)]
     public void DateTime_converter_rejects_non_utc_values(DateTimeKind kind)
     {
         var value = new DateTime(2026, 10, 16, 12, 0, 0, kind);
@@ -35,7 +36,7 @@ public class UtcTests(PostgresDatabaseFixture database) : IClassFixture<Postgres
         Assert.Throws<InvalidOperationException>(() => new UtcNullableDateTimeConverter().ConvertToProvider((DateTime?)value));
     }
 
-    [Fact]
+    [Test]
     public void DateTime_converter_accepts_utc_and_tags_reads_as_utc()
     {
         var utc = new DateTime(2026, 10, 16, 12, 0, 0, DateTimeKind.Utc);
@@ -44,7 +45,7 @@ public class UtcTests(PostgresDatabaseFixture database) : IClassFixture<Postgres
         Assert.Equal(DateTimeKind.Utc, ((DateTime)new UtcDateTimeConverter().ConvertFromProvider(new DateTime(2026, 10, 16, 12, 0, 0, DateTimeKind.Unspecified))!).Kind);
     }
 
-    [Fact]
+    [Test]
     public void Every_persisted_DateTime_and_DateTimeOffset_property_is_timestamptz_with_a_utc_converter()
     {
         using var db = database.CreateContext();
@@ -62,7 +63,7 @@ public class UtcTests(PostgresDatabaseFixture database) : IClassFixture<Postgres
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Non_utc_offsets_are_stored_as_the_same_instant_in_a_timestamptz_column()
     {
         var instant = new DateTimeOffset(2026, 10, 16, 12, 30, 0, TimeSpan.FromHours(-7));

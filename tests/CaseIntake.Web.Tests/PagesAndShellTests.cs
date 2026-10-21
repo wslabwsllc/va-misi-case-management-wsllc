@@ -20,10 +20,10 @@ namespace CaseIntake.Web.Tests;
 /// My tasks, reports, notifications and dashboard edge states, the not-found, error, welcome, access-denied and More
 /// pages, the phone sheets, focus after navigation and the unread badge.
 /// </summary>
-[Trait("Category", "Story:E5-S1")]
-[Trait("Category", "Story:Dashboard")]
-[Trait("Category", "Req:R-4.2-11")]
-[Trait("Category", "Req:R-4.2-12")]
+[Category("Story:E5-S1")]
+[Category("Story:Dashboard")]
+[Category("Req:R-4.2-11")]
+[Category("Req:R-4.2-12")]
 public class PagesAndShellTests : WebTestContext
 {
     private static readonly Error Unavailable = new(ErrorKind.ExternalUnavailable, "Down", "The case service is unavailable.");
@@ -33,7 +33,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- My tasks ----
 
-    [Fact]
+    [Test]
     public async Task My_tasks_lists_cases_waiting_for_the_roles_transitions_with_the_next_step()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -49,38 +49,45 @@ public class PagesAndShellTests : WebTestContext
         Assert.Equal(CaseSortField.UpdatedAt, query.SortBy);
         Assert.Equal(SortDirection.Ascending, query.Direction);
         var list = cut.Find("[data-testid=mywork-list]").TextContent;
-        Assert.Contains("Next step: Move to In Progress", list);
-        Assert.Contains("Next step: Move to Resolved", list);
+        var nextSteps = cut.FindAll("[data-testid=mywork-next]").Select(a => a.TextContent).ToList();
+        Assert.Contains(nextSteps, t => t.Contains("Move to In Progress", StringComparison.Ordinal));
+        Assert.Contains(nextSteps, t => t.Contains("Move to Resolved", StringComparison.Ordinal));
         Assert.DoesNotContain("Still new", list);
         Assert.Contains(cut.FindAll("[data-testid=mywork-list] a"), a => a.GetAttribute("href") == $"cases/{triaged.Id}");
         Assert.Equal("2 cases are waiting for you. Page 1 of 1.", cut.Find("[role=status]").TextContent);
-        Assert.Equal("true", cut.Find("[aria-label='Go to previous page']").GetAttribute("aria-disabled"));
-        Assert.Equal("true", cut.Find("[aria-label='Go to next page']").GetAttribute("aria-disabled"));
+        Assert.True(cut.Find("[aria-label='Go to previous page']").HasAttribute("disabled"));
+        Assert.True(cut.Find("[aria-label='Go to next page']").HasAttribute("disabled"));
     }
 
-    [Fact]
-    public async Task My_tasks_pages_with_links_that_keep_the_url()
+    [Test]
+    public async Task My_tasks_pages_with_buttons_that_keep_the_url()
     {
         SignInAs(AppRoles.Supervisor);
         for (var i = 0; i < 27; i++)
         {
             await SeedCaseAsync($"Needs triage {i:00}");
         }
-        Navigation.NavigateTo("my-work?page=2");
+        Navigation.NavigateTo("my-work?status=New&page=2");
 
         var cut = Render<MyWork>();
 
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=mywork-list] > li").Count));
         Assert.Equal(2, CaseService.ListQueries.Last().Page);
-        Assert.Contains("Showing 26–27 of 27 cases · Page 2 of 2", cut.Find(".pager__info").TextContent);
+        Assert.Equal("Showing 26–27 of 27 cases", cut.Find("[data-testid=mywork-pager-range]").TextContent);
+        Assert.Equal("Page 2 of 2", cut.Find("[data-testid=mywork-pager-info]").TextContent);
+        Assert.True(cut.Find("[aria-label='Go to next page']").HasAttribute("disabled"));
+        Assert.All(cut.FindAll("[data-testid=mywork-next]"), a => Assert.Contains("Move to Triaged", a.TextContent));
+
         var previous = cut.Find("[aria-label='Go to previous page']");
-        Assert.Null(previous.GetAttribute("aria-disabled"));
-        Assert.DoesNotContain("page=", previous.GetAttribute("href"), StringComparison.Ordinal);
-        Assert.EndsWith("my-work?page=3", cut.Find("[aria-label='Go to next page']").GetAttribute("href"), StringComparison.Ordinal);
-        Assert.Contains("Next step: Move to Triaged", cut.Find("[data-testid=mywork-list]").TextContent);
+        Assert.False(previous.HasAttribute("disabled"));
+        previous.Click();
+
+        // Going back to the first page drops page= and keeps the status tab.
+        Assert.EndsWith("my-work?status=New", Navigation.Uri, StringComparison.Ordinal);
+        cut.WaitForAssertion(() => Assert.Equal(25, cut.FindAll("[data-testid=mywork-list] > li").Count));
     }
 
-    [Fact]
+    [Test]
     public void My_tasks_without_waiting_cases_says_all_caught_up()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -89,7 +96,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Equal("0 cases are waiting for you. Page 1 of 1.", cut.Find("[role=status]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Roles_without_transitions_have_no_tasks_and_the_service_is_not_asked()
     {
         SignInAs(AppRoles.Auditor);
@@ -98,7 +105,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Empty(CaseService.ListQueries);
     }
 
-    [Fact]
+    [Test]
     public void My_tasks_shows_service_errors_and_loading()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -117,7 +124,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Reports ----
 
-    [Fact]
+    [Test]
     public async Task Reports_show_cases_by_status_with_shares_and_by_month()
     {
         SignInAs(AppRoles.Supervisor);
@@ -130,23 +137,25 @@ public class PagesAndShellTests : WebTestContext
 
         var byStatus = cut.WaitForElement("[aria-labelledby=by-status] table");
         var rows = byStatus.QuerySelectorAll("tbody tr").Select(r => r.QuerySelectorAll("th, td").Select(c => c.TextContent.Trim()).ToList()).ToList();
-        Assert.Equal(["New", "2", "50%"], rows[0]);
-        Assert.Equal(["Triaged", "1", "25%"], rows[1]);
-        Assert.Equal(["In Progress", "0", "0%"], rows[2]);
-        Assert.Equal(["Closed", "1", "25%"], rows[4]);
+        // Columns: status (a link to the filtered list), share, cases.
+        Assert.Equal(["New: open the list", "50%", "2"], rows[0]);
+        Assert.Equal(["Triaged: open the list", "25%", "1"], rows[1]);
+        Assert.Equal(["In Progress: open the list", "0%", "0"], rows[2]);
+        Assert.Equal(["Closed: open the list", "25%", "1"], rows[4]);
+        Assert.Equal("cases?status=New", byStatus.QuerySelector("tbody tr th a")!.GetAttribute("href"));
         Assert.Contains("4", byStatus.QuerySelector("tfoot")!.TextContent);
         var months = cut.FindAll("[aria-labelledby=by-month] tbody tr");
         Assert.Equal(12, months.Count);
-        Assert.Equal(["Oct 2026", "4", "1"], months[0].QuerySelectorAll("th, td").Select(c => c.TextContent.Trim()));
+        Assert.Equal(["Oct 2026", "", "4", "1"], months[0].QuerySelectorAll("th, td").Select(c => c.TextContent.Trim()));
         Assert.Equal("exports/cases.csv", cut.Find("[data-testid=report-export]").GetAttribute("href"));
     }
 
-    [Fact]
+    [Test]
     public void Reports_with_no_cases_show_zero_shares_and_errors_are_alerts()
     {
         SignInAs(AppRoles.CaseWorker);
         var empty = Render<Reports>();
-        Assert.All(empty.WaitForElement("[aria-labelledby=by-status] table").QuerySelectorAll("tbody tr td:last-child"), td => Assert.Equal("0%", td.TextContent));
+        Assert.All(empty.WaitForElement("[aria-labelledby=by-status] table").QuerySelectorAll("tbody tr td:nth-of-type(1)"), td => Assert.Equal("0%", td.TextContent.Trim()));
 
         CaseService.ListError = Unavailable;
         var failed = Render<Reports>();
@@ -164,7 +173,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Dashboard edge states ----
 
-    [Fact]
+    [Test]
     public async Task Dashboard_shows_skeletons_while_loading_then_says_when_figures_are_partial()
     {
         SignInAs(AppRoles.Supervisor);
@@ -176,13 +185,13 @@ public class PagesAndShellTests : WebTestContext
         var cut = Render<Home>();
 
         Assert.Contains("Loading dashboard…", cut.Find("[data-testid=loading]").TextContent);
-        Assert.Equal(6, cut.FindAll(".skeleton--kpi").Count);
+        Assert.Equal(7, cut.FindAll(".skeleton--kpi").Count);
         CaseService.ListGate.SetResult();
         cut.WaitForAssertion(() => Assert.Contains("Figures are based on the first 1 of 2 cases", cut.Find("[role=note]").TextContent));
         Assert.Equal("2", cut.Find("[data-testid=kpi-total] .kpi__value").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Dashboard_hides_unexpected_failures_behind_a_generic_message()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -200,7 +209,7 @@ public class PagesAndShellTests : WebTestContext
         NotificationFeed.Items.Add(new CaseNotificationDto(id, id, $"Case title {id}", action, from, to, "supervisor@example.test",
             Time.GetUtcNow().AddMinutes(-id), details, unread, AssignedToMe: false, AssignedToYou: assignedToYou));
 
-    [Fact]
+    [Test]
     public void Notifications_describe_every_kind_of_activity()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -227,7 +236,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Contains("newest first", cut.Find(".page-header__subtitle").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void One_unread_notification_is_singular_and_mark_all_read_updates_the_subtitle()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -237,16 +246,16 @@ public class PagesAndShellTests : WebTestContext
 
         cut.Find("[data-testid=mark-all-read]").Click();
 
-        cut.WaitForAssertion(() => Assert.Contains("Last marked as read 10/19/2026 08:00 AM EDT.", cut.Find(".page-header__subtitle").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("Last marked as read 10-19-2026 08:00 ET.", cut.Find(".page-header__subtitle").TextContent));
         Assert.Equal(1, NotificationFeed.MarkAllReadCalls);
     }
 
-    [Fact]
+    [Test]
     public void Notifications_show_empty_failed_and_refreshed_states()
     {
         SignInAs(AppRoles.CaseWorker);
         var cut = Render<Notifications>();
-        cut.WaitForAssertion(() => Assert.Contains("No notifications", cut.Find("[data-testid=notifications-empty]").TextContent));
+        cut.WaitForAssertion(() => Assert.Contains("You're all caught up", cut.Find("[data-testid=notifications-empty]").TextContent));
         Assert.True(cut.Find("[data-testid=mark-all-read]").HasAttribute("disabled"));
 
         NotificationScript.FeedError = new Error(ErrorKind.ExternalUnavailable, "Down", "Notifications are unavailable.");
@@ -266,7 +275,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Empty(cut.Find("[data-testid=notifications-error]").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public void A_failed_mark_all_as_read_keeps_the_unread_entries()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -283,7 +292,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Unread badge ----
 
-    [Fact]
+    [Test]
     public void Badge_caps_large_counts_hides_on_failure_and_refreshes_after_navigation()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -314,7 +323,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Phone sheets ----
 
-    [Fact]
+    [Test]
     public void Profile_sheet_opens_from_the_app_bar_with_the_user_role_and_sign_out()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -334,7 +343,7 @@ public class PagesAndShellTests : WebTestContext
         JSInterop.VerifyFocusAsyncInvoke();
     }
 
-    [Fact]
+    [Test]
     public void More_sheet_lists_the_permitted_pages_and_closes_when_one_is_chosen()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -355,7 +364,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Empty(cut.Find("[data-testid=more-sheet]").QuerySelectorAll("nav"));
     }
 
-    [Fact]
+    [Test]
     public void More_page_shows_the_profile_and_the_site_map()
     {
         SignInAs(AppRoles.Supervisor);
@@ -372,7 +381,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Focus after navigation ----
 
-    [Fact]
+    [Test]
     public void Focus_moves_to_the_heading_only_after_navigating_to_a_different_page()
     {
         RouteData Route(Type page, long? id = null) => new(page, id is null ? new Dictionary<string, object?>() : new Dictionary<string, object?> { ["Id"] = id });
@@ -393,7 +402,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Not found, error, welcome and access denied pages ----
 
-    [Fact]
+    [Test]
     public void Not_found_offers_ways_out_and_focuses_the_heading_after_in_app_navigation()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -411,7 +420,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Equal("", Services.GetRequiredService<ShellState>().BackHref);
     }
 
-    [Fact]
+    [Test]
     public void Error_page_shows_the_operation_reference_but_never_the_exception()
     {
         var context = new DefaultHttpContext();
@@ -427,7 +436,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Equal("trace-5", Render<ErrorPage>(p => p.AddCascadingValue<HttpContext>(withTrace)).Find("code").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Welcome_offers_sign_in_to_visitors_and_the_dashboard_to_signed_in_users()
     {
         var visitor = Render<Welcome>(p => p.AddCascadingValue<HttpContext>(new DefaultHttpContext()));
@@ -444,7 +453,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Empty(user.FindAll("[data-testid=landing-sign-in]"));
     }
 
-    [Fact]
+    [Test]
     public void Access_denied_page_answers_403()
     {
         var context = new DefaultHttpContext();
@@ -456,7 +465,7 @@ public class PagesAndShellTests : WebTestContext
 
     // ---- Services ----
 
-    [Fact]
+    [Test]
     public void Status_announcer_clears_only_when_there_is_a_message()
     {
         var announcer = new StatusAnnouncer();
@@ -475,7 +484,7 @@ public class PagesAndShellTests : WebTestContext
         Assert.Throws<ArgumentException>(() => announcer.Announce(" "));
     }
 
-    [Fact]
+    [Test]
     public async Task Status_announcer_outlet_clears_the_region_when_the_message_is_cleared()
     {
         var cut = Render<StatusAnnouncerOutlet>();

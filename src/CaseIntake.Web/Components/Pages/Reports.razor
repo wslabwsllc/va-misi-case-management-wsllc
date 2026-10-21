@@ -6,13 +6,16 @@
 @inject CaseDashboardService Dashboard
 @inject CaseIntake.Web.Services.PageActivity Activity
 
-@* Case reports: the dashboard figures as tables (the accessible equivalent of the charts) and a CSV export of the case
-   list, all from the authorized case service. *@
-<PageShell Title="Case reports" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="Case figures as tables, and a CSV export of the case list." />
-
-<div class="command-bar" role="toolbar" aria-label="Report commands">
-    <a class="command" href="exports/cases.csv" download data-enhance-nav="false" data-testid="report-export"><Icon Name="export" /> Export all cases to CSV</a>
-</div>
+@* Case reports (redesign): interactive summary cards (each opens the matching cases), the share of cases by status and
+   the cases created and completed per month, as tables with decorative bars (the numbers are always text), and a CSV
+   export of the case list, all from the authorized case service. *@
+<PageShell Title="Case reports" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="Case figures as tables, with a CSV export of the full case list.">
+    <Actions>
+        <div class="btn-row page-actions">
+            <a class="btn btn--primary" href="exports/cases.csv" download data-enhance-nav="false" data-testid="report-export"><Icon Name="download" Small="true" /> Export all cases to CSV</a>
+        </div>
+    </Actions>
+</PageShell>
 
 <ErrorAlert Message="@_error" TestId="reports-error" />
 
@@ -22,44 +25,73 @@
 }
 else if (_data is { } d)
 {
+    var largest = d.ByStatus.OrderByDescending(s => s.Value).ThenBy(s => s.Key).First();
+    <h2 class="visually-hidden">Summary</h2>
+    <ul class="kpi-grid kpi-grid--4" data-testid="report-kpis">
+        <KpiTile Label="Total cases" Value="@UiText.Number(d.Total)" Hint="Every case you can see" Href="cases" Accent="blue" Icon="folder-open" TestId="report-total" />
+        <KpiTile Label="Open now" Value="@UiText.Number(d.Open)" Hint="New, Triaged or In Progress" Href="@($"cases?{CaseDashboardService.OpenStatusQuery}")" Accent="teal" Icon="clock" TestId="report-open" />
+        <KpiTile Label="Resolved or closed" Value="@UiText.Number(d.Completed)" Hint="Completed work" Href="cases?status=Resolved&status=Closed" Accent="green" Icon="circle-check" TestId="report-completed" />
+        <KpiTile Label="Largest status" Value="@(d.Total == 0 ? "None" : UiText.Status(largest.Key))" Hint="@(d.Total == 0 ? "No cases yet" : $"{UiText.Number(largest.Value)} cases")"
+                 Href="@(d.Total == 0 ? "cases" : $"cases?status={largest.Key}")" Accent="purple" Icon="chart-column" TestId="report-largest" />
+    </ul>
     <div class="grid grid--2">
         <section class="card card--flush" aria-labelledby="by-status">
-            <div class="card__header"><h2 id="by-status">Cases by status</h2></div>
-            <table class="data-grid">
+            <div class="card__header"><h2 id="by-status">Cases by status<span class="card__subtitle">Share of all @UiText.Number(d.Total) cases</span></h2></div>
+            <table class="data-grid" data-testid="report-status-table">
                 <caption class="visually-hidden">Cases by status</caption>
-                <thead><tr><th scope="col">Status</th><th scope="col" class="num">Cases</th><th scope="col" class="num">Share</th></tr></thead>
+                <thead><tr><th scope="col">Status</th><th scope="col">Share</th><th scope="col" class="num">Cases</th></tr></thead>
                 <tbody>
                     @foreach (var (status, count) in d.ByStatus)
                     {
+                        var share = d.Total == 0 ? 0 : count / (double)d.Total;
                         <tr>
-                            <th scope="row"><StatusPill Status="status" /></th>
-                            <td class="num">@UiText.Number(count)</td>
-                            <td class="num">@(d.Total == 0 ? "0%" : UiText.Percent(count / (double)d.Total))</td>
+                            <th scope="row"><a href="@($"cases?status={status}")" class="row-plain-link"><StatusPill Status="status" /><span class="visually-hidden">: open the list</span></a></th>
+                            <td>
+                                <span class="share-cell">
+                                    <span class="share-bar" aria-hidden="true"><span style="width: @Pct(share); --c: var(--status-@(status.ToString().ToLowerInvariant())-c)"></span></span>
+                                    <span>@(d.Total == 0 ? "0%" : UiText.Percent(share))</span>
+                                </span>
+                            </td>
+                            <td class="num"><strong>@UiText.Number(count)</strong></td>
                         </tr>
                     }
                 </tbody>
-                <tfoot><tr><th scope="row">Total</th><td class="num">@UiText.Number(d.Total)</td><td class="num">100%</td></tr></tfoot>
+                <tfoot><tr><th scope="row">Total</th><td>100%</td><td class="num">@UiText.Number(d.Total)</td></tr></tfoot>
             </table>
         </section>
         <section class="card card--flush" aria-labelledby="by-month">
-            <div class="card__header"><h2 id="by-month">Created and completed by month (ET)</h2></div>
+            <div class="card__header">
+                <h2 id="by-month">Created and completed by month<span class="card__subtitle">Eastern Time · completion month is the case's last update (an approximation)</span></h2>
+            </div>
+            <ul class="chart-legend card__note" aria-hidden="true">
+                <li><span class="chart-legend__swatch" style="background: var(--accent-blue)"></span>Created</li>
+                <li><span class="chart-legend__swatch" style="background: var(--accent-teal)"></span>Resolved or closed</li>
+            </ul>
             <div class="table-wrap">
-                <table class="data-grid">
+                <table class="data-grid" data-testid="report-month-table">
                     <caption class="visually-hidden">Cases created and completed by month</caption>
-                    <thead><tr><th scope="col">Month</th><th scope="col" class="num">Created</th><th scope="col" class="num">Resolved or closed</th></tr></thead>
+                    <thead><tr><th scope="col">Month</th><th scope="col"><span aria-hidden="true">Activity</span><span class="visually-hidden">Activity bars (decorative)</span></th><th scope="col" class="num">Created</th><th scope="col" class="num">Completed</th></tr></thead>
                     <tbody>
+                        @{ var peak = Math.Max(1, d.CreatedByMonth.Concat(d.CompletedByMonth).Max(m => m.Count)); }
                         @for (var i = d.CreatedByMonth.Count - 1; i >= 0; i--)
                         {
+                            var created = d.CreatedByMonth[i];
+                            var completed = d.CompletedByMonth[i];
                             <tr>
-                                <th scope="row">@d.CreatedByMonth[i].Label</th>
-                                <td class="num">@d.CreatedByMonth[i].Count</td>
-                                <td class="num">@d.CompletedByMonth[i].Count</td>
+                                <th scope="row">@created.Label</th>
+                                <td>
+                                    <span class="activity-bars" aria-hidden="true">
+                                        <span style="width: @Pct(created.Count / (double)peak); --c: var(--accent-blue)"></span>
+                                        <span style="width: @Pct(completed.Count / (double)peak); --c: var(--accent-teal)"></span>
+                                    </span>
+                                </td>
+                                <td class="num">@created.Count</td>
+                                <td class="num">@completed.Count</td>
                             </tr>
                         }
                     </tbody>
                 </table>
             </div>
-            <p class="page-header__subtitle card__note">Completion month is the month of the case's last update.</p>
         </section>
     </div>
 }
@@ -68,6 +100,9 @@ else if (_data is { } d)
     private readonly CancellationTokenSource _cts = new();
     private CaseDashboard? _data;
     private string? _error;
+
+    private static string Pct(double fraction) =>
+        (Math.Clamp(fraction, 0, 1) * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
 
     protected override async Task OnInitializedAsync()
     {

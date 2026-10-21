@@ -6,12 +6,12 @@ using CaseIntake.TestResults.Import;
 namespace CaseIntake.IntegrationTests.TestResults;
 
 /// <summary>E5: the TRX reader maps VSTest results to the module's outcomes and refuses hostile XML.</summary>
-[Trait("Category", "Story:E5-S2")]
+[Category("Story:E5-S2")]
 public class TrxReaderTests
 {
     private static IReadOnlyList<TrxResult> Read(string xml) => TrxReader.Read(new MemoryStream(Encoding.UTF8.GetBytes(xml)));
 
-    [Fact]
+    [Test]
     public void Results_carry_names_outcomes_timings_errors_output_and_categories_from_their_definitions()
     {
         var results = Read(Trx.Document(
@@ -41,7 +41,7 @@ public class TrxReaderTests
         Assert.Equal("Theory", results[2].MethodName);
     }
 
-    [Fact]
+    [Test]
     public void A_result_without_a_definition_or_attributes_falls_back_to_safe_defaults()
     {
         const string xml = """
@@ -69,7 +69,7 @@ public class TrxReaderTests
         Assert.Equal("Named", results[1].ClassName);   // the first definition of a duplicated id wins
     }
 
-    [Fact]
+    [Test]
     public void A_document_with_a_DTD_is_refused_so_entities_cannot_expand()
     {
         const string xml = """
@@ -81,28 +81,26 @@ public class TrxReaderTests
         Assert.Throws<XmlException>(() => Read(xml));
     }
 
-    [Fact]
+    [Test]
     public void Malformed_xml_is_reported_as_an_xml_error()
     {
         Assert.Throws<XmlException>(() => Read("<TestRun><Results>"));
     }
-
-    [Theory]
-    [InlineData("Passed", false, TestOutcome.Passed)]
-    [InlineData("PassedButRunAborted", false, TestOutcome.Passed)]
-    [InlineData("Failed", false, TestOutcome.Failed)]
-    [InlineData("Error", false, TestOutcome.Failed)]
-    [InlineData("Timeout", false, TestOutcome.Failed)]
-    [InlineData("NotExecuted", false, TestOutcome.Skipped)]
-    [InlineData("NotExecuted", true, TestOutcome.Failed)]
-    [InlineData("NotRunnable", false, TestOutcome.Skipped)]
-    [InlineData("Inconclusive", false, TestOutcome.Skipped)]
-    [InlineData("Pending", false, TestOutcome.Skipped)]
-    [InlineData("Warning", true, TestOutcome.Failed)]
-    [InlineData("Aborted", false, TestOutcome.Blocked)]
-    [InlineData("Disconnected", false, TestOutcome.Blocked)]
-    [InlineData("InProgress", false, TestOutcome.Blocked)]
-    [InlineData("SomethingNew", false, TestOutcome.Failed)]
+    [TestCase("Passed", false, TestOutcome.Passed)]
+    [TestCase("PassedButRunAborted", false, TestOutcome.Passed)]
+    [TestCase("Failed", false, TestOutcome.Failed)]
+    [TestCase("Error", false, TestOutcome.Failed)]
+    [TestCase("Timeout", false, TestOutcome.Failed)]
+    [TestCase("NotExecuted", false, TestOutcome.Skipped)]
+    [TestCase("NotExecuted", true, TestOutcome.Failed)]
+    [TestCase("NotRunnable", false, TestOutcome.Skipped)]
+    [TestCase("Inconclusive", false, TestOutcome.Skipped)]
+    [TestCase("Pending", false, TestOutcome.Skipped)]
+    [TestCase("Warning", true, TestOutcome.Failed)]
+    [TestCase("Aborted", false, TestOutcome.Blocked)]
+    [TestCase("Disconnected", false, TestOutcome.Blocked)]
+    [TestCase("InProgress", false, TestOutcome.Blocked)]
+    [TestCase("SomethingNew", false, TestOutcome.Failed)]
     public void Trx_outcomes_map_to_the_five_module_outcomes(string trxOutcome, bool hasError, TestOutcome expected)
     {
         Assert.Equal(expected, TrxReader.MapOutcome(trxOutcome, hasError));

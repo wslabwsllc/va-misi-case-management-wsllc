@@ -18,7 +18,7 @@ public class CaseIdContractTests
 
     public static TheoryData<Type> CaseRequestTypes() => [.. RequestTypes];
 
-    [Fact]
+    [Test]
     public void Every_case_mutation_request_is_covered()
     {
         Assert.Equal(
@@ -26,8 +26,7 @@ public class CaseIdContractTests
             RequestTypes.Select(t => t.Name).Order(StringComparer.Ordinal));
     }
 
-    [Theory]
-    [MemberData(nameof(CaseRequestTypes))]
+    [TestCaseSource(nameof(CaseRequestTypes))]
     public void Requests_carry_no_case_ID(Type requestType)
     {
         var idProperties = requestType.GetProperties(BindingFlags.Public | BindingFlags.Instance)
@@ -37,7 +36,7 @@ public class CaseIdContractTests
         Assert.Empty(idProperties);
     }
 
-    [Fact]
+    [Test]
     public void Updates_and_status_changes_take_the_ID_only_from_the_route()
     {
         foreach (var name in new[] { nameof(ICaseService.UpdateAsync), nameof(ICaseService.ChangeStatusAsync) })
@@ -49,7 +48,7 @@ public class CaseIdContractTests
         Assert.Equal(("id", typeof(long)), (assign[0].Name, assign[0].ParameterType));
     }
 
-    [Fact]
+    [Test]
     public void The_entity_ID_has_no_public_setter_and_starts_unassigned()
     {
         var id = typeof(Case).GetProperty(nameof(Case.Id))!;

@@ -1,0 +1,44 @@
+@* The confirmation every case form shows after its own validation passed and before anything is sent: "Are you sure
+   you want to submit?" with Cancel (first, focused) and Submit. Cancel or Esc closes it and returns focus to the
+   form's Submit button with every value kept; Submit raises OnConfirm, which the form uses to send exactly once. *@
+<ModalDialog @ref="_dialog" Id="@Id" Title="Are you sure you want to submit?" Description="@Description" TestId="@TestId">
+    <Footer>
+        <button type="button" class="btn btn--cancel" autofocus @onclick="CancelAsync" data-testid="@($"{TestId}-cancel")">
+            <Icon Name="close" Small="true" /> Cancel
+        </button>
+        <button type="button" class="btn btn--primary" @onclick="ConfirmAsync" disabled="@_confirming" data-testid="@($"{TestId}-submit")">
+            Submit <Icon Name="chevrons-right" Small="true" />
+        </button>
+    </Footer>
+</ModalDialog>
+
+@code {
+    private ModalDialog? _dialog;
+    private bool _confirming;
+
+    [Parameter, EditorRequired] public string Id { get; set; } = "confirm-submit";
+    [Parameter] public string? Description { get; set; }
+    [Parameter] public string TestId { get; set; } = "confirm-submit";
+    [Parameter, EditorRequired] public EventCallback OnConfirm { get; set; }
+
+    public bool IsOpen => _dialog?.IsOpen ?? false;
+
+    public Task OpenAsync(Func<ValueTask>? returnFocus = null)
+    {
+        _confirming = false;
+        return _dialog!.OpenAsync(returnFocus);
+    }
+
+    private Task CancelAsync() => _dialog!.CloseAsync(restoreFocus: true);
+
+    private async Task ConfirmAsync()
+    {
+        if (_confirming)
+        {
+            return;
+        }
+        _confirming = true;
+        await _dialog!.CloseAsync();
+        await OnConfirm.InvokeAsync();
+    }
+}

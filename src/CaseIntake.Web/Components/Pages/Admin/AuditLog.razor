@@ -16,7 +16,7 @@
    "View all history") and Back returns to it; applying filters keeps focus on the form. The CSV export uses the same
    filters and UTC times. *@
 <PageShell Title="Audit log" Breadcrumbs="@([new Crumb("Dashboard", "")])"
-           Subtitle="Who did what, and when. Times are US Eastern (EDT or EST); the CSV export uses UTC.">
+           Subtitle="Who did what, and when. Times are US Eastern (ET); the CSV export uses UTC.">
     <Actions>
         <a class="btn" href="@ExportHref" download data-testid="export-audit"><Icon Name="export" Small="true" /> Export CSV</a>
     </Actions>
@@ -28,11 +28,11 @@
     <form class="filters" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter the audit log" data-testid="audit-filters">
         <div class="field">
             <label class="field__label" for="audit-from">From (ET)</label>
-            <input id="audit-from" type="date" @bind="_draft.From" data-testid="audit-from" />
+            <DateInput Id="audit-from" @bind-Value="_draft.From" data-testid="audit-from" />
         </div>
         <div class="field">
             <label class="field__label" for="audit-to">To (ET)</label>
-            <input id="audit-to" type="date" @bind="_draft.To" data-testid="audit-to" />
+            <DateInput Id="audit-to" @bind-Value="_draft.To" data-testid="audit-to" />
         </div>
         <div class="field">
             <label class="field__label" for="audit-category">Category</label>

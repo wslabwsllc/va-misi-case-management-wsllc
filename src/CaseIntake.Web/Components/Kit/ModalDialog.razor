@@ -5,7 +5,9 @@
 @* A native <dialog> opened with showModal() through interop.js (E5-S6): the browser traps focus, makes the page inert
    and closes on Esc. Dismissing (Esc or the Close button) raises OnDismissed and returns focus to the element that
    opened the dialog. On phones the same dialog is styled as a bottom sheet. *@
-<dialog @ref="_dialog" class="modal @Class" aria-labelledby="@TitleId" aria-describedby="@(Description is null ? null : DescriptionId)" data-testid="@TestId">
+@* aria-labelledby and aria-describedby point at the title and description only while they are rendered (open), so a
+   closed dialog never carries a reference to a missing element (WAVE "broken ARIA reference"). *@
+<dialog @ref="_dialog" class="modal @Class" aria-labelledby="@(_open ? TitleId : null)" aria-describedby="@(_open && Description is not null ? DescriptionId : null)" data-testid="@TestId">
     <span class="sheet-handle" aria-hidden="true"></span>
     @if (_open)
     {

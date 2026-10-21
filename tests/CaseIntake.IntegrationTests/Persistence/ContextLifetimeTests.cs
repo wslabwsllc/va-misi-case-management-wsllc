@@ -7,8 +7,10 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace CaseIntake.IntegrationTests.Persistence;
 
-public class ContextLifetimeTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class ContextLifetimeTests : ClassFixture<ContextLifetimeTests, PostgresDatabaseFixture>
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private ServiceProvider BuildServices()
     {
         var services = new ServiceCollection();
@@ -17,7 +19,7 @@ public class ContextLifetimeTests(PostgresDatabaseFixture database) : IClassFixt
         return services.BuildServiceProvider();
     }
 
-    [Fact]
+    [Test]
     public async Task Simultaneous_operations_receive_distinct_disposable_contexts()
     {
         await using var provider = BuildServices();
@@ -32,7 +34,7 @@ public class ContextLifetimeTests(PostgresDatabaseFixture database) : IClassFixt
         Assert.Equal(0, await second.Users.CountAsync());   // disposing one does not affect the other
     }
 
-    [Fact]
+    [Test]
     public async Task A_failed_save_commits_none_of_the_batch()
     {
         // One SaveChanges is one transaction: a constraint violation on the second row must roll back the first.

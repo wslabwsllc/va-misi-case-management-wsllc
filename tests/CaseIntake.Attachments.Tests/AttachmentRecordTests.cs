@@ -15,7 +15,7 @@ public class AttachmentRecordTests
         Attachment.Record(id ?? Guid.NewGuid(), Owner, fileName, contentType, size, sha ?? Hash, key ?? Key,
             DateTimeOffset.UnixEpoch, "user-id", "user");
 
-    [Fact]
+    [Test]
     public void Valid_metadata_is_recorded()
     {
         var attachment = Record();
@@ -38,8 +38,7 @@ public class AttachmentRecordTests
         () => Record(key: Key.ToUpperInvariant()),
     ];
 
-    [Theory]
-    [MemberData(nameof(InvalidMetadata))]
+    [TestCaseSource(nameof(InvalidMetadata))]
     public void Invalid_metadata_is_refused(Func<Attachment> record)
     {
         Assert.ThrowsAny<ArgumentException>(record);

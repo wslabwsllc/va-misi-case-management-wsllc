@@ -10,7 +10,7 @@ namespace CaseIntake.Web.Tests;
 /// The JS interop wrappers tolerate a circuit that is gone (disconnected, cancelled, element removed): focus and dialog
 /// calls are best-effort and never surface as errors.
 /// </summary>
-[Trait("Category", "Story:E5-S1")]
+[Category("Story:E5-S1")]
 public class UiInteropTests
 {
     /// <summary>An IJSRuntime whose every call fails with <see cref="Failure"/> (or succeeds when it is null).</summary>
@@ -61,9 +61,7 @@ public class UiInteropTests
     }
 
     public static TheoryData<Exception> CircuitGone => new() { new JSDisconnectedException("gone"), new TaskCanceledException() };
-
-    [Theory]
-    [MemberData(nameof(CircuitGone))]
+    [TestCaseSource(nameof(CircuitGone))]
     public async Task Calls_on_a_circuit_that_is_gone_are_ignored(Exception failure)
     {
         var runtime = new ThrowingRuntime(failure);
@@ -77,7 +75,7 @@ public class UiInteropTests
         await interop.DisposeAsync();
     }
 
-    [Fact]
+    [Test]
     public async Task Module_calls_go_to_the_imported_module_and_disposal_releases_it()
     {
         var module = new RecordingModule();
@@ -90,9 +88,7 @@ public class UiInteropTests
         Assert.Equal(["focusSelector", "setZoom"], module.Calls);
         Assert.True(module.Disposed);
     }
-
-    [Theory]
-    [MemberData(nameof(DisposeFailures))]
+    [TestCaseSource(nameof(DisposeFailures))]
     public async Task Disposal_tolerates_a_failed_or_missing_import(Exception failure)
     {
         var interop = new UiInterop(new ThrowingRuntime(failure));
@@ -107,9 +103,7 @@ public class UiInteropTests
     public static TheoryData<Exception> DisposeFailures => new() { new JSDisconnectedException("gone"), new TaskCanceledException(), new JSException("import failed") };
 
     public static TheoryData<Exception> FocusFailures => new() { new JSException("detached"), new JSDisconnectedException("gone"), new InvalidOperationException("not rendered") };
-
-    [Theory]
-    [MemberData(nameof(FocusFailures))]
+    [TestCaseSource(nameof(FocusFailures))]
     public async Task Safe_focus_ignores_removed_elements_and_lost_circuits(Exception failure)
     {
         var runtime = new ThrowingRuntime(failure);
@@ -120,7 +114,7 @@ public class UiInteropTests
         Assert.Single(runtime.Calls);
     }
 
-    [Fact]
+    [Test]
     public async Task Safe_focus_skips_an_element_that_was_never_captured_and_focuses_one_that_was()
     {
         await default(ElementReference).FocusSafeAsync();

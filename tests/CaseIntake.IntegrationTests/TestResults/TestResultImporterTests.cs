@@ -14,14 +14,20 @@ namespace CaseIntake.IntegrationTests.TestResults;
 /// E5: run folders written by scripts/run-tests.sh are imported once into the results tables, with redacted text,
 /// hashed evidence referenced in place, and NotExecuted results for suites that did not run.
 /// </summary>
-[Trait("Category", "Story:E5-S2")]
-public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>, IAsyncLifetime
+[Category("Story:E5-S2")]
+public sealed class TestResultImporterTests : ClassFixture<TestResultImporterTests, PostgresDatabaseFixture>, IAsyncLifetime
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private const string WebSuite = "CaseIntake.Web.Tests";
     private const string E2ESuite = "CaseIntake.E2E";
     private const string LoginTest = "CaseIntake.E2E.LoginTests.Signs_in_with_the_keyboard";
 
+    [SetUp]
+
     public Task InitializeAsync() => database.ResetAsync();
+
+    [TearDown]
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -69,7 +75,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
             }, ("final.png", Screenshot), ("trace.zip", TraceZip))
             .ServerLog("server-web-e2e.log", "GET /cases?ssn=900123456 200\nCookie: CaseIntake.Auth=CfDJ8secret\nplain line\n");
 
-    [Fact]
+    [Test]
     public async Task A_complete_run_is_imported_with_counts_cases_executions_steps_and_hashed_evidence()
     {
         using var h = new TestResultsTestHarness(database);
@@ -143,7 +149,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.True(File.Exists(folder.PathOf("run.json")), "import must leave the run folder in place");
     }
 
-    [Fact]
+    [Test]
     public async Task Imported_text_is_redacted_and_only_a_redacted_copy_of_the_server_log_is_kept()
     {
         using var h = new TestResultsTestHarness(database);
@@ -169,7 +175,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(("Server log (redacted)", "runs/20261016-150000-r1/server-web-e2e.redacted.log"), (artifact.Caption, artifact.RelativePath));
     }
 
-    [Fact]
+    [Test]
     public async Task Importing_again_skips_runs_already_imported_and_changes_nothing()
     {
         using var h = new TestResultsTestHarness(database);
@@ -185,7 +191,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
             await db.TestArtifacts.CountAsync(), await db.TestResultAuditEntries.CountAsync()));
     }
 
-    [Fact]
+    [Test]
     public async Task A_folder_still_being_written_is_ignored_until_its_run_json_appears()
     {
         using var h = new TestResultsTestHarness(database);
@@ -200,7 +206,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(1, second.Imported);
     }
 
-    [Fact]
+    [Test]
     public async Task Without_a_runs_folder_the_import_explains_that_nothing_has_been_written()
     {
         using var h = new TestResultsTestHarness(database);
@@ -211,7 +217,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal("No test results have been written yet. Run the documented test command first.", Assert.Single(summary.Problems));
     }
 
-    [Fact]
+    [Test]
     public async Task A_suite_that_failed_to_start_records_every_known_test_of_its_module_as_not_executed()
     {
         using var h = new TestResultsTestHarness(database);
@@ -239,7 +245,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(TestOutcome.Passed, login.LastOutcome);   // the E2E suite was not part of this run
     }
 
-    [Fact]
+    [Test]
     public async Task A_run_where_one_suite_produced_no_results_is_partial_and_never_reads_as_passing()
     {
         using var h = new TestResultsTestHarness(database);
@@ -268,7 +274,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal("NoResults", SuiteStatuses(r3.SuitesJson)[E2ESuite]);
     }
 
-    [Fact]
+    [Test]
     public async Task A_run_the_runner_reports_as_partial_or_failed_to_start_keeps_that_status()
     {
         using var h = new TestResultsTestHarness(database);
@@ -298,7 +304,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(2, await db.TestEnvironments.CountAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task An_older_run_imported_later_does_not_replace_the_last_outcome_from_a_newer_run()
     {
         using var h = new TestResultsTestHarness(database);
@@ -322,7 +328,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(2, await db.TestExecutions.CountAsync(e => e.TestCaseId == lists.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Catalog_traits_and_trx_categories_describe_a_test_and_later_runs_keep_what_they_do_not_repeat()
     {
         using var h = new TestResultsTestHarness(database);
@@ -342,7 +348,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(TestResultsTestHarness.StartTime, testCase.FirstSeenAtUtc);
     }
 
-    [Fact]
+    [Test]
     public async Task Broken_or_unsafe_run_folders_are_reported_without_stopping_the_others()
     {
         using var h = new TestResultsTestHarness(database);
@@ -376,7 +382,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal("r-good", (await db.TestRuns.SingleAsync()).RunKey);
     }
 
-    [Fact]
+    [Test]
     public async Task Evidence_outside_its_folder_missing_files_and_unreadable_manifests_are_reported_and_skipped()
     {
         using var h = new TestResultsTestHarness(database, o => o.MaxArtifactBytes = 6);
@@ -425,7 +431,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal("NoResults", SuiteStatuses(run.SuitesJson)["CaseIntake.Escape"]);
     }
 
-    [Fact]
+    [Test]
     public async Task Unknown_evidence_kinds_fall_back_to_screenshots()
     {
         using var h = new TestResultsTestHarness(database);
@@ -446,7 +452,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(TestType.Unit, (await db.TestCases.SingleAsync()).Type);
     }
 
-    [Fact]
+    [Test]
     public async Task Oversized_result_files_and_server_logs_are_not_read()
     {
         using var h = new TestResultsTestHarness(database);
@@ -471,7 +477,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(0, await db.TestArtifacts.CountAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task A_server_log_that_cannot_be_redacted_is_never_shown()
     {
         if (OperatingSystem.IsWindows())
@@ -502,7 +508,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(1, await db.TestArtifacts.CountAsync(a => a.Kind == TestArtifactKind.ResultFile));
     }
 
-    [Fact]
+    [Test]
     public async Task A_second_result_for_the_same_test_in_one_run_is_ignored()
     {
         using var h = new TestResultsTestHarness(database);
@@ -519,7 +525,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(TestOutcome.Passed, execution.Outcome);
     }
 
-    [Fact]
+    [Test]
     public async Task A_save_failure_is_reported_and_the_run_is_imported_on_a_later_pass()
     {
         var faults = new SaveFaults { FailBeforeCommit = true };
@@ -536,7 +542,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Single(h.ImporterLogs.Collector.GetSnapshot(), r => r.Id.Id == 5202);
     }
 
-    [Fact]
+    [Test]
     public async Task A_run_imported_by_another_instance_during_the_pass_is_skipped()
     {
         var race = new ImportedElsewhere(database);
@@ -552,18 +558,16 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal("another instance", (await db.TestRuns.SingleAsync()).ImportedBy);
         Assert.Equal(0, await db.TestExecutions.CountAsync());
     }
-
-    [Theory]
-    [InlineData("Ns.Class.Some_behaviour_works(x: 1)", "Some behaviour works (x: 1)")]
-    [InlineData("Ns.Class.lower_case", "Lower case")]
-    [InlineData("NoNamespace", "NoNamespace")]
-    [InlineData("Ns.Class._", "Ns.Class._")]
+    [TestCase("Ns.Class.Some_behaviour_works(x: 1)", "Some behaviour works (x: 1)")]
+    [TestCase("Ns.Class.lower_case", "Lower case")]
+    [TestCase("NoNamespace", "NoNamespace")]
+    [TestCase("Ns.Class._", "Ns.Class._")]
     public void Test_names_are_humanized_into_titles(string fullName, string title)
     {
         Assert.Equal(title, TestResultImporter.Humanize(Result(fullName)));
     }
 
-    [Fact]
+    [Test]
     public void Humanized_titles_are_capped_to_the_title_column()
     {
         var title = TestResultImporter.Humanize(Result("Ns.C." + new string('a', 500)));
@@ -571,7 +575,7 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Equal(TestResultFieldLimits.NameMaxLength, title.Length);
     }
 
-    [Fact]
+    [Test]
     public void Safe_child_paths_stay_inside_their_folder()
     {
         var folder = Path.Combine(Path.GetTempPath(), "run");
@@ -584,29 +588,27 @@ public sealed class TestResultImporterTests(PostgresDatabaseFixture database) : 
         Assert.Null(TestResultImporter.SafeChild(folder, ""));
         Assert.Null(TestResultImporter.SafeChild(folder, "   "));
     }
-
-    [Theory]
-    [InlineData(".png", "image/png")]
-    [InlineData(".JPG", "image/jpeg")]
-    [InlineData(".jpeg", "image/jpeg")]
-    [InlineData(".webm", "video/webm")]
-    [InlineData(".mp4", "video/mp4")]
-    [InlineData(".zip", "application/zip")]
-    [InlineData(".json", "application/json")]
-    [InlineData(".trx", "application/xml")]
-    [InlineData(".xml", "application/xml")]
-    [InlineData(".html", "text/html")]
-    [InlineData(".htm", "text/html")]
-    [InlineData(".log", "text/plain")]
-    [InlineData(".txt", "text/plain")]
-    [InlineData(".exe", "application/octet-stream")]
-    [InlineData("", "application/octet-stream")]
+    [TestCase(".png", "image/png")]
+    [TestCase(".JPG", "image/jpeg")]
+    [TestCase(".jpeg", "image/jpeg")]
+    [TestCase(".webm", "video/webm")]
+    [TestCase(".mp4", "video/mp4")]
+    [TestCase(".zip", "application/zip")]
+    [TestCase(".json", "application/json")]
+    [TestCase(".trx", "application/xml")]
+    [TestCase(".xml", "application/xml")]
+    [TestCase(".html", "text/html")]
+    [TestCase(".htm", "text/html")]
+    [TestCase(".log", "text/plain")]
+    [TestCase(".txt", "text/plain")]
+    [TestCase(".exe", "application/octet-stream")]
+    [TestCase("", "application/octet-stream")]
     public void Evidence_content_types_follow_the_extension(string extension, string contentType)
     {
         Assert.Equal(contentType, TestResultImporter.ContentTypeFor(extension));
     }
 
-    [Fact]
+    [Test]
     public void Names_types_outcomes_and_kinds_parse_with_safe_fallbacks()
     {
         Assert.Equal("Web.Tests", TestResultImporter.ModuleName("CaseIntake.Web.Tests"));

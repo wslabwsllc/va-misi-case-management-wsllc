@@ -5,7 +5,7 @@
 //    sign-out (/account), attachment and test-evidence downloads, exports, health endpoints and anything else.
 //  - Navigations always go to the network. Only when the network is unreachable does the worker answer with the static
 //    offline page, which contains no user or case data.
-const CACHE = 'caseintake-static-v1';
+const CACHE = 'caseintake-static-v2';   // v2: self-contained offline page (old caches are deleted on activate)
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/icons/icon.svg', '/icons/icon-192.png'];
 const STATIC_EXTENSIONS = /\.(css|js|mjs|svg|png|ico|woff2?|webmanifest)$/i;

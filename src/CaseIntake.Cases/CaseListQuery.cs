@@ -53,7 +53,7 @@ internal static class CaseListQueryValidator
         {
             errors[nameof(CaseListQuery.AssignedTo)] = ["Choose a valid owner."];
         }
-        if (query.CreatedFromUtc > query.CreatedToUtc || query.UpdatedFromUtc > query.UpdatedToUtc)
+        if (query.CreatedFromUtc > query.CreatedToUtc || query.UpdatedFromUtc > query.UpdatedToUtc || query.DueFrom > query.DueTo)
         {
             errors["DateRange"] = ["The start of a date range must not be after its end."];
         }
@@ -114,11 +114,22 @@ internal static class CaseListQueryBuilder
             cases = cases.Where(c => c.UpdatedAtUtc <= updatedTo);
         }
 
+        if (query.DueFrom is { } dueFrom)
+        {
+            cases = cases.Where(c => c.DueOn != null && c.DueOn >= dueFrom);
+        }
+        if (query.DueTo is { } dueTo)
+        {
+            cases = cases.Where(c => c.DueOn != null && c.DueOn <= dueTo);
+        }
+
         var search = query.Search?.Trim();
         if (!string.IsNullOrEmpty(search))
         {
             var pattern = $"%{EscapeLike(search)}%";
-            cases = cases.Where(c => EF.Functions.ILike(c.Title, pattern, LikeEscape)
+            var id = CaseSearch.IdOf(search);
+            cases = cases.Where(c => (id != null && c.Id == id)
+                                     || EF.Functions.ILike(c.Title, pattern, LikeEscape)
                                      || (c.Description != null && EF.Functions.ILike(c.Description, pattern, LikeEscape)));
         }
 

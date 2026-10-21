@@ -38,6 +38,9 @@ public sealed class ScriptedNotificationService(FakeCaseNotificationService inne
 
     public Task<Result<CaseNotificationFeed>> MarkAllReadAsync(CancellationToken ct) =>
         MarkAllReadError is { } error ? Task.FromResult(Result<CaseNotificationFeed>.Failure(error)) : inner.MarkAllReadAsync(ct);
+
+    public Task<Result<CaseNotificationFeed>> MarkReadAsync(long notificationId, CancellationToken ct) =>
+        inner.MarkReadAsync(notificationId, ct);
 }
 
 /// <summary>

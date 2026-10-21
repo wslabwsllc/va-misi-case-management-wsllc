@@ -5,7 +5,7 @@ namespace CaseIntake.Cases.Tests;
 
 public class CaseSeedDataTests
 {
-    [Fact]
+    [Test]
     public void Fixtures_are_deterministic()
     {
         var first = CaseSeedData.Build();
@@ -19,7 +19,7 @@ public class CaseSeedDataTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Fixtures_cover_every_status_with_more_than_two_default_pages()
     {
         var finalStatuses = CaseSeedData.Build().Select(FinalStatus).ToList();
@@ -28,7 +28,7 @@ public class CaseSeedDataTests
         Assert.Equal(Enum.GetValues<CaseStatus>().Order(), finalStatuses.Distinct().Order());
     }
 
-    [Fact]
+    [Test]
     public void Histories_follow_the_workflow_role_matrix_and_move_forward_in_time()
     {
         foreach (var fixture in CaseSeedData.Build())
@@ -53,7 +53,7 @@ public class CaseSeedDataTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Some_fixtures_are_reopened_and_some_match_the_water_search()
     {
         var fixtures = CaseSeedData.Build();
@@ -62,7 +62,7 @@ public class CaseSeedDataTests
         Assert.Contains(fixtures, f => f.Title.Contains("water", StringComparison.OrdinalIgnoreCase));
     }
 
-    [Fact]
+    [Test]
     public void Fixture_text_is_clearly_synthetic()
     {
         foreach (var fixture in CaseSeedData.Build())

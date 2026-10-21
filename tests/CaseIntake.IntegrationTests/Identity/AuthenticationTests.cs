@@ -9,8 +9,10 @@ using Microsoft.EntityFrameworkCore;
 namespace CaseIntake.IntegrationTests.Identity;
 
 /// <summary>E3-S1 and E3-S6 through the real web host, real Identity, real cookies and the real login form.</summary>
-public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class AuthenticationTests : ClassFixture<AuthenticationTests, IdentityWebFixture>
 {
+    private static IdentityWebFixture fixture => Shared;
+
     private const string LoginFailureMessage =
         "Sign-in failed. Check your email and password and try again. After five failed attempts, sign-in is blocked for five minutes.";
 
@@ -19,7 +21,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
             ? cookies.FirstOrDefault(c => c.StartsWith(IdentityModule.AuthCookieName + "=", StringComparison.Ordinal))
             : null;
 
-    [Fact]
+    [Test]
     public async Task Unauthenticated_page_requests_redirect_to_login()
     {
         using var session = fixture.NewSession();
@@ -30,7 +32,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Equal("http://localhost/account/login?ReturnUrl=%2Fcases", response.Headers.Location!.ToString());
     }
 
-    [Fact]
+    [Test]
     public async Task An_anonymous_visitor_at_the_site_root_gets_the_landing_page_with_a_sign_in_link()
     {
         using var session = fixture.NewSession();
@@ -46,7 +48,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Contains("href=\"account/login\" data-testid=\"landing-sign-in\"", html);
     }
 
-    [Fact]
+    [Test]
     public async Task A_signed_in_visitor_on_the_landing_page_is_offered_the_dashboard()
     {
         using var session = fixture.NewSession();
@@ -58,9 +60,8 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.DoesNotContain("landing-sign-in", html);
     }
 
-    [Theory]
-    [InlineData("caseworker@example.test", AppRoles.CaseWorker)]
-    [InlineData("supervisor@example.test", AppRoles.Supervisor)]
+    [TestCase("caseworker@example.test", AppRoles.CaseWorker)]
+    [TestCase("supervisor@example.test", AppRoles.Supervisor)]
     public async Task Valid_seeded_credentials_sign_in_redirect_to_the_case_list_and_show_name_and_role(string userName, string role)
     {
         using var session = fixture.NewSession();
@@ -83,11 +84,10 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
             userName == "caseworker@example.test" ? DemoUsers.CaseWorker.Id : DemoUsers.Supervisor.Id));
     }
 
-    [Theory]
-    [InlineData("/?status=New", "/?status=New")]
-    [InlineData("https://evil.example/phish", "/")]
-    [InlineData("//evil.example/phish", "/")]
-    [InlineData("/\\evil.example/phish", "/")]
+    [TestCase("/?status=New", "/?status=New")]
+    [TestCase("https://evil.example/phish", "/")]
+    [TestCase("//evil.example/phish", "/")]
+    [TestCase("/\\evil.example/phish", "/")]
     public async Task Login_redirects_only_to_local_return_urls(string returnUrl, string expectedLocation)
     {
         using var session = fixture.NewSession();
@@ -99,9 +99,8 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Equal(new Uri("http://localhost" + expectedLocation), login.Headers.Location);
     }
 
-    [Theory]
-    [InlineData("caseworker@example.test", "Wrong-Passw0rd-1", true)]
-    [InlineData("nobody-here@example.test", "Unknown-Passw0rd-2", false)]
+    [TestCase("caseworker@example.test", "Wrong-Passw0rd-1", true)]
+    [TestCase("nobody-here@example.test", "Unknown-Passw0rd-2", false)]
     public async Task Invalid_credentials_show_one_generic_focused_error_and_log_LoginFailed_without_the_password(
         string userName, string password, bool accountExists)
     {
@@ -132,7 +131,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Signing_out_clears_the_cookie_and_protected_pages_redirect_to_login_again()
     {
         using var session = fixture.NewSession();
@@ -156,7 +155,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3004);
     }
 
-    [Fact]
+    [Test]
     public async Task A_login_post_without_an_antiforgery_token_is_rejected()
     {
         using var session = fixture.NewSession();
@@ -173,7 +172,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Null(AuthCookie(response));
     }
 
-    [Fact]
+    [Test]
     public async Task A_logout_post_without_an_antiforgery_token_is_rejected_and_the_user_stays_signed_in()
     {
         using var session = fixture.NewSession();
@@ -186,7 +185,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/")).StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task Five_failed_attempts_lock_the_account_for_five_minutes_and_a_correct_password_is_then_rejected()
     {
         using var session = fixture.NewSession();
@@ -211,11 +210,10 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3003 && r.Id.Name == "LoginLockedOut");
     }
 
-    [Theory]
-    [InlineData("/account/login")]
-    [InlineData("/")]
-    [InlineData("/app.css")]
-    [InlineData("/health/live")]
+    [TestCase("/account/login")]
+    [TestCase("/")]
+    [TestCase("/app.css")]
+    [TestCase("/health/live")]
     public async Task Every_response_carries_the_baseline_security_headers(string path)
     {
         using var session = fixture.NewSession();
@@ -235,7 +233,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
     /// Testing environment without static web assets, so the anonymous script fetch is checked against the published app
     /// (docs/verification.md) rather than here.
     /// </summary>
-    [Fact]
+    [Test]
     public async Task The_login_page_is_reachable_anonymously_with_labeled_fields()
     {
         using var session = fixture.NewSession();
@@ -251,7 +249,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.DoesNotContain("<!--Blazor:", html);   // static SSR: no interactive component markers on the account page
     }
 
-    [Fact]
+    [Test]
     public async Task The_interactive_hub_rejects_anonymous_connections_without_redirecting()
     {
         using var session = fixture.NewSession();
@@ -261,7 +259,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         Assert.Equal(HttpStatusCode.Unauthorized, negotiate.StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task The_auth_cookie_survives_a_new_host_sharing_the_data_protection_keys()
     {
         // Keys on a shared directory (the 'dataprotection' volume in Compose) let a recreated web container read cookies.
@@ -288,7 +286,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Lockout_options_match_the_baseline()
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();

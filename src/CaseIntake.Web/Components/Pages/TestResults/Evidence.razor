@@ -84,7 +84,7 @@
                         </div>
                         @if (!a.Purged)
                         {
-                            <a href="@TestResultRoutes.ArtifactDownload(a.Id)" download data-enhance-nav="false">Download<span class="visually-hidden"> @a.FileName</span></a>
+                            <a href="@TestResultRoutes.ArtifactDownload(a.Id)" download data-enhance-nav="false">Download<span class="visually-hidden">@($" {a.FileName}")</span></a>
                         }
                     </div>
                 </li>

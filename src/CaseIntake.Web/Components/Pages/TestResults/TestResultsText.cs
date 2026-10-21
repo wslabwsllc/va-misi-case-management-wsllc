@@ -12,7 +12,36 @@ public static class TestResultsText
     public const string HowToProduceRuns =
         "Run the documented test command (scripts/run-all-tests.sh, or docker compose run --rm tests). New runs are imported automatically within a minute, or with Import new runs.";
 
-    public static string Outcome(TestOutcome outcome) => outcome == TestOutcome.NotExecuted ? "Not executed" : outcome.ToString();
+    /// <summary>"Not Run" for tests that never executed (never shown as passed); "Not Applicable" spelled out.</summary>
+    public static string Outcome(TestOutcome outcome) => outcome switch
+    {
+        TestOutcome.NotExecuted => "Not Run",
+        TestOutcome.NotApplicable => "Not Applicable",
+        _ => outcome.ToString(),
+    };
+
+    public static string Classification(AccessibilityClassification? classification) => classification switch
+    {
+        AccessibilityClassification.Section508 => "Section 508",
+        AccessibilityClassification.Wcag22Project => "WCAG 2.2 AA project check",
+        _ => "Not classified",
+    };
+
+    public static string Method(TestMethod? method) => method switch
+    {
+        TestMethod.Automated => "Automated",
+        TestMethod.ManualKeyboard => "Manual keyboard",
+        TestMethod.ScreenReader => "Screen reader",
+        TestMethod.VisualOther => "Visual or other",
+        _ => "Not recorded",
+    };
+
+    /// <summary>"WCAG 2.2 · 2.4.11 · AA", or null without a mapping.</summary>
+    public static string? Wcag(string? version, string? criterion, string? level) =>
+        version is null && criterion is null ? null : string.Join(" · ", new[] { version is null ? null : $"WCAG {version}", criterion, level }.OfType<string>());
+
+    /// <summary>Passed ÷ (Passed + Failed), "N/A" when neither occurred. Not a conformance score.</summary>
+    public static string VerdictPassRate(TestOutcomeCounts c) => c.VerdictPassRate is { } rate ? UiText.Percent(rate) : "N/A";
 
     public static string OutcomeCss(TestOutcome outcome) => "outcome-" + outcome.ToString().ToLowerInvariant();
 
@@ -36,6 +65,7 @@ public static class TestResultsText
         TestType.Component => "Component (bUnit)",
         TestType.Integration => "Integration",
         TestType.EndToEnd => "End-to-end (Playwright)",
+        TestType.Manual => "Manual",
         _ => type.ToString(),
     };
 
@@ -53,19 +83,19 @@ public static class TestResultsText
     {
         { Status: TestRunStatus.FailedToStart } => ("Failed to start", "outcome-failed"),
         { Counts.Failed: > 0 } => (Count(run.Counts.Failed, "failed"), "outcome-blocked"),
-        { Counts.NotExecuted: > 0 } => (Count(run.Counts.NotExecuted, "not executed"), "outcome-notexecuted"),
+        { Counts.NotExecuted: > 0 } => (Count(run.Counts.NotExecuted, "not run"), "outcome-notexecuted"),
         { Counts.Blocked: > 0 } => (Count(run.Counts.Blocked, "blocked"), "outcome-blocked"),
         _ => ("Passed", "outcome-passed"),
     };
 
     public static string Counts(TestOutcomeCounts c) => string.Create(CultureInfo.InvariantCulture,
-        $"{c.Total} total, {c.Passed} passed, {c.Failed} failed, {c.Skipped} skipped, {c.Blocked} blocked, {c.NotExecuted} not executed");
+        $"{c.Total} total, {c.Passed} passed, {c.Failed} failed, {c.Skipped} skipped, {c.Blocked} blocked, {c.NotExecuted} not run{(c.NotApplicable > 0 ? $", {c.NotApplicable} not applicable" : "")}");
 
     public static string PassRate(TestOutcomeCounts c) => c.PassRate is { } rate ? UiText.Percent(rate) : "n/a";
 
     public static string ShortCommit(string? commit) => commit is null ? "unknown" : commit.Length > 10 ? commit[..10] : commit;
 
-    /// <summary>A short run label for chart axes: the Eastern start, such as "10/21 09:05 AM EDT".</summary>
+    /// <summary>A short run label for chart axes: the Eastern start, such as "10-21 09:05 ET".</summary>
     public static string ChartLabel(TestRunSummaryDto run) =>
         UiText.ShortTime(run.StartedAtUtc);
 

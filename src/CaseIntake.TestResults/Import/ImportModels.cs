@@ -115,3 +115,50 @@ public sealed class EvidenceFile
     public string File { get; set; } = string.Empty;
     public string? Caption { get; set; }
 }
+
+/// <summary>
+/// One manual test (keyboard, screen reader, visual) from a run's <c>manual/*.json</c> (copied from
+/// <c>tests/accessibility/</c> by scripts/run-tests.sh). Its metadata classifies it explicitly; <see cref="Result"/>
+/// records an execution. Without a complete result the test is imported as Not Run: a verdict needs who ran it, when,
+/// and what they observed, so no passing result is ever created without execution evidence.
+/// </summary>
+public sealed class ManualTestEntry
+{
+    /// <summary>Stable ID, for example <c>A11Y-KB-001</c>; the test's identity across runs.</summary>
+    public string Id { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string? Page { get; set; }
+    public string? Workflow { get; set; }
+
+    /// <summary>Section508 or Wcag22 (anything else leaves the test unclassified).</summary>
+    public string? Classification { get; set; }
+    public string? Section508Provision { get; set; }
+    public string? WcagVersion { get; set; }
+    public string? WcagCriterion { get; set; }
+    public string? WcagLevel { get; set; }
+
+    /// <summary>ManualKeyboard, ScreenReader or VisualOther.</summary>
+    public string? Method { get; set; }
+    public string? Preconditions { get; set; }
+    public string? Steps { get; set; }
+    public string? Expected { get; set; }
+    public string? Priority { get; set; }
+    public List<string> Requirements { get; set; } = [];
+    public ManualTestResult? Result { get; set; }
+}
+
+/// <summary>A recorded manual execution. Passed, Failed, Blocked and NotApplicable need Tester, ExecutedAtUtc and Actual.</summary>
+public sealed class ManualTestResult
+{
+    public string Outcome { get; set; } = "NotExecuted";
+    public DateTimeOffset? ExecutedAtUtc { get; set; }
+    public string? Tester { get; set; }
+    public string? Browser { get; set; }
+    public string? AssistiveTechnology { get; set; }
+    public string? Actual { get; set; }
+    public string? DefectReference { get; set; }
+    public string? RemediationNotes { get; set; }
+
+    /// <summary>Evidence files next to the JSON file (no directories).</summary>
+    public List<EvidenceFile> Evidence { get; set; } = [];
+}

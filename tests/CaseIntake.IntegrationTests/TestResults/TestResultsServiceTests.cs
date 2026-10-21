@@ -14,9 +14,11 @@ namespace CaseIntake.IntegrationTests.TestResults;
 /// E5: the results service over imported runs: dashboard and comparison, filtered and paged lists with literal (ILike)
 /// search, history and flaky tests, audited evidence access and exports, and permission checks on every call.
 /// </summary>
-[Trait("Category", "Story:E5-S4")]
-public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>, IAsyncLifetime
+[Category("Story:E5-S4")]
+public sealed class TestResultsServiceTests : ClassFixture<TestResultsServiceTests, PostgresDatabaseFixture>, IAsyncLifetime
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private const string WebSuite = "CaseIntake.Web.Tests";
     private const string E2ESuite = "CaseIntake.E2E";
     private const string Lists = "Ns.Web.CaseListTests.Lists_cases";
@@ -26,6 +28,8 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
     private static readonly string LongMessage = "Expected " + new string('x', 400);
 
     private readonly TestResultsTestHarness _h = new(database);
+
+    [SetUp]
 
     public async Task InitializeAsync()
     {
@@ -66,6 +70,8 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         _h.ImporterLogs.Collector.Clear();
     }
 
+    [TearDown]
+
     public Task DisposeAsync()
     {
         _h.Dispose();
@@ -98,7 +104,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
 
     private async Task<string[]> RunKeysAsync(TestRunQuery query) => [.. Ok(await Service.ListRunsAsync(query, default)).Items.Select(r => r.RunKey)];
 
-    [Fact]
+    [Test]
     public async Task Dashboard_shows_the_latest_run_its_comparison_and_breakdowns()
     {
         var dashboard = Ok(await Service.GetDashboardAsync(default));
@@ -113,7 +119,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal("20261016-r1", dashboard.Comparison!.Previous!.RunKey);
     }
 
-    [Fact]
+    [Test]
     public async Task Dashboard_is_empty_before_anything_is_imported()
     {
         await database.ResetAsync();
@@ -126,7 +132,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(0, dashboard.KnownTestCases);
     }
 
-    [Fact]
+    [Test]
     public async Task A_run_is_compared_with_the_run_before_it_by_start_time()
     {
         var comparison = Ok(await Service.CompareWithPreviousAsync(await RunIdAsync("20261017-r2"), default));
@@ -145,7 +151,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         TestResultsTestHarness.Fail(await Service.CompareWithPreviousAsync(-1, default), ErrorKind.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task The_first_run_with_results_lists_its_failures_and_every_test_as_new()
     {
         var comparison = Ok(await Service.CompareWithPreviousAsync(await RunIdAsync("20261016-r1"), default));
@@ -156,7 +162,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Empty(comparison.NewlyFailed);   // nothing ran before, so nothing is newly failed
     }
 
-    [Fact]
+    [Test]
     public async Task Runs_are_listed_newest_first_and_paged()
     {
         var page = Ok(await Service.ListRunsAsync(new TestRunQuery(Page: 2, PageSize: 1), default));
@@ -166,7 +172,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(["20261017-r2", "20261016-r1", "20261015-r0"], await RunKeysAsync(new TestRunQuery()));
     }
 
-    [Fact]
+    [Test]
     public async Task Runs_filter_by_status_environment_and_eastern_calendar_days()
     {
         Assert.Equal(["20261015-r0"], await RunKeysAsync(new TestRunQuery(Status: TestRunStatus.FailedToStart)));
@@ -175,33 +181,29 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(["20261017-r2"], await RunKeysAsync(new TestRunQuery(FromDate: new DateOnly(2026, 10, 17))));
         Assert.Equal(["20261016-r1", "20261015-r0"], await RunKeysAsync(new TestRunQuery(ToDate: new DateOnly(2026, 10, 16))));
     }
-
-    [Theory]
-    [InlineData("SEARCH", new[] { "20261017-r2" })]          // branch, case-insensitive
-    [InlineData("%", new[] { "20261017-r2" })]               // a literal percent, not a wildcard
-    [InlineData("_100", new[] { "20261017-r2" })]            // a literal underscore
-    [InlineData("Searc__1", new string[0])]                  // "_" must not match any one character
-    [InlineData("abc", new[] { "20261017-r2", "20261016-r1" })]   // commit
-    [InlineData("NIGHTLY-7", new[] { "20261015-r0" })]       // build id
-    [InlineData("20261016", new[] { "20261016-r1" })]        // run key
-    [InlineData("  ", new[] { "20261017-r2", "20261016-r1", "20261015-r0" })]
-    [InlineData("\\", new string[0])]
+    [TestCase("SEARCH", new[] { "20261017-r2" })]          // branch, case-insensitive
+    [TestCase("%", new[] { "20261017-r2" })]               // a literal percent, not a wildcard
+    [TestCase("_100", new[] { "20261017-r2" })]            // a literal underscore
+    [TestCase("Searc__1", new string[0])]                  // "_" must not match any one character
+    [TestCase("abc", new[] { "20261017-r2", "20261016-r1" })]   // commit
+    [TestCase("NIGHTLY-7", new[] { "20261015-r0" })]       // build id
+    [TestCase("20261016", new[] { "20261016-r1" })]        // run key
+    [TestCase("  ", new[] { "20261017-r2", "20261016-r1", "20261015-r0" })]
+    [TestCase("\\", new string[0])]
     public async Task Run_search_is_a_case_insensitive_literal_substring_match(string search, string[] expected)
     {
         Assert.Equal(expected, await RunKeysAsync(new TestRunQuery(Search: search)));
     }
 
-    [Fact]
+    [Test]
     public async Task Very_long_search_text_is_accepted_and_capped()
     {
         Assert.Empty(await RunKeysAsync(new TestRunQuery(Search: "20261016" + new string('z', 400))));
         Assert.Empty(Ok(await Service.ListTestCasesAsync(new TestCaseQuery(Search: new string('a', 300)), default)).Items);
     }
-
-    [Theory]
-    [InlineData(0, 25, "Page")]
-    [InlineData(1, 0, "PageSize")]
-    [InlineData(1, 201, "PageSize")]
+    [TestCase(0, 25, "Page")]
+    [TestCase(1, 0, "PageSize")]
+    [TestCase(1, 201, "PageSize")]
     public async Task Invalid_paging_is_a_validation_error_on_every_list(int page, int pageSize, string field)
     {
         var errors = new[]
@@ -219,7 +221,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         });
     }
 
-    [Fact]
+    [Test]
     public async Task Run_detail_has_environment_suites_and_run_level_evidence()
     {
         var runId = await RunIdAsync("20261017-r2");
@@ -238,7 +240,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         TestResultsTestHarness.Fail(await Service.GetRunAsync(-1, default), ErrorKind.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Suite_summaries_missing_fields_read_with_defaults()
     {
         var runId = await RunIdAsync("20261016-r1");
@@ -250,7 +252,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal([new TestSuiteDto("", TestType.Unit, "", 0, null), new TestSuiteDto("S", TestType.Unit, "", 0, null)], detail.Suites);
     }
 
-    [Fact]
+    [Test]
     public async Task Executions_list_failures_first_and_trim_long_messages()
     {
         var runId = await RunIdAsync("20261016-r1");
@@ -268,7 +270,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(TimeSpan.FromMilliseconds(125), failed.Duration);
     }
 
-    [Fact]
+    [Test]
     public async Task Executions_filter_by_outcome_module_type_and_search()
     {
         async Task<int> Count(TestExecutionQuery q) => Ok(await Service.ListExecutionsAsync(q, default)).TotalCount;
@@ -284,7 +286,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(10, await Count(new TestExecutionQuery(Outcomes: [])));
     }
 
-    [Fact]
+    [Test]
     public async Task Execution_detail_has_the_case_steps_in_order_evidence_and_requirements()
     {
         var runId = await RunIdAsync("20261017-r2");
@@ -309,7 +311,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         TestResultsTestHarness.Fail(await Service.GetExecutionAsync(-1, default), ErrorKind.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Test_cases_list_failing_first_and_filter_by_module_type_last_outcome_and_search()
     {
         async Task<string[]> Titles(TestCaseQuery q) => [.. Ok(await Service.ListTestCasesAsync(q, default)).Items.Select(c => c.Title)];
@@ -327,7 +329,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(["Removed later", "Was blocked"], page.Items.Select(c => c.Title));
     }
 
-    [Fact]
+    [Test]
     public async Task Test_case_history_is_newest_first_and_bounded()
     {
         var caseId = await CaseIdAsync(Lists);
@@ -343,7 +345,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         TestResultsTestHarness.Fail(await Service.GetTestCaseHistoryAsync(-1, 10, default), ErrorKind.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Flaky_and_recurring_failures_are_found_in_recent_runs()
     {
         var flaky = Ok(await Service.GetFlakyTestsAsync(10, default));
@@ -361,7 +363,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(3, lastTwo.Count);
     }
 
-    [Fact]
+    [Test]
     public async Task Evidence_lists_filter_by_run_kind_and_search_across_file_caption_and_test()
     {
         async Task<TestArtifactListItemDto[]> List(TestArtifactQuery q) => [.. Ok(await Service.ListArtifactsAsync(q, default)).Items];
@@ -381,14 +383,14 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal((7, 2), (paged.TotalCount, paged.Items.Count));
     }
 
-    [Fact]
+    [Test]
     public async Task Modules_and_environments_are_distinct_and_sorted()
     {
         Assert.Equal(["E2E", "Web.Tests"], Ok(await Service.ListModulesAsync(default)));
         Assert.Equal(["docker compose tests", "nightly"], Ok(await Service.ListEnvironmentsAsync(default)));
     }
 
-    [Fact]
+    [Test]
     public async Task Opening_evidence_streams_the_file_and_audits_views_and_downloads()
     {
         var shot = await _h.QueryAsync(db => db.TestArtifacts.SingleAsync(a => a.Run.RunKey == "20261017-r2" && a.Kind == TestArtifactKind.Screenshot));
@@ -412,7 +414,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(["viewed", "downloaded"], logs.Select(r => r.GetStructuredStateValue("Access")));
     }
 
-    [Fact]
+    [Test]
     public async Task Purged_missing_and_unknown_evidence_cannot_be_opened()
     {
         var shots = await _h.QueryAsync(db => db.TestArtifacts.Where(a => a.Kind == TestArtifactKind.Screenshot).OrderBy(a => a.CreatedAtUtc).ToListAsync());
@@ -430,7 +432,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(0, await _h.QueryAsync(db => db.TestResultAuditEntries.CountAsync(a => a.Action.StartsWith("Evidence"))));
     }
 
-    [Fact]
+    [Test]
     public async Task A_run_exports_as_csv_or_html_and_each_export_is_audited()
     {
         var runId = await RunIdAsync("20261017-r2");
@@ -453,7 +455,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(2, _h.ServiceLogs.Collector.GetSnapshot().Count(r => r.Id.Id == 5204));
     }
 
-    [Fact]
+    [Test]
     public async Task Unknown_formats_and_runs_cannot_be_exported()
     {
         var runId = await RunIdAsync("20261017-r2");
@@ -464,7 +466,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(0, await _h.QueryAsync(db => db.TestResultAuditEntries.CountAsync(a => a.Action == "ReportExported")));
     }
 
-    [Fact]
+    [Test]
     public async Task Importing_through_the_service_needs_manage_and_records_the_actor()
     {
         _h.NewRun("20261018-r3", T.AddDays(2)).Suite(WebSuite, "Component", Trx.Document(new TrxTest("Ns.Web.CaseListTests", "Lists_cases"))).Complete();
@@ -484,7 +486,7 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal((Permissions.TestResultsManage, "import"), (deniedLog.GetStructuredStateValue("Permission"), deniedLog.GetStructuredStateValue("ResourceId")));
     }
 
-    [Fact]
+    [Test]
     public async Task Every_call_without_the_view_permission_is_forbidden_and_logged()
     {
         _h.Actor = TestResultsActors.NoPermissions;
@@ -521,14 +523,14 @@ public sealed class TestResultsServiceTests(PostgresDatabaseFixture database) : 
         Assert.Equal(0, await _h.QueryAsync(db => db.TestResultAuditEntries.CountAsync(a => a.Action != "RunImported")));
     }
 
-    [Fact]
+    [Test]
     public void Type_labels_name_the_tooling()
     {
         Assert.Equal(["Unit", "Component (bUnit)", "Integration", "End-to-end (Playwright)", "99"],
             new[] { TestType.Unit, TestType.Component, TestType.Integration, TestType.EndToEnd, (TestType)99 }.Select(TestResultsService.TypeLabel));
     }
 
-    [Fact]
+    [Test]
     public void A_summary_of_a_run_without_its_environment_reads_unknown()
     {
         var summary = TestResultsService.Summary(new TestRun { RunKey = "r", Runner = "x", Environment = null! });

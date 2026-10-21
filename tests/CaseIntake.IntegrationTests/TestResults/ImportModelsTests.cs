@@ -4,10 +4,10 @@ using CaseIntake.TestResults.Import;
 namespace CaseIntake.IntegrationTests.TestResults;
 
 /// <summary>E5: run.json and evidence.json are read with the documented schema, defaults and tolerance.</summary>
-[Trait("Category", "Story:E5-S2")]
+[Category("Story:E5-S2")]
 public class ImportModelsTests
 {
-    [Fact]
+    [Test]
     public void A_run_manifest_written_by_run_tests_sh_round_trips_with_comments_and_trailing_commas()
     {
         const string json = """
@@ -45,7 +45,7 @@ public class ImportModelsTests
         Assert.Equal("synthetic", manifest.Notes);
     }
 
-    [Fact]
+    [Test]
     public void Missing_manifest_fields_take_the_documented_defaults()
     {
         var manifest = JsonSerializer.Deserialize<RunManifest>("""{"runKey":"r1","suites":[{"name":"S"}]}""", RunManifest.Json)!;
@@ -61,7 +61,7 @@ public class ImportModelsTests
         Assert.Equal(("unknown", "unknown", "unknown", (string?)null), (env.Name, env.Os, env.Runtime, env.BaseUrl));
     }
 
-    [Fact]
+    [Test]
     public void Deeply_nested_manifests_are_refused()
     {
         var json = """{"runKey":"r","notes":""" + new string('[', 40) + new string(']', 40) + "}";
@@ -69,7 +69,7 @@ public class ImportModelsTests
         Assert.Throws<JsonException>(() => JsonSerializer.Deserialize<RunManifest>(json, RunManifest.Json));
     }
 
-    [Fact]
+    [Test]
     public void An_evidence_manifest_carries_steps_files_and_browser_problems_but_not_its_folder()
     {
         const string json = """

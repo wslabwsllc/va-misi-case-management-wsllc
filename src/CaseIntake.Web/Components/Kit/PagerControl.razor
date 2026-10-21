@@ -1,14 +1,50 @@
 @using CaseIntake.Web.Services
-@* Labelled Previous/Next paging with the range and page announced politely. Keeps focus on the pager when the
-   activated button becomes disabled (first or last page). *@
-<nav class="pager" aria-label="@Label">
-    <button type="button" class="btn" @ref="_previous" disabled="@(Page <= 1)" @onclick="PreviousAsync" aria-label="Go to previous page" data-testid="pager-previous">
-        <Icon Name="chevron-left" Small="true" /> Previous
-    </button>
-    <span class="pager__info" role="status" aria-live="polite">@UiText.ShowingRange(Page, PageSize, TotalCount, Noun) · Page @Page of @PageCount</span>
-    <button type="button" class="btn" @ref="_next" disabled="@(Page >= PageCount)" @onclick="NextAsync" aria-label="Go to next page" data-testid="pager-next">
-        Next <Icon Name="chevron-right" Small="true" />
-    </button>
+@* The shared bottom pager: optional rows-per-page, "Showing X–Y of Z", "Page X of Y", and Previous / numbered pages /
+   Next. Every control is a native button with a text name; the current page carries aria-current="page". Keeps focus
+   on the pager when the activated button becomes disabled (first or last page). The range is announced politely
+   unless the page announces results itself (Announce="false"). *@
+<nav class="pager" aria-label="@Label" data-testid="@($"{TestIdPrefix}-nav")">
+    @if (PageSizes is { Count: > 0 } && OnPageSizeChanged.HasDelegate)
+    {
+        <div class="pager__size">
+            <label for="@($"{IdPrefix}-size")">Rows per page</label>
+            <select id="@($"{IdPrefix}-size")" value="@PageSize" @onchange="PageSizeAsync" data-testid="@($"{TestIdPrefix}-size")">
+                @foreach (var size in PageSizes)
+                {
+                    <option value="@size">@size</option>
+                }
+            </select>
+        </div>
+    }
+    <span class="pager__info" role="@(Announce ? "status" : null)" aria-live="@(Announce ? "polite" : null)" data-testid="@($"{TestIdPrefix}-range")">@UiText.ShowingRange(Page, PageSize, TotalCount, Noun)</span>
+    <span class="pager__info" data-testid="@($"{TestIdPrefix}-info")">Page @Page of @PageCount</span>
+    <ul class="pager__pages">
+        <li>
+            <button type="button" class="btn" @ref="_previous" disabled="@(Page <= 1)" @onclick="PreviousAsync" aria-label="Go to previous page" data-testid="@($"{TestIdPrefix}-previous")">
+                <Icon Name="chevron-left" Small="true" /> <span class="desktop-only">Previous</span>
+            </button>
+        </li>
+        @foreach (var item in Numbers())
+        {
+            if (item is null)
+            {
+                <li class="pager__gap" aria-hidden="true">…</li>
+            }
+            else
+            {
+                var n = item.Value;
+                <li>
+                    <button type="button" class="btn pager__page" aria-current="@(n == Page ? "page" : null)" aria-label="@($"Page {n}")"
+                            @onclick="() => GoAsync(n)" data-testid="@($"{TestIdPrefix}-number-{n}")">@n</button>
+                </li>
+            }
+        }
+        <li>
+            <button type="button" class="btn" @ref="_next" disabled="@(Page >= PageCount)" @onclick="NextAsync" aria-label="Go to next page" data-testid="@($"{TestIdPrefix}-next")">
+                <span class="desktop-only">Next</span> <Icon Name="chevron-right" Small="true" />
+            </button>
+        </li>
+    </ul>
 </nav>
 
 @code {
@@ -22,8 +58,32 @@
     [Parameter] public string Noun { get; set; } = "items";
     [Parameter] public string Label { get; set; } = "Pagination";
     [Parameter, EditorRequired] public EventCallback<int> OnPageChanged { get; set; }
+    [Parameter] public IReadOnlyList<int>? PageSizes { get; set; }
+    [Parameter] public EventCallback<int> OnPageSizeChanged { get; set; }
+    [Parameter] public bool Announce { get; set; } = true;
+    [Parameter] public string TestIdPrefix { get; set; } = "pager";
+    [Parameter] public string IdPrefix { get; set; } = "pager";
 
     private int PageCount => TotalCount <= 0 ? 1 : (int)Math.Ceiling(TotalCount / (double)PageSize);
+
+    /// <summary>1 … (page-1) page (page+1) … last; null marks a gap.</summary>
+    private IEnumerable<int?> Numbers()
+    {
+        var count = PageCount;
+        var wanted = new SortedSet<int> { 1, count, Page, Page - 1, Page + 1 };
+        var previous = 0;
+        foreach (var n in wanted.Where(n => n >= 1 && n <= count))
+        {
+            if (n - previous > 1)
+            {
+                yield return null;
+            }
+            yield return n;
+            previous = n;
+        }
+    }
+
+    private Task GoAsync(int page) => page == Page ? Task.CompletedTask : OnPageChanged.InvokeAsync(page);
 
     private Task PreviousAsync()
     {
@@ -36,6 +96,9 @@
         _moved = "next";
         return OnPageChanged.InvokeAsync(Math.Min(PageCount, Page + 1));
     }
+
+    private Task PageSizeAsync(ChangeEventArgs e) =>
+        int.TryParse(e.Value?.ToString(), out var size) ? OnPageSizeChanged.InvokeAsync(size) : Task.CompletedTask;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {

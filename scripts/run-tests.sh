@@ -123,6 +123,12 @@ if [[ "${CAPTURE_SERVER_LOGS:-}" == "1" ]]; then
   # scripts/run-all-tests.sh adds the app's log and then renames the manifest, so the run is imported with it.
   server_logs='["server-web-e2e.log"]'; manifest_name="run.json.pending"
 fi
+# Manual accessibility test cases (keyboard, screen reader, visual) travel with every full or UI run. Entries without a
+# recorded result are imported as Not Run; nothing here is ever reported as passed unless a tester recorded it.
+if [[ "$selection" == "all" || "$selection" == "ui" ]] && compgen -G "tests/accessibility/*.json" >/dev/null; then
+  mkdir -p "$run_dir/manual" && cp tests/accessibility/*.json "$run_dir/manual/"
+fi
+
 cat > "$run_dir/.run.json.tmp" <<EOF
 {
   "schemaVersion": 1,

@@ -8,9 +8,9 @@ using CaseIntake.Web.Components.Pages;
 namespace CaseIntake.Web.Tests;
 
 /// <summary>Dashboard: KPIs and charts from the authorized case service only, per role; empty, error and retry states.</summary>
-[Trait("Category", "Story:Dashboard")]
-[Trait("Category", "Req:R-4.2-11")]
-[Trait("Category", "Req:R-4.2-12")]
+[Category("Story:Dashboard")]
+[Category("Req:R-4.2-11")]
+[Category("Req:R-4.2-12")]
 public class DashboardTests : WebTestContext
 {
     private const string Supervisor = "supervisor@example.test";
@@ -29,7 +29,7 @@ public class DashboardTests : WebTestContext
 
     private static string Kpi(IRenderedComponent<Home> cut, string id) => cut.Find($"[data-testid={id}] .kpi__value").TextContent;
 
-    [Fact]
+    [Test]
     public async Task Kpis_are_computed_from_the_case_service_data()
     {
         SignInAs(AppRoles.Supervisor);
@@ -47,7 +47,7 @@ public class DashboardTests : WebTestContext
         Assert.All(CaseService.ListQueries, q => Assert.Equal(100, q.PageSize));
     }
 
-    [Fact]
+    [Test]
     public async Task Overdue_follows_the_due_date_not_the_last_update()
     {
         SignInAs(AppRoles.Supervisor);
@@ -58,14 +58,145 @@ public class DashboardTests : WebTestContext
 
         cut.WaitForAssertion(() => Assert.Equal("2", Kpi(cut, "kpi-overdue")));
         Assert.Equal("cases?overdue=true&sort=DueOn&dir=asc", cut.Find("[data-testid=kpi-overdue]").GetAttribute("href"));
-        var attention = cut.Find("[data-testid=attention]").TextContent;
-        Assert.Contains("In progress case", attention);
-        Assert.Contains("Triaged case", attention);
-        Assert.DoesNotContain("New case one", attention);
-        Assert.Contains("overdue by 4 days", attention);   // urgent: due 2026-10-21
     }
 
-    [Fact]
+    [Test]
+    public async Task Attention_and_recent_case_lists_are_gone_and_my_pending_tasks_is_a_kpi()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+
+        var cut = Render<Home>();
+
+        cut.WaitForAssertion(() => Assert.Equal("6", Kpi(cut, "kpi-total")));
+        Assert.Empty(cut.FindAll("[data-testid=attention]"));
+        Assert.Empty(cut.FindAll("[data-testid=recent-cases]"));
+        Assert.Empty(cut.FindAll("[data-testid=my-tasks]"));
+        var tasks = cut.Find("[data-testid=kpi-tasks]");
+        Assert.Equal("my-work", tasks.GetAttribute("href"));
+        Assert.Equal("5", Kpi(cut, "kpi-tasks"));   // a supervisor can move every status except Closed
+        Assert.Equal(7, cut.FindAll("[data-testid=kpis] > li").Count);
+    }
+
+    [Test]
+    public async Task Kpi_cards_are_single_links_with_a_details_hint_and_no_nested_controls()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+
+        var cut = Render<Home>();
+
+        cut.WaitForAssertion(() => Assert.Equal("6", Kpi(cut, "kpi-total")));
+        foreach (var card in cut.FindAll("[data-testid=kpis] a.icard"))
+        {
+            Assert.Empty(card.QuerySelectorAll("a, button, input, select"));
+            var hint = card.QuerySelector(".icard__more")!;
+            Assert.Contains("View details", hint.TextContent);
+            Assert.Equal("true", hint.GetAttribute("aria-hidden"));
+        }
+        Assert.Contains("icard--red", cut.Find("[data-testid=kpi-overdue]").ClassList);
+        Assert.Contains("icard--green", cut.Find("[data-testid=kpi-resolved]").ClassList);
+    }
+
+    [Test]
+    public async Task Filters_live_in_the_url_narrow_every_figure_and_are_kept_by_the_kpi_links()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+        Navigation.NavigateTo("?priority=High&from=2026-10-01&to=2026-10-31");
+
+        var cut = Render<Home>();
+
+        cut.WaitForAssertion(() => Assert.Equal("1", Kpi(cut, "kpi-total")));   // only the High (Triaged) case
+        Assert.Equal("1", Kpi(cut, "kpi-open"));
+        Assert.Equal("10-01-2026", cut.Find("#dash-from").GetAttribute("value"));
+        Assert.Equal("High", cut.Find("#dash-priority").GetAttribute("value"));
+        Assert.Equal("cases?status=New&status=Triaged&status=InProgress&priority=High&createdFrom=2026-10-01&createdTo=2026-10-31",
+            cut.Find("[data-testid=kpi-open]").GetAttribute("href"));
+        Assert.Contains("priority=High", cut.Find("[data-testid=quick-export]").GetAttribute("href"));
+        Assert.Contains("Export filtered CSV", cut.Find("[data-testid=quick-export]").TextContent);
+        Assert.Contains("created", cut.Find("#dash-basis").TextContent);
+        Assert.Contains("Dashboard filtered: 1 case.", cut.Find("[data-testid=dashboard-announcement]").TextContent);
+    }
+
+    [Test]
+    public async Task Changing_a_filter_applies_it_and_reset_clears_every_filter()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+        var cut = Render<Home>();
+        cut.WaitForAssertion(() => Assert.Equal("6", Kpi(cut, "kpi-total")));
+        Assert.True(cut.Find("[data-testid=dash-reset]").HasAttribute("disabled"));
+
+        cut.Find("#dash-status").Change("New");
+
+        Assert.Contains("status=New", Navigation.Uri, StringComparison.Ordinal);
+        cut.WaitForAssertion(() => Assert.Equal("2", Kpi(cut, "kpi-total")));
+        cut.Find("[data-testid=dash-reset]").Click();
+        Assert.DoesNotContain("status=", Navigation.Uri, StringComparison.Ordinal);
+        cut.WaitForAssertion(() => Assert.Equal("6", Kpi(cut, "kpi-total")));
+    }
+
+    [Test]
+    public async Task Status_is_a_donut_and_open_priority_a_pie_with_counts_and_shares_as_text()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+        var cut = Render<Home>();
+
+        var status = cut.WaitForElement("[data-testid=chart-status]");
+        Assert.Equal("6", status.QuerySelector(".chart__center-value")!.TextContent);
+        var legend = status.QuerySelectorAll("[data-testid=chart-status-legend] li").Select(li => string.Concat(li.TextContent.Where(ch => !char.IsWhiteSpace(ch)))).ToList();
+        Assert.Contains("New233.3%", legend);
+        Assert.Equal("var(--status-new-c)", status.QuerySelector(".chart-legend__swatch")!.GetAttribute("style")!.Replace("background: ", ""));
+        // Slices are mouse targets only (no links inside the role="img" chart: axe nested-interactive); the legend links
+        // are the keyboard and screen-reader path (one tab stop per value).
+        Assert.Empty(status.QuerySelectorAll("svg a, svg [tabindex], svg .chart__point[aria-label]"));
+        Assert.Equal(5, status.QuerySelectorAll("svg .chart__point--link[data-href]").Length);
+        Assert.Equal("New: 2 cases, 33.3%. Open the list.", status.QuerySelector("[data-testid=chart-status-legend] a")!.GetAttribute("aria-label"));
+
+        var priority = cut.Find("[data-testid=chart-priority]");
+        Assert.Empty(priority.QuerySelectorAll(".chart__center-value"));   // a pie, not a donut
+        Assert.Contains("Urgent125%", priority.QuerySelector("[data-testid=chart-priority-legend]")!.TextContent.Replace(" ", "").Replace("\n", "").Replace("\r", ""));
+        Assert.Contains("Total", priority.QuerySelector("details tfoot")!.TextContent);
+    }
+
+    [Test]
+    public async Task Resolution_trend_is_a_line_that_says_it_approximates_completion_by_last_update()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+        var cut = Render<Home>();
+
+        var chart = cut.WaitForElement("[data-testid=chart-resolution]");
+        Assert.NotNull(chart.QuerySelector("polyline.chart__line"));
+        Assert.Equal(12, chart.QuerySelectorAll("circle.chart__marker").Length);
+        Assert.Contains("Approximation", chart.QuerySelector(".chart__desc")!.TextContent);
+        Assert.Contains("last update", chart.QuerySelector(".chart__desc")!.TextContent);
+        // Chronological months, oldest first.
+        var months = chart.QuerySelectorAll("details tbody th").Select(th => th.TextContent.Trim()).ToList();
+        Assert.Equal("Nov 2025", months[0]);
+        Assert.Equal("Oct 2026", months[^1]);
+    }
+
+    [Test]
+    public async Task Charts_offer_a_maximize_button_and_the_card_background_opens_the_same_view()
+    {
+        SignInAs(AppRoles.Supervisor);
+        await SeedMixAsync();
+        var cut = Render<Home>();
+
+        var chart = cut.WaitForElement("[data-testid=chart-status]");
+        Assert.Contains("M15 3h6v6", cut.Find("[data-testid=chart-status-expand]").InnerHtml, StringComparison.Ordinal);   // the maximize icon, not a zoom lens
+        var backdrop = chart.QuerySelector(".card__backdrop-action")!;
+        Assert.Equal("true", backdrop.GetAttribute("aria-hidden"));
+
+        cut.Find("[data-testid=chart-status] .card__backdrop-action").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal("Cases by status", cut.Find("#chart-status-zoom-title").TextContent));
+    }
+
+    [Test]
     public async Task Assigned_to_me_counts_the_open_cases_the_user_owns()
     {
         await SeedMixAsync();
@@ -78,29 +209,10 @@ public class DashboardTests : WebTestContext
         SignInAs(AppRoles.QualityAnalyst);
         var qa = Render<Home>();
         qa.WaitForAssertion(() => Assert.Equal("0", Kpi(qa, "kpi-mine")));
-        Assert.Contains("Your role has no status changes to make", qa.Find("[data-testid=my-tasks]").TextContent);
+        Assert.Equal("0", Kpi(qa, "kpi-tasks"));   // a role with no status changes has no pending tasks
     }
 
-    [Fact]
-    public async Task Recent_cases_lists_only_new_cases_created_in_the_last_seven_days()
-    {
-        SignInAs(AppRoles.Supervisor);
-        await SeedCaseAsync("Old new case");
-        await SeedCaseAsync("Old triaged case", CaseStatus.Triaged);
-        Time.Advance(TimeSpan.FromDays(10));
-        await SeedCaseAsync("Fresh new case");
-        await SeedCaseAsync("Fresh triaged case", CaseStatus.Triaged);
-
-        var cut = Render<Home>();
-
-        cut.WaitForAssertion(() => Assert.Contains("Fresh new case", cut.Find("[data-testid=recent-cases]").TextContent));
-        var recent = cut.Find("[data-testid=recent-cases]").TextContent;
-        Assert.DoesNotContain("Fresh triaged case", recent);   // not New any more
-        Assert.DoesNotContain("Old new case", recent);         // created more than 7 days ago
-        Assert.Contains("New cases created in the last 7 days", recent);
-    }
-
-    [Fact]
+    [Test]
     public async Task Refresh_shows_progress_then_announces_the_new_time()
     {
         SignInAs(AppRoles.Supervisor);
@@ -114,12 +226,14 @@ public class DashboardTests : WebTestContext
         Assert.Contains("Refreshing…", cut.Find("[data-testid=dashboard-refresh]").TextContent);
 
         cut.WaitForAssertion(() => Assert.Equal("7", Kpi(cut, "kpi-total")), TimeSpan.FromSeconds(5));
-        cut.WaitForAssertion(() => Assert.Equal("Dashboard refreshed at 08:00:42 AM EDT", Announcer.Message), TimeSpan.FromSeconds(5));
+        cut.WaitForAssertion(() => Assert.Equal("Dashboard refreshed at 08:00:42 ET", Announcer.Message), TimeSpan.FromSeconds(5));
         Assert.Contains("Refresh", cut.Find("[data-testid=dashboard-refresh]").TextContent);
-        Assert.Contains("Updated 08:00:42 AM EDT on 10/19/2026.", cut.Find(".page-header__subtitle").TextContent);
+        Assert.Contains("Updated 08:00:42 ET", cut.Find("[data-testid=dashboard-updated]").TextContent);
+        Assert.Equal("Monday, 10-19-2026", cut.Find("[data-testid=dashboard-date]").TextContent);
+        Assert.Equal("Good morning, Supervisor", cut.Find("h1").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Quick_actions_follow_permissions()
     {
         await SeedMixAsync();
@@ -127,6 +241,13 @@ public class DashboardTests : WebTestContext
         var worker = Render<Home>();
         worker.WaitForAssertion(() => Assert.Contains("New case", worker.Find("[data-testid=quick-actions]").TextContent));
         Assert.DoesNotContain("Test results", worker.Find("[data-testid=quick-actions]").TextContent);
+        Assert.Empty(worker.FindAll("[data-testid=quick-add-user]"));
+        Assert.Contains("Export CSV", worker.Find("[data-testid=quick-export]").TextContent);
+        Assert.All(worker.FindAll("[data-testid=quick-actions] a"), a => Assert.Contains("btn", a.ClassList));
+
+        SignInAs(AppRoles.Supervisor);
+        var supervisor = Render<Home>();
+        supervisor.WaitForAssertion(() => Assert.Equal("admin/users#add-user", supervisor.Find("[data-testid=quick-add-user]").GetAttribute("href")));
 
         SignInAs(AppRoles.QualityAnalyst);
         var qa = Render<Home>();
@@ -134,7 +255,7 @@ public class DashboardTests : WebTestContext
         Assert.DoesNotContain("New case", qa.Find("[data-testid=quick-actions]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Charts_are_accessible_figures_with_summaries_and_data_tables()
     {
         SignInAs(AppRoles.Supervisor);
@@ -144,7 +265,7 @@ public class DashboardTests : WebTestContext
         var status = cut.WaitForElement("[data-testid=chart-status]");
         Assert.Equal("Cases by status", status.QuerySelector("figcaption")!.TextContent);
         var svg = status.QuerySelector("svg")!;
-        Assert.Equal("group", svg.GetAttribute("role"));   // its bars are links (drill-through)
+        Assert.Equal("img", svg.GetAttribute("role"));   // a donut: the legend holds the drill-through links
         Assert.Contains("New: 2; Triaged: 1; In Progress: 1; Resolved: 1; Closed: 1.", status.QuerySelector("desc")!.TextContent);
         Assert.Equal(5, status.QuerySelectorAll("details table tbody tr").Length);
 
@@ -156,7 +277,7 @@ public class DashboardTests : WebTestContext
         Assert.DoesNotContain("Not available", cut.Markup);
     }
 
-    [Fact]
+    [Test]
     public async Task Chart_columns_and_bars_drill_through_to_the_matching_cases_with_named_links()
     {
         SignInAs(AppRoles.Supervisor);
@@ -164,11 +285,13 @@ public class DashboardTests : WebTestContext
         var cut = Render<Home>();
 
         var status = cut.WaitForElement("[data-testid=chart-status]");
-        var links = status.QuerySelectorAll("svg a.chart__point");
-        Assert.Equal(5, links.Length);
-        Assert.Equal("cases?status=Triaged", links[1].GetAttribute("href"));
-        Assert.Equal("Triaged: 1 case. Open the list.", links[1].GetAttribute("aria-label"));
-        Assert.Equal("Triaged: 1 case", status.QuerySelector($"#{links[1].GetAttribute("data-tip")}")!.TextContent);
+        var slices = status.QuerySelectorAll("svg .chart__point--link");
+        Assert.Equal(5, slices.Length);
+        Assert.Equal("cases?status=Triaged", slices[1].GetAttribute("data-href"));
+        Assert.Equal("Triaged: 1 case", status.QuerySelector($"#{slices[1].GetAttribute("data-tip")}")!.TextContent);
+        var legendLinks = status.QuerySelectorAll("[data-testid=chart-status-legend] a");
+        Assert.Equal("cases?status=Triaged", legendLinks[1].GetAttribute("href"));
+        Assert.Equal("Triaged: 1 case, 16.7%. Open the list.", legendLinks[1].GetAttribute("aria-label"));
 
         var volume = cut.Find("[data-testid=chart-volume]");
         var october = volume.QuerySelectorAll("svg a.chart__point").Last();
@@ -178,10 +301,10 @@ public class DashboardTests : WebTestContext
             volume.QuerySelector("details table tbody tr:last-child a")!.GetAttribute("href"));
 
         var priority = cut.Find("[data-testid=chart-priority]");
-        Assert.Equal("cases?status=New&status=Triaged&status=InProgress&priority=Urgent", priority.QuerySelector("svg a.chart__point")!.GetAttribute("href"));
+        Assert.Equal("cases?status=New&status=Triaged&status=InProgress&priority=Urgent", priority.QuerySelector("svg .chart__point--link")!.GetAttribute("data-href"));
     }
 
-    [Fact]
+    [Test]
     public async Task Month_axis_labels_are_short_with_the_year_once_and_never_overlap()
     {
         SignInAs(AppRoles.Supervisor);
@@ -189,7 +312,7 @@ public class DashboardTests : WebTestContext
         var cut = Render<Home>();
 
         var labels = cut.WaitForElement("[data-testid=chart-volume]").QuerySelectorAll("text.chart__axis-label");
-        // Twelve months in a 420-unit chart: every other month is labelled (estimated 4 characters fit one band).
+        // Twelve months in a 340-unit chart: every other month is labelled (estimated 4 characters fit one band).
         Assert.Equal(6, labels.Length);
         Assert.Equal("Nov2025", labels[0].TextContent);              // first month: "Nov" with the year on a second line
         Assert.Equal(2, labels[0].QuerySelectorAll("tspan").Length);
@@ -197,7 +320,7 @@ public class DashboardTests : WebTestContext
         Assert.Equal("Mar", labels[2].TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Expand_opens_a_larger_copy_of_the_chart_in_a_dialog()
     {
         SignInAs(AppRoles.Supervisor);
@@ -213,7 +336,7 @@ public class DashboardTests : WebTestContext
         Assert.Contains("viewBox=\"0 0 860", cut.Find("[data-testid=chart-volume-dialog]").InnerHtml);
     }
 
-    [Fact]
+    [Test]
     public void An_empty_system_shows_an_empty_state_with_a_create_action_for_creators()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -223,7 +346,7 @@ public class DashboardTests : WebTestContext
         Assert.Contains(cut.FindAll("[data-testid=dashboard-empty] a"), a => a.GetAttribute("href") == "cases/new");
     }
 
-    [Fact]
+    [Test]
     public async Task A_failed_load_shows_an_alert_and_retry_reloads()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -241,7 +364,7 @@ public class DashboardTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal("6", Kpi(cut, "kpi-total")));
     }
 
-    [Fact]
+    [Test]
     public void Chart_without_data_says_so_instead_of_drawing_an_empty_axis()
     {
         var cut = Render<Chart>(p => p.Add(c => c.Id, "c").Add(c => c.Title, "Empty").Add(c => c.Categories, ["A", "B"])
@@ -250,7 +373,7 @@ public class DashboardTests : WebTestContext
         Assert.Empty(cut.FindAll("svg[role=img]"));
     }
 
-    [Fact]
+    [Test]
     public void Multi_series_chart_has_a_legend_and_distinct_marker_shapes()
     {
         var cut = Render<Chart>(p => p.Add(c => c.Id, "c").Add(c => c.Title, "Trend").Add(c => c.Kind, ChartKind.Line)
@@ -266,10 +389,9 @@ public class DashboardTests : WebTestContext
 
     // A per-point <title> made the browser show a second, native tooltip, and a tooltip inside its point was painted over
     // by every later point. Tooltips are now one layer after all points, each named by its point's data-tip.
-    [Theory]
-    [InlineData(ChartKind.Column)]
-    [InlineData(ChartKind.Line)]
-    [InlineData(ChartKind.Bar)]
+    [TestCase(ChartKind.Column)]
+    [TestCase(ChartKind.Line)]
+    [TestCase(ChartKind.Bar)]
     public void Tooltips_are_drawn_after_every_point_with_no_native_title(ChartKind kind)
     {
         var cut = Render<Chart>(p => p.Add(c => c.Id, "c").Add(c => c.Title, "Cases by status").Add(c => c.Kind, kind)
@@ -289,7 +411,7 @@ public class DashboardTests : WebTestContext
             points.Select(point => layer.QuerySelector($"#{point.GetAttribute("data-tip")}")!.TextContent));
     }
 
-    [Fact]
+    [Test]
     public void Bar_tooltips_stay_inside_their_own_row()
     {
         const double width = 420;
@@ -313,16 +435,15 @@ public class DashboardTests : WebTestContext
         }
     }
 
-    [Theory]
-    [InlineData("", "")]
-    [InlineData("cases", "cases")]
-    [InlineData("cases?status=New", "cases")]
-    [InlineData("cases/12", "cases")]
-    [InlineData("cases/new", "cases/new")]
-    [InlineData("test-results", "test-results")]
-    [InlineData("test-results/runs/5", "test-results/runs")]
-    [InlineData("test-results/executions/9", "test-results")]
-    [InlineData("unknown", null)]
+    [TestCase("", "")]
+    [TestCase("cases", "cases")]
+    [TestCase("cases?status=New", "cases")]
+    [TestCase("cases/12", "cases")]
+    [TestCase("cases/new", "cases/new")]
+    [TestCase("test-results", "test-results")]
+    [TestCase("test-results/runs/5", "test-results/runs")]
+    [TestCase("test-results/executions/9", "test-results")]
+    [TestCase("unknown", null)]
     public void Exactly_one_navigation_item_is_current_for_a_path(string path, string? expected)
     {
         Assert.Equal(expected, AppNavigation.CurrentHref(path, AppNavigation.Groups.SelectMany(g => g.Items)));

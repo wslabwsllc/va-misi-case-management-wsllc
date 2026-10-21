@@ -40,7 +40,7 @@ Each run gets its own folder on the `testresults` volume, and earlier runs are n
 ```
 runs/<runKey>/run.json                 manifest (written last; status, git, build, image, environment, suites)
 runs/<runKey>/<Project>.trx            VSTest results per suite
-runs/<runKey>/catalog/<Assembly>.json  xUnit Category traits (Story:, Req:, Priority:) for linking
+runs/<runKey>/catalog/<Assembly>.json  NUnit [Category] values (Story:, Req:, Priority:, A11y:) for linking
 runs/<runKey>/evidence/<test>/         evidence.json, screenshots, trace.zip (on failure), video.webm (E2E_VIDEO=1)
 runs/<runKey>/server-web-e2e.redacted.log
 latest-run                             key of the newest run

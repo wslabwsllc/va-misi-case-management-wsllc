@@ -6,9 +6,11 @@ using Npgsql;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-S1: the database itself enforces ID, title, description and status rules.</summary>
-public class CaseSchemaTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class CaseSchemaTests : ClassFixture<CaseSchemaTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public async Task Ids_are_positive_system_generated_bigints()
     {
         var harness = new CaseTestHarness(database);
@@ -24,7 +26,7 @@ public class CaseSchemaTests(PostgresDatabaseFixture database) : IClassFixture<P
             "SELECT identity_generation FROM information_schema.columns WHERE table_name = 'Cases' AND column_name = 'Id'"));
     }
 
-    [Fact]
+    [Test]
     public async Task Changing_a_saved_id_throws()
     {
         var created = await new CaseTestHarness(database).CreateAsync();
@@ -40,7 +42,7 @@ public class CaseSchemaTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(created.Title, (await new CaseTestHarness(database).LoadAsync(created.Id)).Title);
     }
 
-    [Fact]
+    [Test]
     public async Task Id_cannot_be_supplied_by_an_insert()
     {
         var ex = await Assert.ThrowsAsync<PostgresException>(() => ExecuteAsync(
@@ -50,12 +52,11 @@ public class CaseSchemaTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal("428C9", ex.SqlState);   // generated_always: identity ALWAYS refuses supplied values
     }
 
-    [Theory]
-    [InlineData("abcd", null, 0, PostgresErrorCodes.CheckViolation)]                 // 4-char title
-    [InlineData("T201", null, 0, PostgresErrorCodes.StringDataRightTruncation)]      // 201-char title
-    [InlineData("Valid title", "D4001", 0, PostgresErrorCodes.StringDataRightTruncation)]
-    [InlineData("Valid title", null, 5, PostgresErrorCodes.CheckViolation)]          // status outside 0-4
-    [InlineData("Valid title", null, -1, PostgresErrorCodes.CheckViolation)]
+    [TestCase("abcd", null, 0, PostgresErrorCodes.CheckViolation)]                 // 4-char title
+    [TestCase("T201", null, 0, PostgresErrorCodes.StringDataRightTruncation)]      // 201-char title
+    [TestCase("Valid title", "D4001", 0, PostgresErrorCodes.StringDataRightTruncation)]
+    [TestCase("Valid title", null, 5, PostgresErrorCodes.CheckViolation)]          // status outside 0-4
+    [TestCase("Valid title", null, -1, PostgresErrorCodes.CheckViolation)]
     public async Task Database_constraints_reject_invalid_rows(string title, string? description, int status, string sqlState)
     {
         title = title == "T201" ? new string('t', 201) : title;
@@ -66,14 +67,14 @@ public class CaseSchemaTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(sqlState, ex.SqlState);
     }
 
-    [Fact]
+    [Test]
     public async Task Boundary_values_are_accepted_by_the_database()
     {
         await InsertAsync(new string('t', 5), null, 0);
         await InsertAsync(new string('t', 200), new string('d', 4000), 4);
     }
 
-    [Fact]
+    [Test]
     public async Task Database_counts_supplementary_characters_like_the_service()
     {
         const string supplementary = "\U0001D538";
@@ -86,7 +87,7 @@ public class CaseSchemaTests(PostgresDatabaseFixture database) : IClassFixture<P
         Assert.Equal(200, await ScalarAsync<int>($"SELECT char_length(\"Title\") FROM \"Cases\" WHERE \"Id\" = {max.Id}"));
     }
 
-    [Fact]
+    [Test]
     public async Task Columns_have_the_specified_types()
     {
         var columns = new Dictionary<string, string>();

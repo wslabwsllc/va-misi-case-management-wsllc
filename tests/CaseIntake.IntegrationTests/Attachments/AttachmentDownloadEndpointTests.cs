@@ -57,8 +57,10 @@ public sealed class AttachmentWebFixture : PostgresDatabaseFixture, IAsyncLifeti
 }
 
 /// <summary>E4-S6 (and the E3-S5 endpoint rules) on the real download endpoint.</summary>
-public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : IClassFixture<AttachmentWebFixture>
+public class AttachmentDownloadEndpointTests : ClassFixture<AttachmentDownloadEndpointTests, AttachmentWebFixture>
 {
+    private static AttachmentWebFixture fixture => Shared;
+
     private const string CaseWorker = "caseworker@example.test";
     private const string Supervisor = "supervisor@example.test";
 
@@ -70,7 +72,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         return (c.Id, await fixture.Harness.UploadAsync(c.Id, bytes, fileName, contentType), bytes);
     }
 
-    [Fact]
+    [Test]
     public async Task An_authorized_download_returns_the_original_bytes_as_an_attachment_with_safe_headers()
     {
         var (caseId, attachment, bytes) = await UploadAsync("Résumé – 2026.pdf");
@@ -89,7 +91,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         Assert.Contains("no-store", response.Headers.CacheControl!.ToString(), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public async Task Both_roles_may_download()
     {
         var (caseId, attachment, _) = await UploadAsync();
@@ -102,7 +104,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Anonymous_requests_get_401_without_a_login_redirect()
     {
         var (caseId, attachment, _) = await UploadAsync();
@@ -116,7 +118,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         Assert.Empty(await response.Content.ReadAsByteArrayAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task A_signed_in_user_without_the_download_permission_gets_403_and_the_denial_is_logged()
     {
         var (caseId, attachment, _) = await UploadAsync();
@@ -131,7 +133,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
             && (string?)r.GetStructuredStateValue("ResourceId") == url);
     }
 
-    [Fact]
+    [Test]
     public async Task An_attachment_requested_through_another_case_or_an_unknown_ID_is_404()
     {
         var (_, attachment, _) = await UploadAsync();
@@ -147,7 +149,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         Assert.Equal(HttpStatusCode.NotFound, unknownCase.StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task Missing_stored_content_is_a_controlled_404_with_a_diagnostic_event()
     {
         var (caseId, attachment, _) = await UploadAsync();
@@ -162,7 +164,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 4105 && (string?)r.GetStructuredStateValue("AttachmentId") == attachment.Id.ToString());
     }
 
-    [Fact]
+    [Test]
     public async Task A_completed_download_is_logged_and_a_failed_one_is_not()
     {
         var (caseId, attachment, _) = await UploadAsync();
@@ -185,7 +187,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         Assert.Equal(ok.Headers.GetValues("X-Operation-Id").Single(), single.GetStructuredStateValue("OperationId"));
     }
 
-    [Fact]
+    [Test]
     public async Task Range_requests_are_served_partially()
     {
         var (caseId, attachment, bytes) = await UploadAsync(size: 1000);
@@ -199,7 +201,7 @@ public class AttachmentDownloadEndpointTests(AttachmentWebFixture fixture) : ICl
         Assert.Equal(bytes[..10], await response.Content.ReadAsByteArrayAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task Text_files_are_still_sent_as_downloads_never_rendered_inline()
     {
         var (caseId, attachment, _) = await UploadAsync("notes.txt", "text/plain", 100);

@@ -16,43 +16,67 @@
 @inject TimeProvider Time
 @inject ILogger<CaseDetail> Logger
 
-@* Case detail (E5-S5..S7, redesigned for issue #22): a command bar (back, refresh, edit), a summary strip with the
-   triage fields, the workflow stepper with the status controls, and tabs for the overview (details, veteran and the
-   in-place edit form), the workflow history, the attachments and the audit trail. The record's version is kept with
-   the edit form, so a save against a stale version is reported as a conflict and the user's unsaved text is kept
-   visible next to the latest version. Inactive tab panels stay in the page (hidden), so their content keeps its state. *@
-<PageShell Title="@PageTitle" DocumentTitle="@PageTitle" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])">
+@* Case detail (E5-S5..S7, issue #22, redesign): a header with the case ID, status and due-state badges and the commands
+   (refresh, assign, edit), a summary strip with the triage fields, the workflow card (status, next step, the allowed
+   transitions and the stepper), and tabs for the overview (details with the full description, veteran, audit summary
+   and the in-place edit form), the attachments and the history (status history and audit trail). The record's version
+   is kept with the edit form, so a save against a stale version is reported as a conflict and the user's unsaved text
+   is kept visible next to the latest version. Edits are validated, then confirmed ("Are you sure you want to
+   submit?"), then sent once. Inactive tab panels stay in the page (hidden), so their content keeps its state. *@
+<PageShell Title="@PageTitle" DocumentTitle="@PageTitle" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])" ShowBackButton="true" BackHref="cases">
+    <Eyebrow>
+        @if (_case is { } top)
+        {
+            var topDue = UiText.DueState(top.Status, top.DueOn, _today);
+            <span class="case-id">CASE #@top.Id</span>
+            <StatusPill Status="top.Status" />
+            @if (topDue?.StartsWith("Overdue", StringComparison.Ordinal) == true)
+            {
+                <span class="badge badge--overdue" data-testid="header-overdue">@topDue</span>
+            }
+        }
+    </Eyebrow>
+    <TitleContent>
+        @if (_case is { } named)
+        {
+            <span class="visually-hidden">Case @named.Id: </span>@named.Title
+        }
+        else
+        {
+            @PageTitle
+        }
+    </TitleContent>
     <Actions>
         @if (_case is { } header)
         {
-            <div class="command-bar command-bar--inline" role="toolbar" aria-label="Case commands" data-testid="detail-commands">
-                <a class="command" href="cases" data-testid="back-to-cases"><Icon Name="back" /> Back to cases</a>
-                <button type="button" class="command" @onclick="RefreshAsync" disabled="@_refreshing" aria-busy="@(_refreshing ? "true" : "false")" data-testid="detail-refresh">
-                    <Icon Name="refresh" Class="@(_refreshing ? "icon--spin" : null)" /> @(_refreshing ? "Refreshing…" : "Refresh")
+            <div class="btn-row page-actions" role="toolbar" aria-label="Case commands" data-testid="detail-commands">
+                <a class="btn mobile-only" href="cases" data-testid="back-to-cases"><Icon Name="back" Small="true" /> Back to cases</a>
+                <button type="button" class="btn" @onclick="RefreshAsync" disabled="@_refreshing" aria-busy="@(_refreshing ? "true" : "false")" data-testid="detail-refresh">
+                    <Icon Name="refresh" Small="true" Class="@(_refreshing ? "icon--spin" : null)" /> @(_refreshing ? "Refreshing…" : "Refresh")
                 </button>
                 @switch (AssignRight)
                 {
                     case AssignmentRight.AssignAnyone:
-                        <button type="button" class="command" @ref="_assignButton" @onclick="OpenAssignAsync" disabled="@_assigning" data-testid="assign-case">
-                            <Icon Name="person" /> @(header.AssignedTo is null ? "Assign" : "Reassign")
+                        <button type="button" class="btn" @ref="_assignButton" @onclick="OpenAssignAsync" disabled="@_assigning" aria-haspopup="dialog" data-testid="assign-case">
+                            <Icon Name="user-plus" Small="true" /> @(header.AssignedTo is null ? "Assign" : "Reassign")
                         </button>
                         break;
                     case AssignmentRight.Take:
-                        <button type="button" class="command" @ref="_assignButton" @onclick="TakeAsync" disabled="@_assigning" data-testid="take-case">
-                            <Icon Name="person" /> Take case
+                        <button type="button" class="btn" @ref="_assignButton" @onclick="TakeAsync" disabled="@_assigning" data-testid="take-case">
+                            <Icon Name="user-check" Small="true" /> Take case
                         </button>
                         break;
                     case AssignmentRight.HandBack:
-                        <button type="button" class="command" @ref="_assignButton" @onclick="HandBackAsync" disabled="@_assigning" data-testid="hand-back">
-                            <Icon Name="person" /> Hand back
+                        <button type="button" class="btn" @ref="_assignButton" @onclick="HandBackAsync" disabled="@_assigning" data-testid="hand-back">
+                            <Icon Name="person" Small="true" /> Hand back
                         </button>
                         break;
                 }
                 @if (!_editing && header.Status != CaseStatus.Closed)
                 {
                     <AuthorizeView Policy="@Permissions.CasesEdit">
-                        <button type="button" class="command" @ref="_editButton" @onclick="StartEdit" data-testid="edit-case">
-                            <Icon Name="edit" /> Edit<span class="visually-hidden"> case details</span>
+                        <button type="button" class="btn" @ref="_editButton" @onclick="StartEdit" data-testid="edit-case">
+                            <Icon Name="edit" Small="true" /> Edit<span class="visually-hidden"> case details</span>
                         </button>
                     </AuthorizeView>
                 }
@@ -84,10 +108,18 @@ else
     <section class="record-summary" aria-label="Case summary" data-testid="record-header">
         <dl class="summary-strip">
             <div><dt>Case ID</dt><dd data-testid="case-id">@c.Id</dd></div>
-            <div><dt>Status</dt><dd><StatusPill Status="c.Status" /></dd></div>
             <div><dt>Priority</dt><dd data-testid="summary-priority"><PriorityBadge Priority="c.Priority" /></dd></div>
             <div><dt>Category</dt><dd data-testid="summary-category">@UiText.Category(c.Category)</dd></div>
-            <div><dt>Owner</dt><dd data-testid="summary-owner">@UiText.Owner(c.AssignedTo)</dd></div>
+            <div>
+                <dt>Owner</dt>
+                <dd>
+                    @if (c.AssignedTo is not null)
+                    {
+                        <span class="avatar avatar--sm avatar--soft" aria-hidden="true">@UiText.Initials(c.AssignedTo)</span>
+                    }
+                    <span data-testid="summary-owner">@UiText.Owner(c.AssignedTo)</span>
+                </dd>
+            </div>
             <div>
                 <dt>Due date (ET)</dt>
                 <dd data-testid="summary-due" class="@(dueState?.StartsWith("Overdue", StringComparison.Ordinal) == true ? "cell-overdue" : null)">
@@ -98,15 +130,13 @@ else
                     }
                 </dd>
             </div>
-            <div><dt>Modified</dt><dd>@UiText.Time(c.UpdatedAtUtc)<span class="cell-sub">by @c.UpdatedBy</span></dd></div>
+            <div><dt>Last modified (ET)</dt><dd>@UiText.Time(c.UpdatedAtUtc)<span class="cell-sub">by @c.UpdatedBy</span></dd></div>
         </dl>
     </section>
 
-    <section class="card workflow-card" aria-labelledby="workflow-heading" data-testid="workflow-section">
-        <h2 id="workflow-heading" class="visually-hidden">Workflow</h2>
+    <StatusTransitions Case="c" Class="card workflow-card" OnChanged="OnStatusChangedAsync" OnFailed="ReloadAfterStatusErrorAsync">
         <WorkflowStepper Status="c.Status" History="_audit" />
-        <StatusTransitions Case="c" Class="workflow-card__actions" OnChanged="OnStatusChangedAsync" OnFailed="ReloadAfterStatusErrorAsync" />
-    </section>
+    </StatusTransitions>
 
     <div class="tabs" data-testid="detail-tabs">
         <div class="tabs__list" role="tablist" aria-label="Case sections">
@@ -116,10 +146,14 @@ else
                 <button type="button" role="tab" id="@($"tab-{t.Key}")" class="tabs__tab" aria-selected="@(_tab == t.Key ? "true" : "false")"
                         aria-controls="@($"panel-{t.Key}")" tabindex="@(_tab == t.Key ? 0 : -1)" @ref="_tabButtons[t.Key]"
                         @onclick="() => SelectTab(t.Key)" @onkeydown="e => OnTabKeyAsync(e, t.Key)" data-testid="@($"tab-{t.Key}")">
-                    <Icon Name="@t.Icon" Small="true" /> @t.Text
+                    @t.Text
                     @if (t.Key == "attachments" && _attachmentCount is { } count)
                     {
                         @(" ")<span class="badge" data-testid="attachments-count">@count<span class="visually-hidden">@(count == 1 ? " file" : " files")</span></span>
+                    }
+                    @if (t.Key == "history" && _audit is { } entries)
+                    {
+                        @(" ")<span class="badge" data-testid="history-count">@entries.Count<span class="visually-hidden">@(entries.Count == 1 ? " entry" : " entries")</span></span>
                     }
                 </button>
             }
@@ -129,7 +163,7 @@ else
             <div class="grid grid--main-side">
                 <section class="card" aria-labelledby="details-heading" data-testid="details-section">
                     <div class="card__header">
-                        <h2 id="details-heading">Details</h2>
+                        <h2 id="details-heading">@(_editing ? "Edit case" : "Details")</h2>
                     </div>
                     @if (c.Status == CaseStatus.Closed)
                     {
@@ -138,12 +172,13 @@ else
 
                     @if (_editing)
                     {
-                        <EditForm EditContext="_editContext" OnSubmit="SaveAsync" novalidate class="form" data-testid="edit-form">
+                        <EditForm EditContext="_editContext" OnSubmit="RequestSaveAsync" novalidate class="form" data-testid="edit-form">
                             <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
                             <LabeledInputText Id="edit-title" Label="Title" Required="true" @bind-Value="_edit.Title" @ref="_titleInput"
                                               Hint="@($"{CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
                                               MaxCharacters="CaseFieldLimits.TitleMaxLength" />
                             <LabeledTextArea Id="edit-description" Label="Description" @bind-Value="_edit.Description" Rows="6"
+                                             Hint="@($"Details of the request, up to {CaseFieldLimits.DescriptionMaxLength:N0} characters.")"
                                              MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
                             <TriageFields IdPrefix="edit" Model="_edit" Assignees="_assignees" CanAssign="false" ReadOnlyOwnerHint="Change the owner with Assign, Take case or Hand back."
                                           DueHint="Leave empty for no due date. A case past its due date while open counts as overdue." />
@@ -160,62 +195,73 @@ else
                                     </div>
                                 </div>
                             }
-                            <div class="form-actions">
-                                <button type="submit" class="btn btn--primary" disabled="@_saving" aria-busy="@(_saving ? "true" : "false")" data-testid="save-case">
-                                    <Icon Name="save" Small="true" /> @(_saving ? "Saving…" : "Save")
+                            <div class="form-footer">
+                                <span class="form-actions__note">Changes are saved only after you confirm.</span>
+                                <button type="button" class="btn btn--cancel" @onclick="CancelEdit" disabled="@_saving" data-testid="cancel-edit">
+                                    <Icon Name="close" Small="true" /> Cancel
                                 </button>
-                                <button type="button" class="btn" @onclick="CancelEdit" disabled="@_saving" data-testid="cancel-edit">Cancel</button>
+                                <button type="submit" class="btn btn--primary" @ref="_saveButton" disabled="@_saving" aria-busy="@(_saving ? "true" : "false")" data-testid="save-case">
+                                    @if (_saving)
+                                    {
+                                        <span class="spinner" aria-hidden="true"></span><span>Submitting…</span>
+                                    }
+                                    else
+                                    {
+                                        <span>Submit</span><Icon Name="chevrons-right" Small="true" />
+                                    }
+                                </button>
                             </div>
                         </EditForm>
                     }
                     else
                     {
                         <dl class="field-list">
-                            <dt>Case ID</dt>
-                            <dd>@c.Id <span class="page-header__subtitle">(read-only)</span></dd>
                             <dt>Title</dt>
                             <dd data-testid="case-title">@c.Title</dd>
                             <dt>Description</dt>
-                            <dd class="pre-wrap" data-testid="case-description">@(string.IsNullOrEmpty(c.Description) ? "No description" : c.Description)</dd>
-                            <dt>Priority</dt>
-                            <dd>@UiText.Priority(c.Priority)</dd>
-                            <dt>Category</dt>
-                            <dd>@UiText.Category(c.Category)</dd>
-                            <dt>Owner</dt>
-                            <dd>@UiText.Owner(c.AssignedTo)</dd>
-                            <dt>Due date (ET)</dt>
-                            <dd>@UiText.DueDate(c.DueOn)</dd>
-                            <dt>Created</dt>
+                            <dd class="prose" data-testid="case-description">@(string.IsNullOrWhiteSpace(c.Description) ? "No description provided." : c.Description)</dd>
+                            <dt>Case ID</dt>
+                            <dd>@c.Id <span class="page-header__subtitle">(read-only)</span></dd>
+                            <dt>Created (ET)</dt>
                             <dd>@UiText.Time(c.CreatedAtUtc) by @c.CreatedBy</dd>
-                            <dt>Updated</dt>
+                            <dt>Updated (ET)</dt>
                             <dd>@UiText.Time(c.UpdatedAtUtc) by @c.UpdatedBy</dd>
                         </dl>
                     }
                 </section>
 
-                <section class="card" aria-labelledby="veteran-heading" data-testid="veteran-section">
-                    <div class="card__header"><h2 id="veteran-heading">Veteran</h2></div>
-                    @if (c.Veteran is { } v)
-                    {
-                        <dl class="field-list">
-                            <dt>Name</dt>
-                            <dd>@v.Name</dd>
-                            <dt>Address</dt>
-                            <dd class="pre-wrap">@v.Address</dd>
-                            <dt>SSN</dt>
-                            <dd data-testid="ssn-last4">Ending @v.SsnLast4</dd>
-                        </dl>
-                    }
-                    else
-                    {
-                        <p class="page-header__subtitle">No veteran was attached at intake.</p>
-                    }
-                </section>
+                <div class="stack">
+                    <section class="card" aria-labelledby="veteran-heading" data-testid="veteran-section">
+                        <div class="card__header"><h2 id="veteran-heading">Veteran</h2></div>
+                        @if (c.Veteran is { } v)
+                        {
+                            <dl class="field-list">
+                                <dt>Name</dt>
+                                <dd>@v.Name</dd>
+                                <dt>Address</dt>
+                                <dd class="pre-wrap">@v.Address</dd>
+                                <dt>SSN</dt>
+                                <dd data-testid="ssn-last4">Ending @v.SsnLast4</dd>
+                            </dl>
+                        }
+                        else
+                        {
+                            <div class="empty-box">
+                                <span class="avatar avatar--empty" aria-hidden="true"><Icon Name="person" Small="true" /></span>
+                                <span>No veteran was attached at intake.</span>
+                            </div>
+                        }
+                    </section>
+                    <section class="card" aria-labelledby="audit-summary-heading" data-testid="audit-summary">
+                        <div class="card__header">
+                            <h2 id="audit-summary-heading">Audit trail<span class="card__subtitle">Every change to this case is recorded and cannot be edited.</span></h2>
+                        </div>
+                        <button type="button" class="btn btn--block" @onclick="ShowHistoryAsync" data-testid="view-history">
+                            <Icon Name="history" Small="true" /> View history
+                        </button>
+                    </section>
+                </div>
             </div>
-        </div>
-
-        <div role="tabpanel" id="panel-workflow" aria-labelledby="tab-workflow" tabindex="0" hidden="@(_tab != "workflow")" class="tabs__panel">
-            <StatusHistory Entries="_audit" />
         </div>
 
         <div role="tabpanel" id="panel-attachments" aria-labelledby="tab-attachments" tabindex="0" hidden="@(_tab != "attachments")" class="tabs__panel">
@@ -224,9 +270,15 @@ else
         </div>
 
         <div role="tabpanel" id="panel-history" aria-labelledby="tab-history" tabindex="0" hidden="@(_tab != "history")" class="tabs__panel">
-            <AuditTrail Entries="_audit" Error="@_auditError" />
+            <div class="grid grid--2">
+                <StatusHistory Entries="_audit" />
+                <AuditTrail Entries="_audit" Error="@_auditError" />
+            </div>
         </div>
     </div>
+
+    <ConfirmSubmitDialog @ref="_confirmSave" Id="confirm-edit" TestId="confirm-edit" OnConfirm="SaveAsync"
+                         Description="@($"Your changes to case {c.Id} will be saved and recorded in the audit trail.")" />
 
     @* Assign or reassign (supervisors): choose anyone who works cases, or Unassigned. *@
     <ModalDialog @ref="_assignDialog" Id="assign-case" Title="@($"Assign case {c.Id}")" TestId="assign-dialog"
@@ -244,9 +296,11 @@ else
             </div>
         </ChildContent>
         <Footer>
-            <button type="button" class="btn" @onclick="() => _assignDialog!.CloseAsync(restoreFocus: true)" data-testid="assign-cancel">Cancel</button>
+            <button type="button" class="btn btn--cancel" @onclick="() => _assignDialog!.CloseAsync(restoreFocus: true)" data-testid="assign-cancel">
+                <Icon Name="close" Small="true" /> Cancel
+            </button>
             <button type="button" class="btn btn--primary" @onclick="ConfirmAssignAsync" disabled="@_assigning" data-testid="assign-confirm">
-                <Icon Name="person" Small="true" /> Assign
+                <Icon Name="user-check" Small="true" /> Assign
             </button>
         </Footer>
     </ModalDialog>
@@ -270,7 +324,6 @@ else
     private static readonly Tab[] Tabs =
     [
         new("overview", "Overview", "document"),
-        new("workflow", "Workflow", "status"),
         new("attachments", "Attachments", "attach"),
         new("history", "History", "history"),
     ];
@@ -303,6 +356,9 @@ else
     private string? _pageErrorTitle;
     private ElementReference _editButton;
     private LabeledInputText? _titleInput;
+    private ElementReference _saveButton;
+    private ConfirmSubmitDialog? _confirmSave;
+    private UpdateCaseRequest? _pendingSave;
     private FormErrorSummary? _summary;
     private ErrorAlert? _pageAlert;
     private AttachmentsPanel? _attachments;
@@ -318,6 +374,9 @@ else
 
     /// <summary><c>?assign=true</c> (the case list's row menu) opens the Assign dialog when the user may assign.</summary>
     [SupplyParameterFromQuery(Name = "assign")] private bool QueryAssign { get; set; }
+
+    /// <summary><c>?edit=true</c> (the case list's row menu) opens the edit form when the user may edit.</summary>
+    [SupplyParameterFromQuery(Name = "edit")] private bool QueryEdit { get; set; }
 
     private OperationActor? _actor;
     private string? _me;
@@ -397,11 +456,16 @@ else
         _conflict = false;
         _pageError = null;
         _attachmentCount = null;
-        _tab = Tabs.Any(t => t.Key == QueryTab) ? QueryTab! : "overview";
+        // "workflow" was a tab before the redesign; its status history is now part of History.
+        _tab = QueryTab == "workflow" ? "history" : Tabs.Any(t => t.Key == QueryTab) ? QueryTab! : "overview";
         _actor ??= await CurrentUser.GetAsync(_cts.Token);
         _me = CaseDashboardService.UserNameOf(_actor);
         await LoadAsync();
         _openAssignAfterLoad = QueryAssign && AssignRight == AssignmentRight.AssignAnyone;
+        if (QueryEdit && _case is { Status: not CaseStatus.Closed } && _actor.HasPermission(Permissions.CasesEdit))
+        {
+            await StartEdit();
+        }
     }
 
     private async Task LoadAsync()
@@ -474,6 +538,17 @@ else
         _auditError = audit.IsSuccess ? null : audit.Error!.Message;
     }
 
+
+    /// <summary>"View history" on the overview: opens the History tab and moves focus to it.</summary>
+    private async Task ShowHistoryAsync()
+    {
+        _tab = "history";
+        StateHasChanged();
+        if (_tabButtons.TryGetValue("history", out var button))
+        {
+            await button.FocusSafeAsync();
+        }
+    }
     private void SelectTab(string key)
     {
         _tab = key;
@@ -577,9 +652,10 @@ else
         _focusAfterRender = "edit";
     }
 
-    private async Task SaveAsync()
+    /// <summary>Submit: validate with the server's rules first, then ask "Are you sure you want to submit?".</summary>
+    private async Task RequestSaveAsync()
     {
-        if (_saving || _case is null || _messages is null)
+        if (_saving || _case is null || _messages is null || (_confirmSave?.IsOpen ?? false))
         {
             return;
         }
@@ -589,7 +665,21 @@ else
             ShowValidation(invalid);
             return;
         }
+        _messages.Clear();
+        _showSummary = false;
+        _editContext.NotifyValidationStateChanged();
+        _pendingSave = request;
+        await _confirmSave!.OpenAsync(() => _saveButton.FocusSafeAsync());
+    }
 
+    /// <summary>Confirmed: send the validated request exactly once; the form keeps its values if it fails.</summary>
+    private async Task SaveAsync()
+    {
+        if (_saving || _case is null || _messages is null || _pendingSave is not { } request)
+        {
+            return;
+        }
+        _pendingSave = null;
         _saving = true;
         ClearPageError();
         using var busy = Activity.Begin();

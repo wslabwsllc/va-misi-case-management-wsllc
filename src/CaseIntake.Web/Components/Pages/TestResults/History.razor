@@ -35,7 +35,7 @@ else if (_runs is { } runs)
                    Series="@([new ChartSeries("Pass rate (%)", [.. runs.Select(r => Math.Round((r.Counts.PassRate ?? 0) * 100, 1))], "--series-3")])" />
         </section>
         <section class="card">
-            <Chart Id="history-failures" Title="Failed and not executed" Description="Tests per run that failed or did not run." CategoryHeader="Run"
+            <Chart Id="history-failures" Title="Failed and not run" Description="Tests per run that failed or did not run." CategoryHeader="Run"
                    TestId="history-chart-failures" Categories="labels" EmptyText="No failed or not-executed tests in these runs."
                    Series="@([new ChartSeries("Failed", [.. runs.Select(r => (double)r.Counts.Failed)], "--series-2"), new ChartSeries("Not executed", [.. runs.Select(r => (double)r.Counts.NotExecuted)], "--series-4")])" />
         </section>

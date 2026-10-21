@@ -20,8 +20,10 @@ namespace CaseIntake.IntegrationTests.Identity;
 /// that entries commit with their change, carry the operation ID, cannot be changed, and that the viewer and CSV export
 /// filter, merge and authorize correctly.
 /// </summary>
-public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class AuditLogTests : ClassFixture<AuditLogTests, IdentityWebFixture>
 {
+    private static IdentityWebFixture fixture => Shared;
+
     private const string Password = "Initial-Passw0rd!";
 
     private IServiceProvider Services => fixture.Factory.Services;
@@ -46,7 +48,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
     private async Task<IReadOnlyList<AuditLogEntryDto>> AboutAsync(string entityType, string entityId) =>
         (await Audit.ListAsync(new AuditQuery(EntityType: entityType, EntityId: entityId, OldestFirst: true, PageSize: 200), CancellationToken.None)).Value!.Items;
 
-    [Fact]
+    [Test]
     public async Task User_administration_is_recorded_with_before_and_after_values_and_one_operation_id_per_change()
     {
         var user = await CreateUserAsync(NewEmail("audited"), AppRoles.Auditor);
@@ -74,7 +76,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.DoesNotContain(entries, e => e.Changes.Any(c => (c.Before + c.After).Contains(Password, StringComparison.Ordinal)));
     }
 
-    [Fact]
+    [Test]
     public async Task A_refused_change_writes_no_audit_entry()
     {
         var user = await CreateUserAsync(NewEmail("refused"), AppRoles.Auditor);
@@ -89,7 +91,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.Equal([AuditLogActions.UserCreated], (await AboutAsync(AuditEntityTypes.User, user.Id)).Select(e => e.Action));
     }
 
-    [Fact]
+    [Test]
     public async Task Role_changes_are_recorded_and_a_deleted_role_keeps_its_history()
     {
         var roles = AdministrationTestSupport.Roles(Services, AdministrationTestSupport.Administrator);
@@ -105,7 +107,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.Equal(role.Name, entries[2].Changes.Single(c => c.Field == "Name").Before);
     }
 
-    [Fact]
+    [Test]
     public async Task Sign_in_outcomes_sign_out_and_password_changes_are_recorded_with_the_request_operation_id()
     {
         var email = NewEmail("signin");
@@ -138,7 +140,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.False(await db.AuditLogEntries.AnyAsync(e => (e.Summary ?? "").Contains("Typed-Secret") || (e.ActorName ?? "").Contains("nobody")));
     }
 
-    [Fact]
+    [Test]
     public async Task An_http_access_denial_is_recorded_with_the_page_and_missing_permission()
     {
         using var session = fixture.NewSession();
@@ -153,7 +155,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.Contains("Manage users", entry.Summary);
     }
 
-    [Fact]
+    [Test]
     public async Task Case_changes_appear_in_the_log_with_status_changes_and_a_correlation_id()
     {
         var actor = FakeCurrentUser.ForRole(AppRoles.Supervisor, DemoUsers.Supervisor.Id);
@@ -170,7 +172,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.Equal(entries[1].Key, (await Audit.GetAsync(entries[1].Key, CancellationToken.None)).Value!.Key);
     }
 
-    [Fact]
+    [Test]
     public async Task The_viewer_merges_sources_in_time_order_pages_and_filters_by_eastern_dates()
     {
         var from = new DateOnly(2001, 1, 1);
@@ -200,7 +202,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.Equal(all.OrderByDescending(e => e.OccurredAtUtc).Select(e => e.Key), all.Select(e => e.Key));
     }
 
-    [Fact]
+    [Test]
     public async Task Only_audit_view_reads_the_log_and_entries_cannot_be_changed_or_deleted()
     {
         var clerk = FakeCurrentUser.ForRole(AppRoles.IntakeClerk);
@@ -215,7 +217,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         await Assert.ThrowsAsync<AuditTrailModificationException>(() => db.SaveChangesAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task The_csv_export_is_authorized_formula_safe_in_utc_and_itself_audited()
     {
         await using (var db = fixture.CreateContext())
@@ -244,7 +246,7 @@ public class AuditLogTests(IdentityWebFixture fixture) : IClassFixture<IdentityW
         Assert.Contains(exports, e => e.ActorId == DemoUsers.Administrator.Id && e.Changes.Any(c => c.Field == "From" && c.After == "2002-03-01"));
     }
 
-    [Fact]
+    [Test]
     public async Task A_default_added_later_reaches_seeded_roles_but_a_removed_one_stays_removed()
     {
         await using (var db = fixture.CreateContext())

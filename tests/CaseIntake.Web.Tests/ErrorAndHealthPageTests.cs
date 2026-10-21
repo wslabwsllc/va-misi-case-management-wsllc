@@ -14,7 +14,7 @@ public class ErrorAndHealthPageTests : WebTestContext
         ErrorLog.Errors.Add(FakeErrorLogService.Error(6, ErrorStatus.Resolved, ErrorLevel.Critical));
     }
 
-    [Fact]
+    [Test]
     public void Lists_errors_with_level_status_and_message_and_filters_by_status_from_the_url()
     {
         var all = Render<Errors>();
@@ -28,7 +28,7 @@ public class ErrorAndHealthPageTests : WebTestContext
         Assert.Equal(ErrorStatus.Open, Assert.IsType<ErrorQuery>(ErrorLog.Requests[^1]).Status);
     }
 
-    [Fact]
+    [Test]
     public void An_error_shows_its_reference_a_focusable_stack_trace_and_a_link_to_the_same_errors()
     {
         var cut = Render<ErrorDetail>(p => p.Add(x => x.Id, 5));
@@ -42,7 +42,7 @@ public class ErrorAndHealthPageTests : WebTestContext
         Assert.Contains("3 times", cut.Find("[data-testid=error-occurrences]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Changing_the_status_sends_the_version_and_note_and_shows_the_result()
     {
         var cut = Render<ErrorDetail>(p => p.Add(x => x.Id, 5));
@@ -57,7 +57,7 @@ public class ErrorAndHealthPageTests : WebTestContext
         Assert.Equal("New status", cut.Find("[data-testid=error-status-form] legend").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Without_errors_manage_the_status_is_read_only()
     {
         CurrentUser.Actor = FakeCurrentUser.Authenticated("id-v", "viewer", "Viewer", [Permissions.ErrorsView]);
@@ -69,7 +69,7 @@ public class ErrorAndHealthPageTests : WebTestContext
         Assert.Equal("Open", cut.Find("[data-testid=error-status-value]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void System_health_states_every_result_in_text_and_checks_again_on_request()
     {
         var cut = Render<SystemHealth>();
@@ -89,7 +89,7 @@ public class ErrorAndHealthPageTests : WebTestContext
         Assert.Equal("Checked again. Overall: Healthy.", Announcer.Message);
     }
 
-    [Fact]
+    [Test]
     public void Administrators_see_errors_and_system_health_in_the_navigation()
     {
         var groups = Components.Layout.AppNavigation.Groups.SelectMany(g => g.Items).ToList();

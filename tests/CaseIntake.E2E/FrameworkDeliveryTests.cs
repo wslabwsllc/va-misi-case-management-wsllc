@@ -9,12 +9,12 @@ namespace CaseIntake.E2E;
 /// "blazor.web.js does not work in Docker" defect: the container's content root lacked wwwroot, so every asset request
 /// fell through to the sign-in redirect).
 /// </summary>
-public sealed partial class FrameworkDeliveryTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed partial class FrameworkDeliveryTests : E2ETestBase
 {
     [GeneratedRegex(@"_framework/blazor\.web(\.[a-z0-9]+)?\.js")]
     private static partial Regex FrameworkScript();
 
-    [Fact]
+    [Test]
     public async Task Framework_script_is_served_anonymously_as_JavaScript_and_referenced_once()
     {
         await using var s = await StartAsync(Meta("blazor.web.js is delivered by the Docker-hosted app", "Docker JavaScript fix", ["R-4.5-1", "R-4.2-12"],
@@ -42,7 +42,7 @@ public sealed partial class FrameworkDeliveryTests(PlaywrightFixture fixture) : 
         s.Complete("Framework script and assets delivered; one bootstrap reference");
     }
 
-    [Fact]
+    [Test]
     public async Task Interactivity_starts_without_console_errors_or_failed_framework_requests()
     {
         await using var s = await StartAsync(Meta("Blazor interactivity initializes in Docker", "Docker JavaScript fix", ["R-4.5-1", "R-4.5-3"],
@@ -79,13 +79,16 @@ public sealed partial class FrameworkDeliveryTests(PlaywrightFixture fixture) : 
         await s.StepAsync("No JavaScript errors and no failed framework or circuit requests", () =>
         {
             Assert.Empty(s.ConsoleErrors);
-            Assert.DoesNotContain(s.NetworkFailures, f => f.Contains("/_framework/", StringComparison.Ordinal) || f.Contains("/_blazor", StringComparison.Ordinal) || f.EndsWith(".js -> HTTP 404", StringComparison.Ordinal));
+            // Blazor posts /_blazor/disconnect as the page unloads; a full reload aborts that beacon in the browser
+            // (Playwright 1.52 reports it as net::ERR_ABORTED). It is the old page saying goodbye, not a failed request.
+            var failures = s.NetworkFailures.Where(f => !(f.StartsWith("POST /_blazor/disconnect", StringComparison.Ordinal) && f.EndsWith("net::ERR_ABORTED", StringComparison.Ordinal)));
+            Assert.DoesNotContain(failures, f => f.Contains("/_framework/", StringComparison.Ordinal) || f.Contains("/_blazor", StringComparison.Ordinal) || f.EndsWith(".js -> HTTP 404", StringComparison.Ordinal));
             return Task.CompletedTask;
         }, expected: "0 console errors");
         s.Complete("Interactive, navigable and error-free");
     }
 
-    [Fact]
+    [Test]
     public async Task Installable_manifest_and_service_worker_without_caching_sensitive_pages()
     {
         await using var s = await StartAsync(Meta("PWA manifest and safe service worker", "Mobile and PWA", ["R-4.2-12"],

@@ -8,9 +8,11 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-S6/E2-S7: detail retrieval, edits, immutable ID and optimistic concurrency.</summary>
-public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class CaseEditTests : ClassFixture<CaseEditTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public async Task Detail_returns_every_field_and_role_filtered_next_statuses()
     {
         var harness = new CaseTestHarness(database);
@@ -31,7 +33,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Empty(CaseTestHarness.Ok(await harness.Service.GetAsync(resolved.Id, CancellationToken.None)).AllowedNextStatuses);
     }
 
-    [Fact]
+    [Test]
     public async Task Detail_checks_permission_before_existence()
     {
         var harness = new CaseTestHarness(database) { Actor = TestActors.NoPermissions };
@@ -42,7 +44,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         CaseTestHarness.Fail(await harness.Service.GetAsync(0, CancellationToken.None), ErrorKind.NotFound);
     }
 
-    [Fact]
+    [Test]
     public async Task Edit_saves_changes_refreshes_audit_fields_and_returns_a_new_version()
     {
         var harness = new CaseTestHarness(database);
@@ -67,7 +69,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Contains(harness.Logs.Collector.GetSnapshot(), r => r.Id.Id == 2002);
     }
 
-    [Fact]
+    [Test]
     public async Task Stale_version_is_a_conflict_and_nothing_is_overwritten()
     {
         var harness = new CaseTestHarness(database);
@@ -85,7 +87,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Equal(2, await harness.CountAuditAsync(original.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Status_change_after_an_edit_with_the_old_version_is_a_conflict()
     {
         var harness = new CaseTestHarness(database);
@@ -99,7 +101,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
     }
 
     /// <summary>A transition commits between the edit's read and its save: the edit's save detects it through xmin.</summary>
-    [Fact]
+    [Test]
     public async Task Concurrent_transition_committed_during_an_edit_makes_the_edit_conflict()
     {
         var plain = new CaseTestHarness(database);
@@ -118,7 +120,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Equal([AuditActions.Created, AuditActions.StatusChanged], trail.Select(a => a.Action));   // no Edited entry committed
     }
 
-    [Fact]
+    [Test]
     public async Task Concurrent_edit_committed_during_a_transition_makes_the_transition_conflict()
     {
         var plain = new CaseTestHarness(database);
@@ -134,7 +136,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Equal(2, await plain.CountAuditAsync(original.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Two_contexts_editing_the_same_row_conflict_on_the_second_save()
     {
         var created = await new CaseTestHarness(database).CreateAsync();
@@ -150,7 +152,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         await Assert.ThrowsAsync<DbUpdateConcurrencyException>(() => second.SaveChangesAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task No_op_edit_changes_neither_timestamps_version_nor_audit()
     {
         var harness = new CaseTestHarness(database);
@@ -165,7 +167,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Equal(1, await harness.CountAuditAsync(created.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Edit_applies_intake_validation()
     {
         var harness = new CaseTestHarness(database);
@@ -178,7 +180,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Equal(created.Title, (await harness.LoadAsync(created.Id)).Title);
     }
 
-    [Fact]
+    [Test]
     public async Task Closed_cases_reject_edits_with_CaseClosed()
     {
         var harness = new CaseTestHarness(database);
@@ -191,7 +193,7 @@ public class CaseEditTests(PostgresDatabaseFixture database) : IClassFixture<Pos
         Assert.Equal(closed.Title, (await harness.LoadAsync(closed.Id)).Title);
     }
 
-    [Fact]
+    [Test]
     public async Task Edit_permission_and_existence_are_checked()
     {
         var harness = new CaseTestHarness(database);

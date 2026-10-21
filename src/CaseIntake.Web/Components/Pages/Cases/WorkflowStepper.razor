@@ -13,13 +13,17 @@
             <span class="stepper__marker" aria-hidden="true">
                 @if (state == "complete")
                 {
-                    <Icon Name="success" Small="true" />
+                    <Icon Name="check" Small="true" />
+                }
+                else
+                {
+                    @(Array.IndexOf(Stages, stage) + 1)
                 }
             </span>
             <span class="stepper__text">
                 <span class="stepper__name">@UiText.Status(stage)</span>
                 <span class="stepper__meta">
-                    <span class="visually-hidden">, </span>@StateText(state)@(EnteredAt(stage) is { } at ? $" · {UiText.Time(at)}" : null)
+                    <span class="visually-hidden">, </span>@StateText(state)@(EnteredAt(stage) is { } at ? $" · since {UiText.Date(Domain.EasternTime.Date(at))}" : null)
                 </span>
             </span>
         </li>
@@ -42,7 +46,7 @@
     private static string StateText(string state) => state switch
     {
         "complete" => "Completed",
-        "current" => "Current stage",
+        "current" => "Current",
         _ => "Not started",
     };
 

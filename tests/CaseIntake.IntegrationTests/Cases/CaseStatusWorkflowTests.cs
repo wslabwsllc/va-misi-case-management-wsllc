@@ -7,8 +7,10 @@ using CaseIntake.TestKit;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-S8: the five allowed edges succeed with the right permission; everything else is rejected without change.</summary>
-public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class CaseStatusWorkflowTests : ClassFixture<CaseStatusWorkflowTests, PostgresDatabaseFixture>
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private static readonly Dictionary<CaseStatus, CaseStatus[]> PathTo = new()
     {
         [CaseStatus.New] = [],
@@ -18,12 +20,11 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         [CaseStatus.Closed] = [CaseStatus.Triaged, CaseStatus.InProgress, CaseStatus.Resolved, CaseStatus.Closed],
     };
 
-    [Theory]
-    [InlineData(CaseStatus.New, CaseStatus.Triaged, AuditActions.StatusChanged)]
-    [InlineData(CaseStatus.Triaged, CaseStatus.InProgress, AuditActions.StatusChanged)]
-    [InlineData(CaseStatus.InProgress, CaseStatus.Resolved, AuditActions.StatusChanged)]
-    [InlineData(CaseStatus.Resolved, CaseStatus.Closed, AuditActions.StatusChanged)]
-    [InlineData(CaseStatus.Resolved, CaseStatus.InProgress, AuditActions.Reopened)]
+    [TestCase(CaseStatus.New, CaseStatus.Triaged, AuditActions.StatusChanged)]
+    [TestCase(CaseStatus.Triaged, CaseStatus.InProgress, AuditActions.StatusChanged)]
+    [TestCase(CaseStatus.InProgress, CaseStatus.Resolved, AuditActions.StatusChanged)]
+    [TestCase(CaseStatus.Resolved, CaseStatus.Closed, AuditActions.StatusChanged)]
+    [TestCase(CaseStatus.Resolved, CaseStatus.InProgress, AuditActions.Reopened)]
     public async Task Allowed_edges_change_status_audit_fields_and_trail(CaseStatus from, CaseStatus to, string action)
     {
         var harness = new CaseTestHarness(database);
@@ -54,8 +55,7 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(DisallowedPairs))]
+    [TestCaseSource(nameof(DisallowedPairs))]
     public async Task Every_other_pair_is_an_InvalidTransition_and_changes_nothing(CaseStatus from, CaseStatus to)
     {
         var harness = new CaseTestHarness(database);
@@ -70,13 +70,12 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         Assert.Equal(auditBefore, await harness.CountAuditAsync(detail.Id));
     }
 
-    [Fact]
+    [Test]
     public void Disallowed_pairs_cover_20_of_25() => Assert.Equal(20, DisallowedPairs().Count());
 
-    [Theory]
-    [InlineData(CaseStatus.New, CaseStatus.Triaged)]
-    [InlineData(CaseStatus.Resolved, CaseStatus.Closed)]
-    [InlineData(CaseStatus.Resolved, CaseStatus.InProgress)]
+    [TestCase(CaseStatus.New, CaseStatus.Triaged)]
+    [TestCase(CaseStatus.Resolved, CaseStatus.Closed)]
+    [TestCase(CaseStatus.Resolved, CaseStatus.InProgress)]
     public async Task CaseWorker_is_forbidden_supervisor_only_edges(CaseStatus from, CaseStatus to)
     {
         var harness = new CaseTestHarness(database);
@@ -89,9 +88,8 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         Assert.Contains(harness.Logs.Collector.GetSnapshot(), r => r.Id.Id == SecurityEvents.AuthorizationDeniedId);
     }
 
-    [Theory]
-    [InlineData(CaseStatus.Triaged, CaseStatus.InProgress)]
-    [InlineData(CaseStatus.InProgress, CaseStatus.Resolved)]
+    [TestCase(CaseStatus.Triaged, CaseStatus.InProgress)]
+    [TestCase(CaseStatus.InProgress, CaseStatus.Resolved)]
     public async Task CaseWorker_may_use_its_permitted_edges(CaseStatus from, CaseStatus to)
     {
         var harness = new CaseTestHarness(database);
@@ -103,7 +101,7 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         Assert.Equal((to, "caseworker@example.test"), (moved.Status, moved.UpdatedBy));
     }
 
-    [Fact]
+    [Test]
     public async Task Stale_version_is_a_conflict()
     {
         var harness = new CaseTestHarness(database);
@@ -117,9 +115,8 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         Assert.Equal((CaseStatus.Triaged, triaged.Version), (stored.Status, stored.Version));
     }
 
-    [Theory]
-    [InlineData(-1)]
-    [InlineData(5)]
+    [TestCase(-1)]
+    [TestCase(5)]
     public async Task Undefined_target_status_is_a_validation_error(int value)
     {
         var harness = new CaseTestHarness(database);
@@ -128,7 +125,7 @@ public class CaseStatusWorkflowTests(PostgresDatabaseFixture database) : IClassF
         CaseTestHarness.Fail(await harness.Service.ChangeStatusAsync(created.Id, new ChangeStatusRequest((CaseStatus)value, created.Version), CancellationToken.None), ErrorKind.Validation);
     }
 
-    [Fact]
+    [Test]
     public async Task Unknown_case_and_anonymous_actor_are_rejected()
     {
         var harness = new CaseTestHarness(database);

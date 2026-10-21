@@ -26,7 +26,7 @@ All automated evidence comes from `docker compose run --rm tests` (or the same p
 | Reflow at 320 CSS px (400% zoom) | `AccessibilitySweepTests.Every_page_reflows_at_320_css_pixels_without_sideways_scrolling` | every signed-in page |
 | Touch target size, phone layouts | `ResponsiveLayoutTests` | bottom navigation >= 44x44 px at 375 and 390 px |
 | Labels, descriptions, live regions, focus calls | `CaseIntake.Web.Tests` (bUnit) | every form and page component |
-| Time and language formats | `DateTimeFormatTests`, `AccessibilitySweepTests.Times_are_shown_in_eastern_time_with_the_zone_in_en_US_format` | en-US, Eastern with EDT/EST |
+| Time and language formats | `DateTimeFormatTests`, `AccessibilitySweepTests.Times_are_shown_in_eastern_time_with_the_zone_in_en_US_format` | en-US, Eastern, labelled ET |
 
 ## Status
 

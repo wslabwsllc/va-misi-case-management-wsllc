@@ -8,9 +8,11 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>The composed web application registers the real case module (not a fake) and it works end to end.</summary>
-public class CasesModuleTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class CasesModuleTests : ClassFixture<CasesModuleTests, PostgresDatabaseFixture>
 {
-    [Fact]
+    private static PostgresDatabaseFixture database => Shared;
+
+    [Test]
     public async Task Web_host_resolves_the_real_CaseService_per_scope()
     {
         var currentUser = new FakeCurrentUser();

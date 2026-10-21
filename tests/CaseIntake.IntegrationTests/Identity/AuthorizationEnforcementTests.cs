@@ -21,9 +21,11 @@ using Microsoft.Extensions.Logging.Testing;
 namespace CaseIntake.IntegrationTests.Identity;
 
 /// <summary>E3-S5: permissions are enforced on pages, endpoints and services, and every denial is logged.</summary>
-public class AuthorizationEnforcementTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class AuthorizationEnforcementTests : ClassFixture<AuthorizationEnforcementTests, IdentityWebFixture>
 {
-    [Fact]
+    private static IdentityWebFixture fixture => Shared;
+
+    [Test]
     public async Task A_page_needing_a_permission_the_user_lacks_shows_an_accessible_access_denied_page_with_403()
     {
         using var session = fixture.NewSession();
@@ -47,7 +49,7 @@ public class AuthorizationEnforcementTests(IdentityWebFixture fixture) : IClassF
         Assert.NotNull(denial.GetStructuredStateValue("UserId"));
     }
 
-    [Fact]
+    [Test]
     public async Task Users_with_the_permission_reach_the_page()
     {
         using var session = fixture.NewSession();
@@ -56,7 +58,7 @@ public class AuthorizationEnforcementTests(IdentityWebFixture fixture) : IClassF
         Assert.Equal(HttpStatusCode.OK, (await session.Client.GetAsync("/")).StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task The_composition_root_registers_the_circuit_adapter_by_default_and_the_HTTP_adapter_by_key()
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();
@@ -70,7 +72,7 @@ public class AuthorizationEnforcementTests(IdentityWebFixture fixture) : IClassF
     /// (<c>RequireAuthorization(Permissions.AttachmentsDownload).DisableCookieRedirect()</c>, actor from the keyed HTTP
     /// adapter) on the real Identity module, real cookies and real users.
     /// </summary>
-    [Fact]
+    [Test]
     public async Task A_download_style_endpoint_returns_401_anonymous_403_without_the_permission_and_200_with_it()
     {
         var builder = WebApplication.CreateBuilder();
@@ -131,8 +133,10 @@ public class AuthorizationEnforcementTests(IdentityWebFixture fixture) : IClassF
 /// E3-S5 service matrix: every role (and a principal with no permissions) against every protected <see cref="ICaseService"/>
 /// operation, with actors built by the production principal → actor path. Services deny independently of the UI.
 /// </summary>
-public class ServiceAuthorizationMatrixTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class ServiceAuthorizationMatrixTests : ClassFixture<ServiceAuthorizationMatrixTests, PostgresDatabaseFixture>
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     public const string NoPermissions = "NoPermissions";
 
     public enum Operation { Create, Get, List, AuditTrail, Edit, Triage, Start, Resolve, Close, Reopen }
@@ -185,8 +189,7 @@ public class ServiceAuthorizationMatrixTests(PostgresDatabaseFixture database) :
         [CaseStatus.Resolved] = [CaseStatus.Triaged, CaseStatus.InProgress, CaseStatus.Resolved],
     };
 
-    [Theory]
-    [MemberData(nameof(Matrix))]
+    [TestCaseSource(nameof(Matrix))]
     public async Task Each_role_is_allowed_exactly_the_operations_its_permissions_cover(string role, Operation operation)
     {
         var harness = new CaseTestHarness(database);
@@ -234,7 +237,7 @@ public class ServiceAuthorizationMatrixTests(PostgresDatabaseFixture database) :
         }
     }
 
-    [Fact]
+    [Test]
     public async Task A_case_worker_cannot_triage_a_new_case_through_the_service()
     {
         var harness = new CaseTestHarness(database);

@@ -7,8 +7,10 @@ using Microsoft.Extensions.Logging.Testing;
 namespace CaseIntake.IntegrationTests.Attachments;
 
 /// <summary>E4-S5/D9: startup cleanup removes only stale, unreferenced files and never committed content.</summary>
-public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class AttachmentReconcilerTests : ClassFixture<AttachmentReconcilerTests, PostgresDatabaseFixture>
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     internal static AttachmentStorageReconciler Reconciler(AttachmentTestHarness h, FakeLogger<AttachmentStorageReconciler>? logs = null) =>
         new(h.Cases.Factory, h.Store, h.Options, TimeProvider.System, logs ?? new FakeLogger<AttachmentStorageReconciler>());
 
@@ -23,7 +25,7 @@ public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClas
         return path;
     }
 
-    [Fact]
+    [Test]
     public async Task Stale_temporary_and_unreferenced_files_are_removed_while_committed_and_recent_files_stay()
     {
         using var h = new AttachmentTestHarness(database);
@@ -55,7 +57,7 @@ public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClas
         Assert.NotEqual(Guid.Empty, committed.Id);
     }
 
-    [Fact]
+    [Test]
     public async Task The_migrator_entry_point_reconciles_the_configured_root_and_can_run_again_safely()
     {
         var root = Path.Combine(Path.GetTempPath(), "caseintake-reconcile-" + Guid.NewGuid().ToString("N"));
@@ -90,7 +92,7 @@ public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClas
         }
     }
 
-    [Fact]
+    [Test]
     public async Task A_file_that_cannot_be_deleted_is_counted_as_a_failure_and_the_run_still_completes()
     {
         using var h = new AttachmentTestHarness(database);
@@ -107,7 +109,7 @@ public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClas
         Assert.True(File.Exists(stale));
     }
 
-    [Fact]
+    [Test]
     public async Task Attachments_whose_content_is_missing_are_counted_not_deleted()
     {
         using var h = new AttachmentTestHarness(database);
@@ -124,7 +126,7 @@ public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClas
         Assert.True(int.Parse(summary.GetStructuredStateValue("MissingContent")!, System.Globalization.CultureInfo.InvariantCulture) >= 1);
     }
 
-    [Fact]
+    [Test]
     public async Task A_missing_root_is_not_an_error()
     {
         using var h = new AttachmentTestHarness(database);
@@ -135,7 +137,7 @@ public class AttachmentReconcilerTests(PostgresDatabaseFixture database) : IClas
         Assert.Single(logs.Collector.GetSnapshot(), r => r.Id.Id == 4110);
     }
 
-    [Fact]
+    [Test]
     public async Task A_failure_is_logged_and_does_not_stop_startup()
     {
         using var h = new AttachmentTestHarness(database);

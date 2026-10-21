@@ -5,15 +5,19 @@
   </PropertyGroup>
   <!-- E3 unit tests: permission matrix, actor snapshots, ICurrentUser adapters, policies, return URLs, headers. No database. -->
   <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Testing\CaseIntake.Testing.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.Identity\CaseIntake.Identity.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="NUnit.Analyzers" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
   </ItemGroup>
   <ItemGroup>
-    <Using Include="Xunit" />
+    <Using Include="NUnit.Framework" />
+    <Using Include="CaseIntake.Testing.Assert" Alias="Assert" />
+    <Using Include="CaseIntake.Testing" />
   </ItemGroup>
 </Project>

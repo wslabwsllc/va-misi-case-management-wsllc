@@ -14,12 +14,12 @@ namespace CaseIntake.Web.Tests;
 /// recovery when the case was closed meanwhile, status change failures, attachment failures, and the audit and status
 /// history panels on their own.
 /// </summary>
-[Trait("Category", "Story:E5-S5")]
-[Trait("Category", "Story:E5-S6")]
-[Trait("Category", "Story:E5-S7")]
-[Trait("Category", "Req:R-4.2-6")]
-[Trait("Category", "Req:R-4.2-7")]
-[Trait("Category", "Req:R-4.2-8")]
+[Category("Story:E5-S5")]
+[Category("Story:E5-S6")]
+[Category("Story:E5-S7")]
+[Category("Req:R-4.2-6")]
+[Category("Req:R-4.2-7")]
+[Category("Req:R-4.2-8")]
 public class CaseDetailFailureTests : WebTestContext
 {
     private IRenderedComponent<CaseDetail> RenderCase(long id) => Render<CaseDetail>(p => p.Add(c => c.Id, id));
@@ -29,7 +29,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Loading and load failures ----
 
-    [Fact]
+    [Test]
     public async Task Veteran_attached_at_intake_shows_name_address_and_only_the_last_four_digits()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -44,7 +44,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.DoesNotContain("No veteran was attached", section.TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task A_case_without_a_veteran_says_so()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -54,7 +54,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=ssn-last4]"));
     }
 
-    [Fact]
+    [Test]
     public async Task A_load_error_other_than_not_found_is_shown_with_a_title_and_no_record()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -72,7 +72,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal($"Case {created.Id}", cut.Find("h1").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public async Task An_unexpected_load_failure_shows_a_generic_message()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -85,7 +85,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.DoesNotContain("database offline", cut.Markup);
     }
 
-    [Fact]
+    [Test]
     public async Task Loading_is_shown_until_the_case_arrives()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -100,7 +100,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=loading]"));
     }
 
-    [Fact]
+    [Test]
     public async Task Audit_trail_failure_is_shown_in_the_history_tab_while_the_case_still_loads()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -123,7 +123,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Refresh ----
 
-    [Fact]
+    [Test]
     public async Task Refresh_reloads_the_case_and_announces_it()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -147,7 +147,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Tabs ----
 
-    [Fact]
+    [Test]
     public async Task Home_selects_the_first_tab_and_other_keys_change_nothing()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -164,11 +164,9 @@ public class CaseDetailFailureTests : WebTestContext
     }
 
     // ---- Assignment ----
-
-    [Theory]
-    [InlineData(ErrorKind.Conflict, "This case was changed by someone else. The latest version is shown; try again.")]
-    [InlineData(ErrorKind.Forbidden, "Your role cannot make this assignment.")]
-    [InlineData(ErrorKind.ExternalUnavailable, "The assignment service is unavailable.")]
+    [TestCase(ErrorKind.Conflict, "This case was changed by someone else. The latest version is shown; try again.")]
+    [TestCase(ErrorKind.Forbidden, "Your role cannot make this assignment.")]
+    [TestCase(ErrorKind.ExternalUnavailable, "The assignment service is unavailable.")]
     public async Task A_rejected_take_explains_why_and_keeps_the_owner(ErrorKind kind, string message)
     {
         SignInAs(AppRoles.CaseWorker);
@@ -185,7 +183,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Null(Announcer.Message);
     }
 
-    [Fact]
+    [Test]
     public async Task A_field_error_from_the_assignment_is_shown_as_the_reason()
     {
         SignInAs(AppRoles.Supervisor);
@@ -203,7 +201,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal("Unassigned", cut.Find("[data-testid=summary-owner]").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public async Task Cancelling_the_assign_dialog_closes_it_and_returns_focus()
     {
         SignInAs(AppRoles.Supervisor);
@@ -220,7 +218,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal("Unassigned", cut.Find("[data-testid=summary-owner]").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public async Task The_assign_query_opens_the_dialog_for_supervisors_only()
     {
         SignInAs(AppRoles.Supervisor);
@@ -240,7 +238,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Edit failures ----
 
-    [Fact]
+    [Test]
     public async Task An_unexpected_save_failure_keeps_the_form_and_the_text()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -250,7 +248,7 @@ public class CaseDetailFailureTests : WebTestContext
         cut.Find("#edit-title").Input("Unsaved title text");
         CaseService.NextUpdateException = new InvalidOperationException("timeout");
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         cut.WaitForAssertion(() => Assert.Contains("Something went wrong. Your text is still in the form; try again.", cut.Find("[data-testid=detail-error]").TextContent));
         Assert.Contains("Your changes were not saved", cut.Find("[data-testid=detail-error]").TextContent);
@@ -258,7 +256,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=reload-latest]"));
     }
 
-    [Fact]
+    [Test]
     public async Task A_rejected_save_on_an_open_case_stays_in_edit_mode()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -268,13 +266,13 @@ public class CaseDetailFailureTests : WebTestContext
         cut.Find("#edit-title").Input("Not allowed title");
         CaseService.NextUpdateError = new Error(ErrorKind.Forbidden, "Forbidden", "You may not edit this case.");
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         cut.WaitForAssertion(() => Assert.Contains("You may not edit this case.", cut.Find("[data-testid=detail-error]").TextContent));
         Assert.NotEmpty(cut.FindAll("[data-testid=edit-form]"));
     }
 
-    [Fact]
+    [Test]
     public async Task Server_field_errors_on_the_description_and_unknown_fields_are_shown_in_the_summary()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -287,7 +285,7 @@ public class CaseDetailFailureTests : WebTestContext
             ["Unexpected"] = ["Something else is wrong."],
         });
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         var summary = cut.Find("#error-summary").TextContent;
         Assert.Contains("Description contains a blocked word.", summary);
@@ -295,7 +293,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Contains("Description contains a blocked word.", cut.Find("#edit-description-error").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task The_owner_list_loaded_for_editing_is_reused_by_the_assign_dialog()
     {
         SignInAs(AppRoles.Supervisor);
@@ -312,7 +310,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal(["", "caseworker@example.test", "supervisor@example.test"], cut.FindAll("[data-testid=assign-owner] option").Select(o => o.GetAttribute("value")));
     }
 
-    [Fact]
+    [Test]
     public async Task Reload_after_a_conflict_reports_a_failed_reload_and_keeps_the_option()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -321,7 +319,7 @@ public class CaseDetailFailureTests : WebTestContext
         cut.WaitForElement("[data-testid=edit-case]").Click();
         cut.Find("#edit-title").Input("My unsaved title");
         CaseService.NextUpdateError = new Error(ErrorKind.Conflict, "VersionConflict", "This case was changed by someone else.");
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
         CaseService.GetError = new Error(ErrorKind.ExternalUnavailable, "Down", "The case service is unavailable.");
 
         cut.Find("[data-testid=reload-latest]").Click();
@@ -332,7 +330,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal("My unsaved title", cut.Find("#edit-title").GetAttribute("value"));
     }
 
-    [Fact]
+    [Test]
     public async Task Reload_after_a_conflict_on_a_case_closed_meanwhile_shows_the_unsaved_title_read_only()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -341,7 +339,7 @@ public class CaseDetailFailureTests : WebTestContext
         cut.WaitForElement("[data-testid=edit-case]").Click();
         cut.Find("#edit-title").Input("Title that cannot be saved");
         CaseService.NextUpdateError = new Error(ErrorKind.Conflict, "VersionConflict", "This case was changed by someone else.");
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
         var actor = CurrentUser.Actor;
         CurrentUser.Actor = FakeCurrentUser.ForRole(AppRoles.Supervisor, "another-supervisor");
         await CaseService.ChangeStatusAsync(created.Id, new ChangeStatusRequest(CaseStatus.Closed, created.Version), CancellationToken.None);
@@ -357,7 +355,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Status change failures ----
 
-    [Fact]
+    [Test]
     public async Task An_unexpected_status_failure_closes_the_dialog_and_shows_a_generic_alert()
     {
         SignInAs(AppRoles.Supervisor);
@@ -373,7 +371,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal("Status: New", cut.Find("[data-testid=status-heading]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Other_status_errors_show_the_service_message()
     {
         SignInAs(AppRoles.Supervisor);
@@ -389,7 +387,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Attachments ----
 
-    [Fact]
+    [Test]
     public async Task Attachment_list_failure_is_reported_without_hiding_the_upload_form()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -409,9 +407,7 @@ public class CaseDetailFailureTests : WebTestContext
         { new IOException("reset"), null, "The file could not be read completely. Choose it again and retry." },
         { new InvalidOperationException("boom"), null, "Something went wrong and the file was not uploaded. Try again." },
     };
-
-    [Theory]
-    [MemberData(nameof(UploadFailures))]
+    [TestCaseSource(nameof(UploadFailures))]
     public async Task Upload_failures_are_explained_next_to_the_input(Exception? thrown, Error? error, string message)
     {
         SignInAs(AppRoles.CaseWorker);
@@ -431,7 +427,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Null(Announcer.Message);
     }
 
-    [Fact]
+    [Test]
     public async Task Closed_cases_cannot_receive_files()
     {
         SignInAs(AppRoles.Supervisor);
@@ -443,7 +439,7 @@ public class CaseDetailFailureTests : WebTestContext
 
     // ---- Audit trail and status history panels ----
 
-    [Fact]
+    [Test]
     public void Audit_trail_shows_loading_empty_details_and_pages_back_to_newer_entries()
     {
         var loading = Render<AuditTrail>();
@@ -467,7 +463,7 @@ public class CaseDetailFailureTests : WebTestContext
         Assert.Equal("Showing 1–2 of 4 entries", cut.Find("[role=status]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Status_history_shows_loading_no_changes_reopened_badges_and_durations()
     {
         Assert.Contains("Loading status history…", Render<StatusHistory>().Find("[data-testid=loading]").TextContent);

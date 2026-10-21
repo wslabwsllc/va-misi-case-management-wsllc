@@ -11,9 +11,15 @@ using Microsoft.Extensions.Logging.Testing;
 namespace CaseIntake.IntegrationTests.Identity;
 
 /// <summary>E3-S4: roles and one demo user per role, idempotent, passwords never reset.</summary>
-public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>, IAsyncLifetime
+public sealed class IdentitySeedTests : ClassFixture<IdentitySeedTests, PostgresDatabaseFixture>, IAsyncLifetime
 {
+    private static PostgresDatabaseFixture database => Shared;
+
+    [SetUp]
+
     public Task InitializeAsync() => database.ResetAsync();
+
+    [TearDown]
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -24,7 +30,7 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         return await action(scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>());
     }
 
-    [Fact]
+    [Test]
     public async Task A_fresh_seed_creates_both_roles_and_one_user_per_role_with_the_configured_password()
     {
         await IdentityTestSupport.SeedAsync(database.ConnectionString);
@@ -57,7 +63,7 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         });
     }
 
-    [Fact]
+    [Test]
     public async Task Reseeding_creates_no_duplicates_and_does_not_reset_passwords()
     {
         await IdentityTestSupport.SeedAsync(database.ConnectionString);
@@ -87,7 +93,7 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         });
     }
 
-    [Fact]
+    [Test]
     public async Task A_partially_seeded_database_is_completed()
     {
         // Simulates a run that stopped after creating the case worker but before adding its role membership.
@@ -110,9 +116,8 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         });
     }
 
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
+    [TestCase(null)]
+    [TestCase("")]
     public async Task A_missing_demo_password_fails_the_seed_and_creates_no_users(string? password)
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => IdentityTestSupport.SeedAsync(database.ConnectionString, password));
@@ -122,7 +127,7 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         Assert.Equal(0, await db.Users.CountAsync());
     }
 
-    [Fact]
+    [Test]
     public async Task A_password_that_violates_the_policy_fails_the_seed()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => IdentityTestSupport.SeedAsync(database.ConnectionString, "short"));
@@ -130,7 +135,7 @@ public sealed class IdentitySeedTests(PostgresDatabaseFixture database) : IClass
         Assert.DoesNotContain("short", ex.Message.Replace("PasswordTooShort", "", StringComparison.Ordinal), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public async Task Identity_seeds_before_cases_so_seeded_audit_entries_reference_real_user_ids()
     {
         await using (var provider = IdentityTestSupport.SeedServices(database.ConnectionString, extra: s => s.AddCasesSeed()))

@@ -1,37 +1,49 @@
 @inherits NavigationAwareBase
 
-@* Desktop/tablet site map: a labelled navigation landmark made of lists of links, grouped like a Power Apps sitemap. *@
+@* Desktop/tablet sidebar: the deep navy panel with the product mark and the labelled site map (lists of links grouped
+   like a Power Apps sitemap). Collapsed, it becomes an icon rail whose item names appear as tooltips on hover and
+   keyboard focus; the names stay in the accessible name either way. *@
 @if (IsAuthenticated)
 {
     var allItems = VisibleGroups.SelectMany(g => g.Items).ToList();
-    <nav id="app-nav" class="app-nav @(Collapsed ? "app-nav--collapsed" : null)" aria-label="Main navigation" data-testid="side-nav">
-        @foreach (var group in VisibleGroups)
-        {
-            var groupId = "nav-group-" + (group.Label ?? "home").Replace(' ', '-').ToLowerInvariant();
-            <div class="app-nav__group">
-                @if (group.Label is not null)
-                {
-                    <span class="app-nav__group-label" id="@groupId">@group.Label</span>
-                }
-                <ul aria-labelledby="@(group.Label is null ? null : groupId)">
-                    @foreach (var item in group.Items)
+    <div class="app-sidebar" data-testid="sidebar">
+        <div class="app-sidebar__inner">
+        <nav id="app-nav" class="app-nav @(Collapsed ? "app-nav--collapsed" : null)" aria-label="Main navigation" data-testid="side-nav">
+            <a class="sidebar-brand" href="" aria-label="Case Management, Case Intake and Triage, dashboard">
+                <span class="sidebar-brand__mark" aria-hidden="true"><img src="@Assets["icons/icon.svg"]" alt="" width="34" height="34" /></span>
+                <span class="sidebar-brand__text" aria-hidden="true">
+                    <span class="sidebar-brand__name">Case Management</span>
+                    <span class="sidebar-brand__tag">Case Intake and Triage</span>
+                </span>
+            </a>
+            @foreach (var group in VisibleGroups)
+            {
+                var groupId = "nav-group-" + (group.Label ?? "home").Replace(' ', '-').ToLowerInvariant();
+                <div class="app-nav__group">
+                    @if (group.Label is not null)
                     {
-                        <li>
-                            <a class="nav-link @(item.Child ? "nav-link--child" : null)" href="@item.Href" aria-current="@CurrentAttr(item, allItems)"
-                               title="@(Collapsed ? item.Text : null)">
-                                <Icon Name="@item.Icon" />
-                                <span class="nav-link__text">@item.Text</span>
-                                @if (item.Href == "notifications")
-                                {
-                                    <NotificationBadge TestId="nav-unread" />
-                                }
-                            </a>
-                        </li>
+                        <span class="app-nav__group-label" id="@groupId">@group.Label</span>
                     }
-                </ul>
-            </div>
-        }
-    </nav>
+                    <ul aria-labelledby="@(group.Label is null ? null : groupId)">
+                        @foreach (var item in group.Items)
+                        {
+                            <li>
+                                <a class="nav-link @(item.Child ? "nav-link--child" : null)" href="@item.Href" aria-current="@CurrentAttr(item, allItems)">
+                                    <span class="nav-link__icon"><Icon Name="@item.Icon" Small="@item.Child" /></span>
+                                    <span class="nav-link__text">@item.Text</span>
+                                    @if (item.Href == "notifications")
+                                    {
+                                        <NotificationBadge TestId="nav-unread" />
+                                    }
+                                </a>
+                            </li>
+                        }
+                    </ul>
+                </div>
+            }
+        </nav>
+        </div>
+    </div>
 }
 
 @code {

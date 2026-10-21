@@ -41,10 +41,14 @@ internal static class TriageIdentity
 }
 
 /// <summary>Issue #22: priority, category, owner and due date through the real case service, directory and database.</summary>
-[Trait("Category", "Story:Issue-22")]
-public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>, IAsyncLifetime
+[Category("Story:Issue-22")]
+public sealed class CaseTriageTests : ClassFixture<CaseTriageTests, PostgresDatabaseFixture>, IAsyncLifetime
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private readonly CaseTestHarness _harness = new(database);
+
+    [SetUp]
 
     public async Task InitializeAsync()
     {
@@ -55,11 +59,13 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         }
     }
 
+    [TearDown]
+
     public Task DisposeAsync() => Task.CompletedTask;
 
     private CaseAssigneeDirectory Directory() => new(_harness.Factory, _harness.CurrentUser, new FakeLogger<CaseAssigneeDirectory>());
 
-    [Fact]
+    [Test]
     public async Task Intake_without_triage_is_medium_general_unassigned_and_due_after_the_medium_target()
     {
         var created = await _harness.CreateAsync("Defaults at intake");
@@ -70,7 +76,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal(created.DueOn, stored.DueOn);
     }
 
-    [Fact]
+    [Test]
     public async Task An_empty_due_date_follows_the_priority_and_an_explicit_one_is_kept()
     {
         _harness.Actor = TestActors.Supervisor;   // choosing an owner at intake needs cases.assign
@@ -85,7 +91,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal(CaseCategory.Records, explicitDue.Category);
     }
 
-    [Fact]
+    [Test]
     public async Task Only_supervisors_choose_an_owner_at_intake_and_only_people_who_work_cases_can_own_one()
     {
         _harness.Actor = TestActors.CaseWorker;
@@ -111,7 +117,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal(ErrorKind.Validation, toNobody.Error!.Kind);
     }
 
-    [Fact]
+    [Test]
     public async Task Editing_triage_is_audited_by_field_never_changes_the_owner_and_a_null_triage_leaves_it_unchanged()
     {
         var created = await _harness.CreateAsync("Triage edit");
@@ -136,7 +142,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
     private Task<Result<CaseDetailDto>> AssignAsync(CaseDetailDto c, string? owner) =>
         _harness.Service.AssignAsync(c.Id, new AssignCaseRequest(owner, c.Version), CancellationToken.None);
 
-    [Fact]
+    [Test]
     public async Task Supervisor_assigns_reassigns_and_unassigns_with_audited_details()
     {
         var created = await _harness.CreateAsync("Supervisor assigns");
@@ -154,7 +160,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Contains(_harness.Logs.Collector.GetSnapshot(), r => r.Id.Id == 2004 && r.Message.Contains($"Case {created.Id} owner changed", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [Test]
     public async Task Case_worker_takes_an_unassigned_case_and_hands_back_only_their_own()
     {
         var created = await _harness.CreateAsync("Take me");
@@ -174,7 +180,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal(ErrorKind.Forbidden, (await AssignAsync(theirs, null)).Error!.Kind);
     }
 
-    [Fact]
+    [Test]
     public async Task Assignment_is_refused_for_clerks_closed_cases_unknown_owners_and_stale_versions()
     {
         var created = await _harness.CreateAsync("Refusals");
@@ -191,7 +197,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal("CaseClosed", (await AssignAsync(closed, null)).Error!.Code);
     }
 
-    [Fact]
+    [Test]
     public async Task Keeping_the_current_owner_is_allowed_even_if_they_no_longer_work_cases()
     {
         var created = await _harness.CreateAsync("Former owner");
@@ -208,7 +214,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal("intakeclerk@example.test", result.Value!.AssignedTo);
     }
 
-    [Fact]
+    [Test]
     public async Task Assignee_directory_lists_the_people_who_work_cases()
     {
         _harness.Actor = TriageIdentity.IntakeClerk;   // reading the list only needs cases.view
@@ -220,7 +226,7 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
         Assert.Equal(ErrorKind.Forbidden, (await Directory().ListAsync(CancellationToken.None)).Error!.Kind);
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_triage_values_are_rejected_before_the_database()
     {
         var result = await _harness.Service.CreateAsync(new CreateCaseRequest("Bad triage", null, null,
@@ -231,11 +237,13 @@ public sealed class CaseTriageTests(PostgresDatabaseFixture database) : IClassFi
 }
 
 /// <summary>Issue #21: the activity feed, unread counts and the per-user read cursor, over the real audit trail.</summary>
-[Trait("Category", "Story:Issue-21")]
+[Category("Story:Issue-21")]
 public sealed class CaseNotificationTests : IAsyncLifetime
 {
     private readonly PostgresDatabaseFixture _database = new();
     private CaseTestHarness _harness = null!;
+
+    [SetUp]
 
     public async Task InitializeAsync()
     {
@@ -243,6 +251,8 @@ public sealed class CaseNotificationTests : IAsyncLifetime
         await TriageIdentity.SeedAsync(_database);
         _harness = new CaseTestHarness(_database);
     }
+
+    [TearDown]
 
     public Task DisposeAsync() => _database.DisposeAsync();
 
@@ -255,7 +265,7 @@ public sealed class CaseNotificationTests : IAsyncLifetime
         return CaseTestHarness.Ok(await Notifications().GetFeedAsync(50, CancellationToken.None));
     }
 
-    [Fact]
+    [Test]
     public async Task Activity_by_others_is_unread_until_marked_and_own_activity_never_notifies()
     {
         // The supervisor creates a case, assigns it to the case worker and triages it: three entries.
@@ -294,7 +304,7 @@ public sealed class CaseNotificationTests : IAsyncLifetime
         Assert.Equal([true, false, false, false], after.Items.Select(i => i.Unread));
     }
 
-    [Fact]
+    [Test]
     public async Task Marking_twice_moves_the_cursor_forward_only_and_old_activity_leaves_the_window()
     {
         await _harness.CreateAsync("Old news");
@@ -311,7 +321,52 @@ public sealed class CaseNotificationTests : IAsyncLifetime
         Assert.Equal(1, await db.CaseNotificationCursors.CountAsync());
     }
 
-    [Fact]
+    [Test]
+    public async Task One_notification_can_be_marked_read_on_its_own_and_mark_all_then_covers_it()
+    {
+        var created = await _harness.CreateAsync("Read one at a time");
+        _harness.Time.Advance(TimeSpan.FromMinutes(1));
+        await _harness.MoveAsync(created, CaseStatus.Triaged);
+        var feed = await FeedAsAsync(TestActors.CaseWorker);
+        Assert.Equal(2, feed.UnreadCount);
+
+        _harness.Actor = TestActors.CaseWorker;
+        var afterOne = CaseTestHarness.Ok(await Notifications().MarkReadAsync(feed.Items[1].Id, CancellationToken.None));
+        Assert.Equal(1, afterOne.UnreadCount);
+        Assert.Equal([true, false], afterOne.Items.Select(i => i.Unread));
+        Assert.Equal(1, CaseTestHarness.Ok(await Notifications().GetUnreadCountAsync(CancellationToken.None)));
+        CaseTestHarness.Ok(await Notifications().MarkReadAsync(feed.Items[1].Id, CancellationToken.None));   // again: no error, no duplicate
+
+        // Someone else's feed is not affected.
+        await using (var db = _database.CreateContext())
+        {
+            Assert.Equal(1, await db.CaseNotificationReads.CountAsync());
+        }
+
+        _harness.Actor = TestActors.CaseWorker;
+        var all = CaseTestHarness.Ok(await Notifications().MarkAllReadAsync(CancellationToken.None));
+        Assert.Equal(0, all.UnreadCount);
+        await using var after = _database.CreateContext();
+        Assert.Equal(0, await after.CaseNotificationReads.CountAsync());   // the cursor covers them now
+    }
+
+    [Test]
+    public async Task Only_an_entry_of_your_own_feed_can_be_marked_read()
+    {
+        var created = await _harness.CreateAsync("Not yours to mark");
+        var supervisorEntry = (await FeedAsAsync(TestActors.CaseWorker)).Items.Single().Id;
+
+        // The supervisor wrote the entry, so it is not in the supervisor's feed.
+        _harness.Actor = TestActors.Supervisor;
+        Assert.Equal(ErrorKind.NotFound, (await Notifications().MarkReadAsync(supervisorEntry, CancellationToken.None)).Error!.Kind);
+        _harness.Actor = TestActors.CaseWorker;
+        Assert.Equal(ErrorKind.NotFound, (await Notifications().MarkReadAsync(long.MaxValue, CancellationToken.None)).Error!.Kind);
+        _harness.Actor = TestActors.NoPermissions;
+        Assert.Equal(ErrorKind.Forbidden, (await Notifications().MarkReadAsync(supervisorEntry, CancellationToken.None)).Error!.Kind);
+        Assert.NotNull(created);
+    }
+
+    [Test]
     public async Task Without_cases_view_the_feed_is_forbidden()
     {
         _harness.Actor = TestActors.NoPermissions;
@@ -322,16 +377,20 @@ public sealed class CaseNotificationTests : IAsyncLifetime
 }
 
 /// <summary>The E5 triage migration gives seeded rows of existing databases exactly what a fresh seed gives them.</summary>
-[Trait("Category", "Story:Issue-22")]
+[Category("Story:Issue-22")]
 public sealed class CaseTriageBackfillTests : IAsyncLifetime
 {
     private readonly PostgresDatabaseFixture _database = new();
 
+    [SetUp]
+
     public Task InitializeAsync() => _database.InitializeAsync();
+
+    [TearDown]
 
     public Task DisposeAsync() => _database.DisposeAsync();
 
-    [Fact]
+    [Test]
     public async Task Backfill_sql_matches_the_seed_triage_formula()
     {
         var services = new ServiceCollection();

@@ -10,8 +10,10 @@ using Microsoft.EntityFrameworkCore;
 namespace CaseIntake.IntegrationTests.Identity;
 
 /// <summary>Supervisors add users of the roles within their access, and users change their own password, against real Identity and cookies.</summary>
-public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class UserAdministrationTests : ClassFixture<UserAdministrationTests, IdentityWebFixture>
 {
+    private static IdentityWebFixture fixture => Shared;
+
     private const string InitialPassword = "Initial-Passw0rd!";
     private const string NewPassword = "Changed-Passw0rd!";
 
@@ -19,8 +21,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
 
     private static string NewEmail(string prefix) => $"{prefix}-{Guid.NewGuid():N}@example.test";
 
-    [Theory]
-    [MemberData(nameof(Roles))]
+    [TestCaseSource(nameof(Roles))]
     public async Task A_supervisor_adds_a_user_of_each_role_they_may_grant_who_can_then_sign_in_with_that_role(string role)
     {
         var email = NewEmail("new");
@@ -42,11 +43,10 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
     /// <summary>The roles whose permissions a supervisor holds (not Quality analyst or Administrator; see RolesAndPermissionsTests).</summary>
     public static TheoryData<string> Roles => [AppRoles.Auditor, AppRoles.IntakeClerk, AppRoles.CaseWorker, AppRoles.Supervisor];
 
-    [Theory]
-    [InlineData(AppRoles.Auditor)]
-    [InlineData(AppRoles.IntakeClerk)]
-    [InlineData(AppRoles.CaseWorker)]
-    [InlineData(AppRoles.QualityAnalyst)]
+    [TestCase(AppRoles.Auditor)]
+    [TestCase(AppRoles.IntakeClerk)]
+    [TestCase(AppRoles.CaseWorker)]
+    [TestCase(AppRoles.QualityAnalyst)]
     public async Task Other_roles_cannot_list_or_add_users(string role)
     {
         var email = NewEmail("denied");
@@ -59,7 +59,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         Assert.Null(await FindAsync(email));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalid_input_returns_field_errors_and_creates_nothing()
     {
         var email = NewEmail("weak");
@@ -76,7 +76,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         Assert.Null(await FindAsync(email));
     }
 
-    [Fact]
+    [Test]
     public async Task The_users_page_is_for_supervisors_only()
     {
         using var supervisor = fixture.NewSession();
@@ -90,7 +90,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         Assert.StartsWith("http://localhost/account/access-denied", denied.Headers.Location!.ToString(), StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public async Task A_user_changes_their_password_the_old_one_stops_working_and_other_sessions_end()
     {
         var email = NewEmail("change");
@@ -124,7 +124,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3012);
     }
 
-    [Fact]
+    [Test]
     public async Task Mismatched_new_passwords_are_rejected_without_changing_anything()
     {
         using var session = fixture.NewSession();
@@ -137,7 +137,7 @@ public class UserAdministrationTests(IdentityWebFixture fixture) : IClassFixture
         await fresh.SignInAsync(IdentityWebFixture.LogoutUser, IdentityTestSupport.DemoPassword);
     }
 
-    [Fact]
+    [Test]
     public async Task The_change_password_page_requires_sign_in()
     {
         using var session = fixture.NewSession();

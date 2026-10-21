@@ -5,11 +5,19 @@
    the same chart works on desktop and phone widths.
    Issue #21: hovering or focusing a column or bar shows its value in a tooltip; with Links each one is a link to the
    matching records (drill-through, reachable by Tab); columns grow in on first render (not with reduced motion); and
-   Expand opens a larger copy in a dialog. Axis labels are thinned so they never overlap.
+   Expand opens a larger copy in an accessible dialog. Axis labels are thinned so they never overlap.
+   Redesign: Donut and Pie draw slices with a side legend that lists every value and share as text; the legend entries
+   are the keyboard and screen-reader drill-through links (the slices are the same links for the mouse, out of the tab
+   order). Inside a chart card, clicking the card background also opens the larger view (a mouse convenience; the
+   Expand button is the keyboard path), while the points keep their own drill-through.
    Tooltips are drawn in one layer after every point, so no later point paints over them, and each point names its
    tooltip in data-tip. js/app.js shows the tooltip on hover or focus and hides it on Escape (WCAG 1.4.13). There is no
    <title> in the SVG (the figcaption names it), because browsers show the nearest <title> as a second, native tooltip. *@
-<figure class="chart @(ShowExpand ? "chart--expandable" : null)" aria-labelledby="@CaptionId" data-testid="@TestId">
+<figure class="chart @(ShowExpand ? "chart--expandable" : null) @(IsCircular ? "chart--circular" : null)" aria-labelledby="@CaptionId" data-testid="@TestId">
+    @if (ShowExpand)
+    {
+        <div class="card__backdrop-action" aria-hidden="true" @onclick="ExpandAsync"></div>
+    }
     <figcaption id="@CaptionId">@Title</figcaption>
     @if (!string.IsNullOrEmpty(Description))
     {
@@ -18,6 +26,36 @@
     @if (!HasData)
     {
         <p class="chart-unavailable" data-testid="chart-empty"><Icon Name="info" /> <span>@EmptyText</span></p>
+    }
+    else if (IsCircular)
+    {
+        <div class="chart__body">
+            <svg viewBox="0 0 @N(CircleSize) @N(CircleSize)" role="img" aria-labelledby="@CaptionId @SvgDescId"
+                 preserveAspectRatio="xMidYMid meet" class="chart__svg @(Animate ? "chart__svg--animate" : null)">
+                <desc id="@SvgDescId">@Summary</desc>
+                @RenderCircle()
+            </svg>
+            <ul class="chart-legend chart-legend--side" aria-label="@($"{Title}: values")" data-testid="@(TestId is null ? null : TestId + "-legend")">
+                @for (var i = 0; i < Categories.Count; i++)
+                {
+                    var index = i;
+                    var value = Series[0].Values[index];
+                    <li>
+                        <span class="chart-legend__swatch" style="background: var(@ColorAt(index))" aria-hidden="true"></span>
+                        @if (LinkAt(index) is { } href)
+                        {
+                            <a href="@href" aria-label="@($"{PointText(index)}, {ChartFormat.Share(value, Total)}. Open the list.")">@Categories[index]</a>
+                        }
+                        else
+                        {
+                            <span>@Categories[index]</span>
+                        }
+                        <span class="chart-legend__value" aria-hidden="@(LinkAt(index) is null ? null : "true")">@Format(value)</span>
+                        <span class="chart-legend__share" aria-hidden="@(LinkAt(index) is null ? null : "true")">@ChartFormat.Share(value, Total)</span>
+                    </li>
+                }
+            </ul>
+        </div>
     }
     else
     {
@@ -34,9 +72,12 @@
                 @RenderColumnsOrLines()
             }
         </svg>
+    }
+    @if (HasData)
+    {
         @if (HasLinks)
         {
-            <p class="chart__hint">Select a @(Kind == ChartKind.Bar ? "bar" : "column") to open the matching cases.</p>
+            <p class="chart__hint">@HintText</p>
         }
         @if (Series.Count > 1)
         {
@@ -59,6 +100,10 @@
                             {
                                 <th scope="col" class="num">@series.Name</th>
                             }
+                            @if (IsCircular)
+                            {
+                                <th scope="col" class="num">Share</th>
+                            }
                         </tr>
                     </thead>
                     <tbody>
@@ -80,9 +125,17 @@
                                 {
                                     <td class="num">@Format(series.Values[index])</td>
                                 }
+                                @if (IsCircular)
+                                {
+                                    <td class="num">@ChartFormat.Share(Series[0].Values[index], Total)</td>
+                                }
                             </tr>
                         }
                     </tbody>
+                    @if (IsCircular)
+                    {
+                        <tfoot><tr><th scope="row">Total</th><td class="num">@Format(Total)</td><td class="num">100%</td></tr></tfoot>
+                    }
                 </table>
             </div>
         </details>
@@ -90,9 +143,9 @@
     @* Last in the DOM (after the chart and its table), shown in the top-right corner by CSS. *@
     @if (ShowExpand)
     {
-        <button type="button" class="btn btn--subtle btn--icon chart__expand" @onclick="ExpandAsync" @ref="_expandButton"
-                title="Expand chart" data-testid="@(TestId is null ? null : TestId + "-expand")">
-            <Icon Name="zoom-in" Small="true" /><span class="visually-hidden">Expand chart: @Title</span>
+        <button type="button" class="btn btn--icon chart__expand" @onclick="ExpandAsync" @ref="_expandButton"
+                data-tooltip="Expand chart" data-tooltip-align="end" aria-haspopup="dialog" data-testid="@(TestId is null ? null : TestId + "-expand")">
+            <Icon Name="maximize" Small="true" /><span class="visually-hidden">Expand chart: @Title</span>
         </button>
     }
 </figure>
@@ -104,7 +157,8 @@
         {
             <Chart Id="@($"{Id}-zoomed")" Title="@Title" Description="@Description" Categories="Categories" Series="Series"
                    Kind="Kind" Stacked="Stacked" Format="Format" CategoryHeader="@CategoryHeader" EmptyText="@EmptyText"
-                   Width="860" Links="Links" AxisLabels="AxisLabels" ValueNoun="@ValueNoun" Expandable="false" Animate="false" />
+                   Width="860" Links="Links" AxisLabels="AxisLabels" ValueNoun="@ValueNoun" PointColors="PointColors"
+                   CenterLabel="@CenterLabel" Expandable="false" Animate="false" />
         }
     </ModalDialog>
 }
@@ -126,7 +180,7 @@
     [Parameter] public Func<double, string> Format { get; set; } = ChartFormat.Integer;
     [Parameter] public string CategoryHeader { get; set; } = "Category";
     [Parameter] public string EmptyText { get; set; } = "No data to chart yet.";
-    [Parameter] public double Width { get; set; } = 420;
+    [Parameter] public double Width { get; set; } = 340;
     [Parameter] public string? TestId { get; set; }
 
     /// <summary>Optional drill-through target per category (same order); null entries are not links.</summary>
@@ -143,6 +197,33 @@
 
     [Parameter] public bool Expandable { get; set; } = true;
     [Parameter] public bool Animate { get; set; } = true;
+
+    /// <summary>Optional colour per category (CSS custom property names), for single-series charts: status and priority colours.</summary>
+    [Parameter] public IReadOnlyList<string>? PointColors { get; set; }
+
+    /// <summary>The word under the total in a donut ("total").</summary>
+    [Parameter] public string CenterLabel { get; set; } = "total";
+
+    private bool IsCircular => Kind is ChartKind.Donut or ChartKind.Pie;
+
+    private const double CircleSize = 200;
+
+    private double Total => Series.Count == 0 ? 0 : Series[0].Values.Sum();
+
+    /// <summary>Width of the drawing in SVG units (tooltips are kept inside it).</summary>
+    private double SvgWidth => IsCircular ? CircleSize : Width;
+
+    private string HintText => Kind switch
+    {
+        ChartKind.Bar => "Select a bar to open the matching cases.",
+        ChartKind.Line => "Select a point to open the matching cases.",
+        ChartKind.Donut or ChartKind.Pie => "Select a slice or a legend entry to open the matching cases.",
+        _ => "Select a column to open the matching cases.",
+    };
+
+    /// <summary>The colour of category <paramref name="index"/> of series <paramref name="series"/>.</summary>
+    private string ColorAt(int index, int series = 0) =>
+        Series.Count == 1 && PointColors is { } colors && index < colors.Count ? colors[index] : Series[series].ColorVar;
 
     private string CaptionId => $"{Id}-caption";
     private string SvgDescId => $"{Id}-svg-desc";
@@ -202,14 +283,14 @@
     private string TipId(int index) => $"{Id}-tip-{index.ToString(CultureInfo.InvariantCulture)}";
 
     /// <summary>Estimated at 6.6 px per character of 12 px semibold text, plus padding; never wider than the chart.</summary>
-    private double TipWidth(string text) => Math.Min((text.Length * 6.6) + 16, Width - 8);
+    private double TipWidth(string text) => Math.Min((text.Length * 6.6) + 16, SvgWidth - 8);
 
     /// <summary>A tooltip centred above (x, y), kept inside the chart.</summary>
     private Tip TipAbove(int index, double x, double y)
     {
         var text = PointText(index);
         var width = TipWidth(text);
-        return new Tip(index, Math.Clamp(x - (width / 2), 4, Width - width - 4), Math.Max(y - 30, 2), width, text);
+        return new Tip(index, Math.Clamp(x - (width / 2), 4, SvgWidth - width - 4), Math.Max(y - 30, 2), width, text);
     }
 
     /// <summary>
@@ -258,12 +339,27 @@
     private void OpenPoint(Microsoft.AspNetCore.Components.Rendering.RenderTreeBuilder builder, ref int seq, int index)
     {
         var href = LinkAt(index);
-        builder.OpenElement(seq++, href is null ? "g" : "a");
-        builder.AddAttribute(seq++, "class", "chart__point");
-        if (href is not null)
+        if (IsCircular)
         {
-            builder.AddAttribute(seq++, "href", href);
-            builder.AddAttribute(seq++, "aria-label", PointText(index) + ". Open the list.");
+            // A donut or pie is one image (role="img") described by its summary, so its slices cannot be links (axe
+            // nested-interactive). The legend holds the links for keyboard and screen-reader users; a slice keeps the
+            // same target for the mouse through data-href (js/app.js).
+            builder.OpenElement(seq++, "g");
+            builder.AddAttribute(seq++, "class", href is null ? "chart__point" : "chart__point chart__point--link");
+            if (href is not null)
+            {
+                builder.AddAttribute(seq++, "data-href", href);
+            }
+        }
+        else
+        {
+            builder.OpenElement(seq++, href is null ? "g" : "a");
+            builder.AddAttribute(seq++, "class", "chart__point");
+            if (href is not null)
+            {
+                builder.AddAttribute(seq++, "href", href);
+                builder.AddAttribute(seq++, "aria-label", PointText(index) + ". Open the list.");
+            }
         }
         builder.AddAttribute(seq++, "style", $"--i: {index.ToString(CultureInfo.InvariantCulture)}");
         builder.AddAttribute(seq++, "data-tip", TipId(index));
@@ -345,7 +441,7 @@
                 builder.AddAttribute(seq++, "x", N(x)); builder.AddAttribute(seq++, "y", N(y));
                 builder.AddAttribute(seq++, "width", N(Math.Max(barW - 2, 1))); builder.AddAttribute(seq++, "height", N(Math.Max(h, 0)));
                 builder.AddAttribute(seq++, "rx", "2");
-                builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                builder.AddAttribute(seq++, "style", $"fill: var({ColorAt(i, s)})");
                 builder.CloseElement();
                 if (value > 0 && !Stacked && Series.Count <= 2 && Categories.Count <= 14)
                 {
@@ -368,6 +464,15 @@
             {
                 var points = string.Join(' ', Enumerable.Range(0, Categories.Count).Select(i =>
                     $"{N(Left + (band * i) + band / 2)},{N(Top + plotH - (plotH * Series[s].Values[i] / max))}"));
+                if (Series.Count == 1)
+                {
+                    // A light area under a single line (decorative; the markers and labels carry the values).
+                    builder.OpenElement(seq++, "polygon");
+                    builder.AddAttribute(seq++, "class", "chart__area");
+                    builder.AddAttribute(seq++, "points", $"{N(Left + band / 2)},{N(Top + plotH)} {points} {N(Left + (band * (Categories.Count - 1)) + band / 2)},{N(Top + plotH)}");
+                    builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                    builder.CloseElement();
+                }
                 builder.OpenElement(seq++, "polyline");
                 builder.AddAttribute(seq++, "class", "chart__line");
                 builder.AddAttribute(seq++, "points", points);
@@ -402,8 +507,17 @@
                         builder.AddAttribute(seq++, "x", N(cx - 4)); builder.AddAttribute(seq++, "y", N(cy - 4));
                         builder.AddAttribute(seq++, "width", "8"); builder.AddAttribute(seq++, "height", "8");
                     }
-                    builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                    builder.AddAttribute(seq++, "style", $"fill: var({ColorAt(i, s)})");
                     builder.CloseElement();
+                    if (Series.Count == 1 && Series[s].Values[i] > 0 && Categories.Count <= 14)
+                    {
+                        builder.OpenElement(seq++, "text");
+                        builder.AddAttribute(seq++, "class", "chart__value");
+                        builder.AddAttribute(seq++, "x", N(cx)); builder.AddAttribute(seq++, "y", N(cy - 9));
+                        builder.AddAttribute(seq++, "text-anchor", "middle");
+                        builder.AddContent(seq++, Format(Series[s].Values[i]));
+                        builder.CloseElement();
+                    }
                 }
                 tips.Add(TipAbove(i, cx, highest - 8));
                 builder.CloseElement();
@@ -444,7 +558,7 @@
                 builder.AddAttribute(seq++, "x", N(labelW + offset)); builder.AddAttribute(seq++, "y", N(y + 4));
                 builder.AddAttribute(seq++, "width", N(Math.Max(w, 0))); builder.AddAttribute(seq++, "height", "18");
                 builder.AddAttribute(seq++, "rx", "2");
-                builder.AddAttribute(seq++, "style", $"fill: var({Series[s].ColorVar})");
+                builder.AddAttribute(seq++, "style", $"fill: var({ColorAt(i, s)})");
                 builder.CloseElement();
                 offset += Stacked ? w : 0;
             }
@@ -461,4 +575,70 @@
         }
         AddTooltips(builder, ref seq, tips);
     };
+
+    /// <summary>Donut or pie slices, clockwise from the top, each a point with its tooltip; the donut shows the total.</summary>
+    private RenderFragment RenderCircle() => builder =>
+    {
+        const double center = CircleSize / 2;
+        const double outer = 92;
+        var inner = Kind == ChartKind.Donut ? 58.0 : 0.0;
+        var total = Total;
+        var seq = 0;
+        var tips = new List<Tip>(Categories.Count);
+        var start = -Math.PI / 2;
+        for (var i = 0; i < Categories.Count; i++)
+        {
+            var value = Series[0].Values[i];
+            if (value <= 0)
+            {
+                continue;
+            }
+            var sweep = 2 * Math.PI * value / total;
+            var end = start + sweep;
+            OpenPoint(builder, ref seq, i);
+            builder.OpenElement(seq++, "path");
+            builder.AddAttribute(seq++, "class", "chart__slice");
+            builder.AddAttribute(seq++, "d", SlicePath(center, outer, inner, start, end));
+            builder.AddAttribute(seq++, "style", $"fill: var({ColorAt(i)})");
+            builder.CloseElement();
+            var middle = start + (sweep / 2);
+            var labelRadius = inner > 0 ? (outer + inner) / 2 : outer * 0.62;
+            tips.Add(TipAbove(i, center + (labelRadius * Math.Cos(middle)), center + (labelRadius * Math.Sin(middle))));
+            builder.CloseElement();
+            start = end;
+        }
+        if (Kind == ChartKind.Donut)
+        {
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "class", "chart__center-value");
+            builder.AddAttribute(seq++, "x", N(center)); builder.AddAttribute(seq++, "y", N(center + 6));
+            builder.AddAttribute(seq++, "text-anchor", "middle");
+            builder.AddAttribute(seq++, "aria-hidden", "true");
+            builder.AddContent(seq++, Format(total));
+            builder.CloseElement();
+            builder.OpenElement(seq++, "text");
+            builder.AddAttribute(seq++, "class", "chart__center-label");
+            builder.AddAttribute(seq++, "x", N(center)); builder.AddAttribute(seq++, "y", N(center + 24));
+            builder.AddAttribute(seq++, "text-anchor", "middle");
+            builder.AddAttribute(seq++, "aria-hidden", "true");
+            builder.AddContent(seq++, CenterLabel);
+            builder.CloseElement();
+        }
+        AddTooltips(builder, ref seq, tips);
+    };
+
+    /// <summary>An annular (or, with inner = 0, a pie) sector; a full circle is drawn as two halves.</summary>
+    private static string SlicePath(double c, double outer, double inner, double start, double end)
+    {
+        if (end - start >= (2 * Math.PI) - 1e-9)
+        {
+            var mid = start + Math.PI;
+            return SlicePath(c, outer, inner, start, mid) + " " + SlicePath(c, outer, inner, mid, end - 1e-6);
+        }
+        string P(double r, double a) => $"{N(c + (r * Math.Cos(a)))} {N(c + (r * Math.Sin(a)))}";
+        var large = end - start > Math.PI ? 1 : 0;
+        return inner > 0
+            ? $"M {P(outer, start)} A {N(outer)} {N(outer)} 0 {large} 1 {P(outer, end)} L {P(inner, end)} A {N(inner)} {N(inner)} 0 {large} 0 {P(inner, start)} Z"
+            : $"M {N(c)} {N(c)} L {P(outer, start)} A {N(outer)} {N(outer)} 0 {large} 1 {P(outer, end)} Z";
+    }
 }

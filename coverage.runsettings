@@ -16,6 +16,7 @@
               <Exclude>
                 <ModulePath>.*[\\/]CaseIntake\.[^\\/]*Tests\.dll$</ModulePath>
                 <ModulePath>.*[\\/]CaseIntake\.TestKit\.dll$</ModulePath>
+                <ModulePath>.*[\\/]CaseIntake\.Testing\.dll$</ModulePath>
                 <ModulePath>.*[\\/]CaseIntake\.E2E\.dll$</ModulePath>
               </Exclude>
             </ModulePaths>

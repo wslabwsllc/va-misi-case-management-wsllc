@@ -12,8 +12,8 @@ namespace CaseIntake.Web.Tests;
 /// Test results browsing pages: test cases, test case history, evidence gallery, history and trends, run list filters and
 /// paging, run detail comparison and files, and the loading, empty and error states of each.
 /// </summary>
-[Trait("Category", "Story:Test management")]
-[Trait("Category", "Req:R-4.2-13")]
+[Category("Story:Test management")]
+[Category("Req:R-4.2-13")]
 public class TestResultsBrowsingTests : WebTestContext
 {
     private static readonly Error Unavailable = new(ErrorKind.ExternalUnavailable, "Unavailable", "The test results store is unavailable.");
@@ -25,7 +25,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Test cases ----
 
-    [Fact]
+    [Test]
     public void Test_cases_lists_each_case_with_its_last_status_story_and_requirements()
     {
         TestResults.TestCases.Add(FakeTestResultsService.TestCase(11, "Confirm the transition", TestOutcome.Failed));
@@ -37,39 +37,41 @@ public class TestResultsBrowsingTests : WebTestContext
         var first = cut.FindAll("[data-testid=cases-table] tbody tr")[0];
         Assert.Equal("test-results/cases/11", first.QuerySelector("a")!.GetAttribute("href"));
         Assert.Equal("Failed", first.QuerySelector(".status-pill")!.TextContent);
-        Assert.Contains("End-to-end (Playwright)", first.TextContent);
-        Assert.Contains("E5-S6", first.TextContent);
+        Assert.Contains("E2E", first.TextContent);
         Assert.Contains("R-4.2-8", first.TextContent);
-        Assert.Null(cut.FindAll("[data-testid=cases-table] tbody tr")[1].QuerySelector(".status-pill"));
+        // A test that has never run reads "Not Run".
+        Assert.Equal("Not Run", cut.FindAll("[data-testid=cases-table] tbody tr")[1].QuerySelector(".status-pill")!.TextContent);
         Assert.Equal(["", "E2E", "Web.Tests"], cut.FindAll("#testcase-module option").Select(o => o.GetAttribute("value")));
         Assert.Equal("page", cut.Find("[data-testid=tr-tabs] a[aria-current]").GetAttribute("aria-current"));
         Assert.Equal("Test cases", cut.Find("[data-testid=tr-tabs] a[aria-current]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Test_case_filters_are_sent_to_the_service_and_reset_to_the_first_page()
     {
         var cut = Render<TestCases>();
         cut.WaitForElement("[data-testid=cases-empty]");
         Assert.Contains("No test cases match", cut.Find("[data-testid=cases-empty]").TextContent);
 
-        cut.Find("#testcase-search").Input("  transition ");
+        // Filters apply as soon as they change (the search after a short pause) and always return to page 1.
+        Navigation.NavigateTo("test-results/cases?page=3");
+        cut.WaitForAssertion(() => Assert.Equal(3, TestResults.CaseQueries.Last().Page));
         cut.Find("#testcase-module").Change("E2E");
+        Assert.Equal(1, TestResults.CaseQueries.Last().Page);
         cut.Find("#testcase-type").Change(nameof(TestType.Component));
         cut.Find("#testcase-outcome").Change(nameof(TestOutcome.NotExecuted));
-        cut.Find("[data-testid=case-filters]").Submit();
+        cut.Find("#testcase-search").Input("  transition ");
 
-        var query = TestResults.CaseQueries.Last();
-        Assert.Equal(new TestCaseQuery("E2E", TestType.Component, TestOutcome.NotExecuted, "transition", 1, 50), query);
+        cut.WaitForAssertion(() => Assert.Equal(
+            new TestCaseQuery("E2E", TestType.Component, TestOutcome.NotExecuted, "transition", 1, 50), TestResults.CaseQueries.Last()), TimeSpan.FromSeconds(5));
 
-        cut.Find("#testcase-search").Input("   ");
         cut.Find("#testcase-module").Change("");
-        cut.Find("[data-testid=case-filters]").Submit();
-        Assert.Null(TestResults.CaseQueries.Last().Search);
+        cut.Find("#testcase-search").Input("   ");
+        cut.WaitForAssertion(() => Assert.Null(TestResults.CaseQueries.Last().Search), TimeSpan.FromSeconds(5));
         Assert.Null(TestResults.CaseQueries.Last().Module);
     }
 
-    [Fact]
+    [Test]
     public void Test_cases_page_through_results_with_the_pager()
     {
         for (var i = 1; i <= 60; i++)
@@ -79,7 +81,8 @@ public class TestResultsBrowsingTests : WebTestContext
 
         var cut = Render<TestCases>();
         cut.WaitForAssertion(() => Assert.Equal(50, cut.FindAll("[data-testid=cases-table] tbody tr").Count));
-        Assert.Contains("Showing 1–50 of 60 test cases · Page 1 of 2", cut.Find(".pager__info").TextContent);
+        Assert.Equal("Showing 1–50 of 60 test cases", cut.Find("[data-testid=pager-range]").TextContent);
+        Assert.Equal("Page 1 of 2", cut.Find("[data-testid=pager-info]").TextContent);
 
         cut.Find("[data-testid=pager-next]").Click();
 
@@ -90,7 +93,7 @@ public class TestResultsBrowsingTests : WebTestContext
         JSInterop.VerifyFocusAsyncInvoke();
     }
 
-    [Fact]
+    [Test]
     public void Test_cases_show_the_service_error_or_a_generic_message_when_the_call_throws()
     {
         TestResults.Failure = Unavailable;
@@ -107,13 +110,14 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Equal(3, thrown.FindAll("#testcase-module option").Count);
     }
 
-    [Fact]
+    [Test]
     public void Test_cases_show_a_loading_indicator_until_the_service_answers()
     {
         TestResults.Gate = new TaskCompletionSource();
         TestResults.Only = [nameof(ITestResultsService.ListTestCasesAsync)];
         var cut = Render<TestCases>();
-        Assert.Contains("Loading test cases…", cut.Find("[data-testid=loading]").TextContent);
+        // The summary counts have their own loading indicator; the list says it is loading test cases.
+        Assert.Contains(cut.FindAll("[data-testid=loading]"), l => l.TextContent.Contains("Loading test cases…", StringComparison.Ordinal));
 
         TestResults.Gate.SetResult();
 
@@ -123,7 +127,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Test case detail ----
 
-    [Fact]
+    [Test]
     public void Test_case_detail_lists_runs_newest_first_with_a_duration_trend_and_the_case_fields()
     {
         var testCase = FakeTestResultsService.TestCase(11, "Confirm the transition", TestOutcome.Failed);
@@ -138,19 +142,19 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=history-table] tbody tr").Count));
         var rows = cut.FindAll("[data-testid=history-table] tbody tr");
         Assert.Equal("test-results/executions/51", rows[0].QuerySelector("a")!.GetAttribute("href"));
-        Assert.Contains("10/05/2026 09:00 AM EDT", rows[0].TextContent);
+        Assert.Contains("10-05-2026 09:00 ET", rows[0].TextContent);
         Assert.Contains("3.3 s", rows[0].TextContent);
         Assert.Contains("0123456789", rows[0].TextContent);
         Assert.DoesNotContain("0123456789a", rows[0].TextContent);
         Assert.Contains("800 ms", rows[1].TextContent);
         Assert.Contains("unknown", rows[1].TextContent);
         // The chart reads oldest to newest.
-        Assert.Equal(["10/04 09:00 AM EDT", "10/05 09:00 AM EDT"], cut.FindAll("[data-testid=testcase-chart-duration] table tbody th").Select(th => th.TextContent.Trim()));
+        Assert.Equal(["10-04 09:00 ET", "10-05 09:00 ET"], cut.FindAll("[data-testid=testcase-chart-duration] table tbody th").Select(th => th.TextContent.Trim()));
         Assert.Contains("Ns.Class.Confirm_the_transition", cut.Find("[aria-labelledby=testcase-heading]").TextContent);
         Assert.Equal("Confirm the transition", cut.Find("h1").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public void Test_case_without_runs_or_recorded_details_says_so()
     {
         TestResults.Histories[12] = new TestCaseHistoryDto(FakeTestResultsService.TestCase(12, "Never run", last: null, story: null, requirements: null) with { Description = null, Priority = null }, []);
@@ -160,11 +164,12 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.WaitForElement("[data-testid=history-empty]");
         var facts = cut.Find("[aria-labelledby=testcase-heading]").TextContent;
         Assert.Contains("Unknown", facts);
-        Assert.Equal(4, facts.Split("Not recorded").Length - 1);
+        // Description, story, requirements, priority, test method and workflow.
+        Assert.Equal(6, facts.Split("Not recorded").Length - 1);
         Assert.Empty(cut.FindAll("[data-testid=testcase-chart-duration]"));
     }
 
-    [Fact]
+    [Test]
     public void Missing_or_failing_test_case_shows_an_error_instead_of_the_record()
     {
         var missing = Render<TestCaseDetail>(p => p.Add(c => c.Id, 99));
@@ -178,7 +183,7 @@ public class TestResultsBrowsingTests : WebTestContext
         thrown.WaitForAssertion(() => Assert.Contains("The test case could not be loaded. Try again.", thrown.Find("[data-testid=testcase-error]").TextContent));
     }
 
-    [Fact]
+    [Test]
     public void Test_case_detail_shows_loading_until_the_history_arrives()
     {
         TestResults.Histories[1] = new TestCaseHistoryDto(FakeTestResultsService.TestCase(1, "Slow"), []);
@@ -194,7 +199,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Evidence gallery ----
 
-    [Fact]
+    [Test]
     public void Evidence_gallery_shows_screenshots_with_preview_links_to_the_test_and_downloads()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(4, passed: 1, failed: 1));
@@ -231,7 +236,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Equal($"/test-results/artifacts/{shot.Id}?download=true", cut.Find("[data-testid=evidence-preview] .modal__footer a").GetAttribute("href"));
     }
 
-    [Fact]
+    [Test]
     public void Evidence_filters_send_run_kind_and_search_and_paging_keeps_them()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(4, passed: 1, failed: 0));
@@ -258,7 +263,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Equal(new TestArtifactQuery(4, null, null, 1, 48), TestResults.ArtifactQueries.Last());
     }
 
-    [Fact]
+    [Test]
     public void Evidence_shows_the_empty_state_an_error_or_a_generic_failure()
     {
         var empty = Render<Evidence>();
@@ -277,7 +282,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Empty(thrown.FindAll("[data-testid=evidence-gallery]"));
     }
 
-    [Fact]
+    [Test]
     public void Evidence_shows_loading_until_the_gallery_arrives()
     {
         TestResults.Gate = new TaskCompletionSource();
@@ -291,7 +296,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Evidence preview ----
 
-    [Fact]
+    [Test]
     public void Preview_zooms_through_the_steps_and_returns_to_fit()
     {
         var shot = FakeTestResultsService.Artifact(TestArtifactKind.Screenshot, "page.png");
@@ -337,7 +342,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- History and trends ----
 
-    [Fact]
+    [Test]
     public void History_charts_recent_runs_oldest_first_and_lists_flaky_tests()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(3, passed: 9, failed: 1, notExecuted: 2));
@@ -348,7 +353,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
         cut.WaitForElement("[data-testid=flaky-table]");
         Assert.Equal(new TestRunQuery(1, 20), TestResults.RunQueries.Single());
-        Assert.Equal(["10/02 05:00 AM EDT", "10/03 05:00 AM EDT"], cut.FindAll("[data-testid=history-chart-passrate] table tbody th").Select(th => th.TextContent.Trim()));
+        Assert.Equal(["10-02 05:00 ET", "10-03 05:00 ET"], cut.FindAll("[data-testid=history-chart-passrate] table tbody th").Select(th => th.TextContent.Trim()));
         Assert.Contains("The last 20 imported runs", cut.Markup);
         var row = cut.Find("[data-testid=flaky-table] tbody tr");
         Assert.Equal("test-results/cases/11", row.QuerySelector("a")!.GetAttribute("href"));
@@ -356,7 +361,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Equal("History and trends", cut.Find("[data-testid=tr-tabs] a[aria-current]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void History_without_flaky_tests_or_runs_shows_empty_states()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(2, passed: 10, failed: 0));
@@ -369,7 +374,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Empty(none.FindAll("[data-testid=history-chart-passrate]"));
     }
 
-    [Fact]
+    [Test]
     public void History_failures_show_an_alert_and_flaky_failures_fall_back_to_empty()
     {
         TestResults.Failure = Unavailable;
@@ -390,7 +395,7 @@ public class TestResultsBrowsingTests : WebTestContext
         thrown.WaitForAssertion(() => Assert.Contains("The history could not be loaded. Try again.", thrown.Find("[data-testid=history-error]").TextContent));
     }
 
-    [Fact]
+    [Test]
     public void History_shows_loading_until_the_runs_arrive()
     {
         TestResults.Gate = new TaskCompletionSource();
@@ -402,7 +407,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Test runs list ----
 
-    [Fact]
+    [Test]
     public void Run_filters_are_sent_to_the_service_and_the_filtered_empty_state_suggests_fewer_filters()
     {
         var cut = Render<TestRuns>();
@@ -421,7 +426,7 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Contains("Try a different search or fewer filters.", cut.Find("[data-testid=runs-empty]").TextContent));
     }
 
-    [Fact]
+    [Test]
     public void Runs_page_with_the_pager_and_show_each_runs_result()
     {
         for (var i = 1; i <= 27; i++)
@@ -431,7 +436,7 @@ public class TestResultsBrowsingTests : WebTestContext
         var cut = Render<TestRuns>();
         cut.WaitForAssertion(() => Assert.Equal(25, cut.FindAll("[data-testid=runs-table] tbody tr").Count));
         var pills = cut.FindAll("[data-testid=runs-table] tbody tr .status-pill").Select(p => p.TextContent).ToList();
-        Assert.Equal(["1 failed", "3 not executed", "1 failed", "Failed to start"], pills.Take(4));
+        Assert.Equal(["1 failed", "3 not run", "1 failed", "Failed to start"], pills.Take(4));
         Assert.Equal(25, cut.FindAll("[data-testid=run-cards] li").Count);
 
         cut.Find("[data-testid=pager-next]").Click();
@@ -441,7 +446,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Equal([1, 2, 1], TestResults.RunQueries.Select(q => q.Page));
     }
 
-    [Fact]
+    [Test]
     public void Runs_list_errors_are_shown_in_the_alert()
     {
         TestResults.Failure = Unavailable;
@@ -456,7 +461,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Empty(thrown.FindAll("[data-testid=runs-table]"));
     }
 
-    [Fact]
+    [Test]
     public void Runs_list_shows_loading_until_the_service_answers()
     {
         TestResults.Gate = new TaskCompletionSource();
@@ -470,7 +475,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Run detail ----
 
-    [Fact]
+    [Test]
     public void Run_detail_shows_suites_notes_comparison_and_run_files()
     {
         var run = FakeTestResultsService.Run(4, passed: 3, failed: 1, blocked: 1, notes: "Nightly run");
@@ -485,7 +490,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
         cut.WaitForElement("[data-testid=executions-empty]");
         Assert.Equal("Run run-4", cut.Find("h1").TextContent.Trim());
-        Assert.Contains("Completed · 5 total, 3 passed, 1 failed, 0 skipped, 1 blocked, 0 not executed", cut.Find("[data-testid=record-header]").TextContent);
+        Assert.Contains("Completed · 5 total, 3 passed, 1 failed, 0 skipped, 1 blocked, 0 not run", cut.Find("[data-testid=record-header]").TextContent);
         Assert.Contains("60%", cut.Find("[data-testid=record-header]").TextContent);
         Assert.Equal("/test-results/runs/4/export/html", cut.Find("[data-testid=export-html]").GetAttribute("href"));
         Assert.Equal("/test-results/runs/4/export/csv", cut.Find("[data-testid=export-csv]").GetAttribute("href"));
@@ -505,7 +510,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Single(files.QuerySelectorAll("a"));
     }
 
-    [Fact]
+    [Test]
     public void Run_detail_filters_results_by_outcome_and_name_and_pages()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(4, passed: 60, failed: 1));
@@ -521,25 +526,24 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.Find("[data-testid=pager-next]").Click();
         cut.WaitForAssertion(() => Assert.Equal(11, cut.FindAll("[data-testid=executions-table] tbody tr").Count));
 
-        cut.Find("#execution-search").Input(" failure ");
+        // Filters apply as soon as they change (the search after a short pause) and return to page 1.
         cut.Find("#execution-outcome-filter").Change(nameof(TestOutcome.Failed));
-        cut.Find("[data-testid=execution-filters]").Submit();
+        cut.Find("#execution-search").Input(" failure ");
 
+        cut.WaitForAssertion(() => Assert.Equal("failure", TestResults.ExecutionQueries.Last().Search), TimeSpan.FromSeconds(5));
         var query = TestResults.ExecutionQueries.Last();
         Assert.Equal(4, query.RunId);
         Assert.Equal(1, query.Page);
         Assert.Equal([TestOutcome.Failed], query.Outcomes);
-        Assert.Equal("failure", query.Search);
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=executions-table] tbody tr")));
 
-        cut.Find("#execution-search").Input("");
         cut.Find("#execution-outcome-filter").Change("");
-        cut.Find("[data-testid=execution-filters]").Submit();
+        cut.Find("#execution-search").Input("");
+        cut.WaitForAssertion(() => Assert.Null(TestResults.ExecutionQueries.Last().Search), TimeSpan.FromSeconds(5));
         Assert.Null(TestResults.ExecutionQueries.Last().Outcomes);
-        Assert.Null(TestResults.ExecutionQueries.Last().Search);
     }
 
-    [Fact]
+    [Test]
     public void Run_detail_errors_missing_runs_and_failed_result_lists_are_reported()
     {
         var missing = Render<RunDetail>(p => p.Add(r => r.RunId, 99));
@@ -562,7 +566,7 @@ public class TestResultsBrowsingTests : WebTestContext
         thrown.WaitForAssertion(() => Assert.Contains("The test run could not be loaded. Try again.", thrown.Find("[data-testid=run-error]").TextContent));
     }
 
-    [Fact]
+    [Test]
     public void Run_detail_shows_loading_until_the_run_arrives()
     {
         TestResults.Runs.Add(FakeTestResultsService.Run(4, passed: 1, failed: 0));
@@ -575,7 +579,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Execution detail ----
 
-    [Fact]
+    [Test]
     public void Passing_execution_without_evidence_or_logs_says_what_was_not_recorded()
     {
         var run = FakeTestResultsService.Run(3, passed: 1, failed: 0);
@@ -589,14 +593,14 @@ public class TestResultsBrowsingTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal("Passed", cut.Find("[data-testid=execution-outcome]").TextContent));
         Assert.Contains("No evidence files were recorded", cut.Find("[data-testid=no-evidence]").TextContent);
         Assert.Contains("Not a browser test", cut.Markup);
-        Assert.Contains("10/03/2026 05:00 AM EDT", cut.Markup);
+        Assert.Contains("10-03-2026 05:00 ET", cut.Markup);
         Assert.Empty(cut.FindAll("[data-testid=failure-message]"));
         Assert.Empty(cut.FindAll("[data-testid=steps-table]"));
         Assert.Empty(cut.FindAll("#logs-heading"));
         Assert.Contains(new Crumb("Run run-3", "test-results/runs/3"), Services.GetRequiredService<ShellState>().Breadcrumbs);
     }
 
-    [Fact]
+    [Test]
     public void Execution_detail_shows_logs_stack_trace_and_purged_screenshots()
     {
         var run = FakeTestResultsService.Run(3, passed: 0, failed: 1);
@@ -620,7 +624,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Contains("removed by retention", cut.Find("[data-testid=evidence-files]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Execution_detail_errors_and_loading()
     {
         var missing = Render<ExecutionDetail>(p => p.Add(d => d.Id, 99));
@@ -643,7 +647,7 @@ public class TestResultsBrowsingTests : WebTestContext
 
     // ---- Dashboard ----
 
-    [Fact]
+    [Test]
     public void Dashboard_lists_newly_failed_and_fixed_tests_recent_runs_and_exports()
     {
         var latest = FakeTestResultsService.Run(2, passed: 40, failed: 1);
@@ -667,10 +671,10 @@ public class TestResultsBrowsingTests : WebTestContext
         var recent = cut.FindAll("[data-testid=tr-recent] li");
         Assert.Equal(2, recent.Count);
         Assert.Contains("main @ abcdef1234", recent[0].TextContent);
-        Assert.Equal("2 not executed", recent[1].QuerySelector(".status-pill")!.TextContent);
+        Assert.Equal("2 not run", recent[1].QuerySelector(".status-pill")!.TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Dashboard_without_a_previous_run_or_changes_says_so()
     {
         var only = FakeTestResultsService.Run(1, passed: 5, failed: 0);
@@ -686,7 +690,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Contains("No test was fixed.", unchanged.Find("[data-testid=tr-comparison]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Dashboard_load_failures_show_an_alert_with_a_title()
     {
         TestResults.Failure = Unavailable;
@@ -706,7 +710,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Empty(thrown.Find("[data-testid=tr-error]").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public void Import_reports_problems_nothing_new_and_failures()
     {
         TestResults.ImportResult = new ImportSummaryDto(0, 2, 0, 0, [.. Enumerable.Range(1, 12).Select(i => $"bad-{i}.trx")]);
@@ -723,7 +727,7 @@ public class TestResultsBrowsingTests : WebTestContext
         Assert.Equal(2, TestResults.ImportCalls);
     }
 
-    [Fact]
+    [Test]
     public void Dashboard_shows_loading_and_disables_import_while_importing()
     {
         TestResults.Gate = new TaskCompletionSource();
@@ -742,15 +746,13 @@ public class TestResultsBrowsingTests : WebTestContext
     }
 
     // ---- Display text ----
-
-    [Theory]
-    [InlineData(TestArtifactKind.ConsoleLog, "Console log")]
-    [InlineData(TestArtifactKind.NetworkLog, "Network log")]
-    [InlineData(TestArtifactKind.ResultFile, "Result file")]
-    [InlineData(TestArtifactKind.Video, "Video")]
+    [TestCase(TestArtifactKind.ConsoleLog, "Console log")]
+    [TestCase(TestArtifactKind.NetworkLog, "Network log")]
+    [TestCase(TestArtifactKind.ResultFile, "Result file")]
+    [TestCase(TestArtifactKind.Video, "Video")]
     public void Artifact_kinds_read_as_words(TestArtifactKind kind, string text) => Assert.Equal(text, TestResultsText.Kind(kind));
 
-    [Fact]
+    [Test]
     public void Run_results_types_suites_and_commits_have_display_text()
     {
         Assert.Equal(("2 blocked", "outcome-blocked"), TestResultsText.RunResult(FakeTestResultsService.Run(1, passed: 1, failed: 0, blocked: 2)));

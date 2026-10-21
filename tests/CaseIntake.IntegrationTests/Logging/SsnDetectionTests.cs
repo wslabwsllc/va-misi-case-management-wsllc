@@ -29,8 +29,7 @@ public class SsnDetectionTests
         { "case 42 of 72", false },
     };
 
-    [Theory]
-    [MemberData(nameof(Samples))]
+    [TestCaseSource(nameof(Samples))]
     public void Log_scrubber_and_evidence_redactor_agree(string text, bool isSsn)
     {
         Assert.Equal(isSsn, SsnRedaction.ContainsSsn(text));
@@ -38,7 +37,7 @@ public class SsnDetectionTests
         Assert.Equal(isSsn, EvidenceRedactor.Redact(text).Contains("[REDACTED-SSN]", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [Test]
     public void Random_GUIDs_and_operation_ids_are_never_treated_as_SSNs()
     {
         for (var i = 0; i < 10_000; i++)
@@ -52,7 +51,7 @@ public class SsnDetectionTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Redaction_replaces_the_SSN_and_keeps_an_adjacent_identifier_intact()
     {
         var text = $"lookup 900-45-6789 for attachment {GuidWithNineDigitRun}";

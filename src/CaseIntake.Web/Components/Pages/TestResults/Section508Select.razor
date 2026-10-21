@@ -1,0 +1,20 @@
+@using CaseIntake.Domain.TestResults
+@* The "508 Accessibility" filter: All tests (default), Section 508 tests only, or every test except them. *@
+<div class="field">
+    <label class="field__label" for="@Id">508 Accessibility</label>
+    <select id="@Id" value="@Value" @onchange="ChangedAsync" data-testid="@TestId">
+        <option value="@Section508Filter.All">All Tests</option>
+        <option value="@Section508Filter.Section508Only">Section 508 Tests Only</option>
+        <option value="@Section508Filter.ExcludeSection508">Exclude Section 508 Tests</option>
+    </select>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "a11y-filter";
+    [Parameter] public Section508Filter Value { get; set; }
+    [Parameter] public EventCallback<Section508Filter> ValueChanged { get; set; }
+    [Parameter] public string TestId { get; set; } = "filter-508";
+
+    private Task ChangedAsync(ChangeEventArgs e) =>
+        ValueChanged.InvokeAsync(Enum.TryParse<Section508Filter>(e.Value?.ToString(), out var f) && Enum.IsDefined(f) ? f : Section508Filter.All);
+}

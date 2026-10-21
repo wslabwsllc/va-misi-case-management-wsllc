@@ -6,7 +6,7 @@ using CaseIntake.TestResults.Reports;
 namespace CaseIntake.IntegrationTests.TestResults;
 
 /// <summary>E5: run exports are a formula-safe CSV and a self-contained, encoded HTML report.</summary>
-[Trait("Category", "Story:E5-S6")]
+[Category("Story:E5-S6")]
 public class TestReportWriterTests
 {
     private static readonly DateTimeOffset Started = TestResultsTestHarness.StartTime;
@@ -19,7 +19,7 @@ public class TestReportWriterTests
         string? browser = null, string? viewport = null) =>
         new(id, 1, id, title, "Ns." + title, module, TestType.Unit, outcome, TimeSpan.FromMilliseconds(1234.9), browser, viewport, message, 0);
 
-    [Fact]
+    [Test]
     public void Csv_has_a_bom_a_header_and_one_quoted_row_per_result()
     {
         var file = TestReportWriter.Csv(Run(), [Row(1, "Shows \"quoted\" title", TestOutcome.Passed, browser: "chromium", viewport: "1440x900"),
@@ -34,21 +34,19 @@ public class TestReportWriterTests
         Assert.Equal("\"run-1\",\"Web.Tests\",Unit,\"Fails\",Failed,1234,\"\",\"\",\"line1  line2\"", lines[2]);
         Assert.Equal(3, lines.Length);
     }
-
-    [Theory]
-    [InlineData("=HYPERLINK(\"x\")", "\"'=HYPERLINK(\"\"x\"\")\"")]
-    [InlineData("+1", "\"'+1\"")]
-    [InlineData("-1", "\"'-1\"")]
-    [InlineData("@SUM(A1)", "\"'@SUM(A1)\"")]
-    [InlineData("\tx", "\"'\tx\"")]
-    [InlineData("plain", "\"plain\"")]
-    [InlineData("", "\"\"")]
+    [TestCase("=HYPERLINK(\"x\")", "\"'=HYPERLINK(\"\"x\"\")\"")]
+    [TestCase("+1", "\"'+1\"")]
+    [TestCase("-1", "\"'-1\"")]
+    [TestCase("@SUM(A1)", "\"'@SUM(A1)\"")]
+    [TestCase("\tx", "\"'\tx\"")]
+    [TestCase("plain", "\"plain\"")]
+    [TestCase("", "\"\"")]
     public void Csv_cells_neutralize_leading_formula_characters(string value, string expected)
     {
         Assert.Equal(expected, TestReportWriter.Cell(value));
     }
 
-    [Fact]
+    [Test]
     public void Html_report_for_a_first_run_encodes_text_and_lists_failures_first()
     {
         var environment = new TestEnvironment { Name = "docker <compose>", OperatingSystem = "Linux", Runtime = "10.0" };
@@ -88,7 +86,7 @@ public class TestReportWriterTests
         Assert.True(html.IndexOf("Z fails", StringComparison.Ordinal) < html.IndexOf("A passes", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [Test]
     public void Html_report_compares_with_the_previous_run_and_omits_a_pass_rate_when_nothing_executed()
     {
         var environment = new TestEnvironment { Name = "ci", OperatingSystem = "Linux", Runtime = "10.0" };
@@ -110,11 +108,9 @@ public class TestReportWriterTests
         Assert.Contains("1 not executed</dd>", html, StringComparison.Ordinal);
         Assert.DoesNotContain("pass rate", html, StringComparison.Ordinal);
     }
-
-    [Theory]
-    [InlineData(TestOutcome.NotExecuted, "Not executed")]
-    [InlineData(TestOutcome.Blocked, "Blocked")]
-    [InlineData(TestOutcome.Passed, "Passed")]
+    [TestCase(TestOutcome.NotExecuted, "Not executed")]
+    [TestCase(TestOutcome.Blocked, "Blocked")]
+    [TestCase(TestOutcome.Passed, "Passed")]
     public void Outcome_labels_are_readable(TestOutcome outcome, string label)
     {
         Assert.Equal(label, TestReportWriter.Outcome(outcome));

@@ -18,12 +18,18 @@ namespace CaseIntake.IntegrationTests.TestResults;
 /// E5: evidence retention removes the files of old runs beyond the newest N while keeping every structured result, and
 /// the background service imports new run folders on its own.
 /// </summary>
-[Trait("Category", "Story:E5-S7")]
-public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>, IAsyncLifetime
+[Category("Story:E5-S7")]
+public sealed class TestResultsMaintenanceTests : ClassFixture<TestResultsMaintenanceTests, PostgresDatabaseFixture>, IAsyncLifetime
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private static readonly DateTimeOffset T = TestResultsTestHarness.StartTime;
 
+    [SetUp]
+
     public Task InitializeAsync() => database.ResetAsync();
+
+    [TearDown]
 
     public Task DisposeAsync() => Task.CompletedTask;
 
@@ -43,7 +49,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
             .GroupBy(a => a.RunKey)
             .ToDictionary(g => g.Key, g => (g.Count(a => a.Purged), g.Count(a => !a.Purged)));
 
-    [Fact]
+    [Test]
     public async Task Evidence_of_runs_past_retention_is_deleted_while_results_and_the_newest_runs_stay()
     {
         using var h = new TestResultsTestHarness(database, o => { o.ArtifactRetention = TimeSpan.FromDays(30); o.KeepLatestRuns = 1; });
@@ -83,7 +89,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
         Assert.Equal(1, await h.QueryAsync(db => db.TestResultAuditEntries.CountAsync(a => a.Action == "ArtifactsPurged")));
     }
 
-    [Fact]
+    [Test]
     public async Task The_newest_runs_keep_their_evidence_however_old_they_are()
     {
         using var h = new TestResultsTestHarness(database, o => { o.ArtifactRetention = TimeSpan.FromDays(30); o.KeepLatestRuns = 2; });
@@ -100,7 +106,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
         Assert.Equal((0, 2), state["r-200-days"]);
     }
 
-    [Fact]
+    [Test]
     public async Task Zero_retention_keeps_everything()
     {
         using var h = new TestResultsTestHarness(database, o => { o.ArtifactRetention = TimeSpan.Zero; o.KeepLatestRuns = 1; });
@@ -112,7 +118,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
         Assert.Equal(0, await h.QueryAsync(db => db.TestArtifacts.CountAsync(a => a.Purged)));
     }
 
-    [Fact]
+    [Test]
     public async Task Evidence_already_gone_is_marked_purged_and_files_that_cannot_be_deleted_are_retried_next_pass()
     {
         if (OperatingSystem.IsWindows())
@@ -149,7 +155,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
         Assert.False(File.Exists(Path.Combine(evidenceFolder, "final.png")));
     }
 
-    [Fact]
+    [Test]
     public async Task The_module_registers_the_service_factory_and_validates_options_at_startup()
     {
         var root = Path.Combine(Path.GetTempPath(), "caseintake-testresults-" + Guid.NewGuid().ToString("N"));
@@ -173,7 +179,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
         Assert.Contains("TestResults:KeepLatestRuns must be at least 1.", error.Failures);
     }
 
-    [Fact]
+    [Test]
     public async Task The_background_import_does_nothing_when_its_interval_is_zero()
     {
         await using var provider = Provider(database.CreateContextFactory(), new() { ["TestResults:ScanInterval"] = "00:00:00" });
@@ -188,7 +194,7 @@ public sealed class TestResultsMaintenanceTests(PostgresDatabaseFixture database
         await service.StopAsync(CancellationToken.None);
     }
 
-    [Fact]
+    [Test]
     public async Task The_background_import_logs_a_failed_pass_and_imports_new_runs_on_the_next_one()
     {
         using var h = new TestResultsTestHarness(database);

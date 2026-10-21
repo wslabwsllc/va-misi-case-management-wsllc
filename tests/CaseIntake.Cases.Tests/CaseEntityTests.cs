@@ -9,7 +9,7 @@ public class CaseEntityTests
     private static Case NewCase(string? description = "Original description") =>
         Case.Create("  Original title  ", description, null, "creator", Created);
 
-    [Fact]
+    [Test]
     public void Create_sets_initial_status_audit_fields_and_normalized_title()
     {
         var entity = Case.Create("  Leaking roof  ", "", new CaseVeteran("Pat Example", "1 Example Way", "1234"), "worker", Created);
@@ -25,7 +25,7 @@ public class CaseEntityTests
         Assert.Equal(0, entity.Id);   // assigned by the database
     }
 
-    [Fact]
+    [Test]
     public void Create_normalizes_timestamps_to_utc()
     {
         var local = new DateTimeOffset(2026, 10, 16, 7, 0, 0, TimeSpan.FromHours(-5));
@@ -36,7 +36,7 @@ public class CaseEntityTests
         Assert.Equal(local.UtcDateTime, entity.CreatedAtUtc.UtcDateTime);
     }
 
-    [Fact]
+    [Test]
     public void Create_rejects_invalid_text_as_a_domain_guard()
     {
         var ex = Assert.Throws<CaseRuleException>(() => Case.Create("abc", null, null, "worker", Created));
@@ -45,25 +45,24 @@ public class CaseEntityTests
         Assert.Contains(ex.FieldErrors, e => e.Field == CaseFieldNames.Title);
     }
 
-    [Theory]
-    [InlineData("Original title", "Original description", new string[0])]
-    [InlineData("  Original title ", "Original description", new string[0])]          // title is normalized before comparing
-    [InlineData("New title", "Original description", new[] { "Title" })]
-    [InlineData("Original title", "Changed description", new[] { "Description" })]
-    [InlineData("Original title", "Original description ", new[] { "Description" })]   // description is not trimmed
-    [InlineData("Original title", null, new[] { "Description" })]
-    [InlineData("New title", "", new[] { "Title", "Description" })]
-    [InlineData("original title", "Original description", new[] { "Title" })]          // ordinal comparison
+    [TestCase("Original title", "Original description", new string[0])]
+    [TestCase("  Original title ", "Original description", new string[0])]          // title is normalized before comparing
+    [TestCase("New title", "Original description", new[] { "Title" })]
+    [TestCase("Original title", "Changed description", new[] { "Description" })]
+    [TestCase("Original title", "Original description ", new[] { "Description" })]   // description is not trimmed
+    [TestCase("Original title", null, new[] { "Description" })]
+    [TestCase("New title", "", new[] { "Title", "Description" })]
+    [TestCase("original title", "Original description", new[] { "Title" })]          // ordinal comparison
     public void Change_detection_lists_changed_fields_in_order(string title, string? description, string[] expected) =>
         Assert.Equal(expected, NewCase().DetectChanges(title, description));
 
-    [Fact]
+    [Test]
     public void Empty_and_null_descriptions_are_the_same_value()
     {
         Assert.Empty(NewCase(description: null).DetectChanges("Original title", ""));
     }
 
-    [Fact]
+    [Test]
     public void Edit_applies_changes_and_refreshes_audit_fields()
     {
         var entity = NewCase();
@@ -79,7 +78,7 @@ public class CaseEntityTests
         Assert.Equal(Created, entity.CreatedAtUtc);
     }
 
-    [Fact]
+    [Test]
     public void No_op_edit_changes_nothing()
     {
         var entity = NewCase();
@@ -91,7 +90,7 @@ public class CaseEntityTests
         Assert.Equal("creator", entity.UpdatedBy);
     }
 
-    [Fact]
+    [Test]
     public void Closed_cases_cannot_be_edited()
     {
         var entity = NewCase();
@@ -104,7 +103,7 @@ public class CaseEntityTests
         Assert.Equal(CaseRuleException.CaseClosedCode, ex.Code);
     }
 
-    [Fact]
+    [Test]
     public void TransitionTo_follows_the_workflow_and_returns_the_previous_status()
     {
         var entity = NewCase();
@@ -118,11 +117,10 @@ public class CaseEntityTests
         Assert.Equal("supervisor", entity.UpdatedBy);
     }
 
-    [Theory]
-    [InlineData(CaseStatus.Resolved)]
-    [InlineData(CaseStatus.Closed)]
-    [InlineData(CaseStatus.New)]
-    [InlineData((CaseStatus)42)]
+    [TestCase(CaseStatus.Resolved)]
+    [TestCase(CaseStatus.Closed)]
+    [TestCase(CaseStatus.New)]
+    [TestCase((CaseStatus)42)]
     public void TransitionTo_rejects_disallowed_targets_without_changing_the_case(CaseStatus target)
     {
         var entity = NewCase();
@@ -134,7 +132,7 @@ public class CaseEntityTests
         Assert.Equal(Created, entity.UpdatedAtUtc);
     }
 
-    [Fact]
+    [Test]
     public void Edited_audit_details_list_field_names_only()
     {
         var audit = AuditEvent.Edited(Created, ["Title", "Description"]);
@@ -143,7 +141,7 @@ public class CaseEntityTests
         Assert.Equal("Changed: Title, Description", audit.Details);
     }
 
-    [Fact]
+    [Test]
     public void Audit_entries_are_linked_through_the_case_navigation()
     {
         var entity = NewCase();
@@ -158,7 +156,7 @@ public class CaseEntityTests
         Assert.Equal("worker@example.test", entry.Actor);
     }
 
-    [Fact]
+    [Test]
     public void Actor_names_longer_than_the_column_are_capped_on_create_and_on_update()
     {
         var longActor = new string('a', 300);

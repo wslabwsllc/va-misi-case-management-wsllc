@@ -43,7 +43,7 @@ Manual checks are referenced as M1 to M9 ([manual-test-procedures.md](manual-tes
 | 2.4.1 Bypass Blocks | Supports | "Skip to main content" is the first Tab stop on every page (sweep) and moves focus to `main` |
 | 2.4.2 Page Titled | Supports | Every page has a specific title ending "- Case Intake and Triage" (sweep) |
 | 2.4.3 Focus Order | Partially Supports | Focus moves to the new page's h1 after navigation, to error summaries after failed submits, into and back out of dialogs (tested). Logical order on every page needs M1 |
-| 2.4.4 Link Purpose (In Context) | Partially Supports | Links have descriptive text or accessible names that include their visible text (for example "Entry A-12, 10/21/2026 09:05 AM EDT"); axe passes. Needs M1 |
+| 2.4.4 Link Purpose (In Context) | Partially Supports | Links have descriptive text or accessible names that include their visible text (for example "Entry A-12, 10-21-2026 09:05 ET"); axe passes. Needs M1 |
 | 2.5.1 Pointer Gestures (2.1) | Supports | No path-based or multipoint gestures; the evidence viewer zooms with buttons |
 | 2.5.2 Pointer Cancellation (2.1) | Supports | Actions use native click (up-event) activation |
 | 2.5.3 Label in Name (2.1) | Partially Supports | Accessible names contain the visible label (axe `label-content-name-mismatch` passes). Needs M1 |

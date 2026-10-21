@@ -11,16 +11,16 @@ namespace CaseIntake.Web.Tests;
 /// Case list filters, chips, refresh, out-of-range pages, sorting on phones and failures; intake failures and removing
 /// a selected veteran.
 /// </summary>
-[Trait("Category", "Story:E5-S3")]
-[Trait("Category", "Story:E5-S4")]
-[Trait("Category", "Req:R-4.2-1")]
-[Trait("Category", "Req:R-4.2-2")]
-[Trait("Category", "Req:R-4.2-4")]
+[Category("Story:E5-S3")]
+[Category("Story:E5-S4")]
+[Category("Req:R-4.2-1")]
+[Category("Req:R-4.2-2")]
+[Category("Req:R-4.2-4")]
 public class CaseListAndIntakeEdgeTests : WebTestContext
 {
     // ---- Case list ----
 
-    [Fact]
+    [Test]
     public async Task Priority_and_overdue_filters_are_applied_and_an_unchecked_status_is_dropped()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -29,12 +29,12 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         var cut = Render<CaseList>();
         cut.WaitForElement("[data-testid=case-table]");
 
-        cut.Find("[data-testid=status-New]").Change(false);
-        cut.Find("[data-testid=priority-High]").Change(true);
-        cut.Find("[data-testid=priority-Urgent]").Change(true);
+        // Filters apply as soon as they change. "All statuses" drops the status filter; the priority select carries
+        // several priorities as one comma-separated option value.
+        cut.Find("[data-testid=filter-status]").Change("");
+        cut.Find("[data-testid=filter-priority]").Change($"{nameof(CasePriority.High)},{nameof(CasePriority.Urgent)}");
         cut.Find("[data-testid=filter-category]").Change(nameof(CaseCategory.Billing));
         cut.Find("[data-testid=filter-overdue]").Change(true);
-        cut.Find("[data-testid=case-filters]").Submit();
 
         Assert.DoesNotContain("status=", Navigation.Uri, StringComparison.Ordinal);
         Assert.Contains("priority=High", Navigation.Uri, StringComparison.Ordinal);
@@ -46,7 +46,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         Assert.Equal([CaseCategory.Billing], CaseService.ListQueries.Last().Categories);
     }
 
-    [Fact]
+    [Test]
     public void Clear_resets_every_filter_and_keeps_the_sort()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -65,7 +65,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         Assert.Null(query.AssignedTo);
     }
 
-    [Fact]
+    [Test]
     public void An_owner_from_the_url_who_is_not_in_the_directory_stays_selectable()
     {
         SignInAs(AppRoles.Supervisor);
@@ -77,12 +77,10 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         Assert.Contains(cut.FindAll("[data-testid=filter-owner] option"), o => o.GetAttribute("value") == "former@example.test" && o.TextContent == "former@example.test");
         Assert.Equal("former@example.test", CaseService.ListQueries.Last().AssignedTo);
     }
-
-    [Theory]
-    [InlineData("updatedFrom=2026-10-01", "Updated on or after 10/01/2026")]
-    [InlineData("updatedTo=2026-10-15", "Updated on or before 10/15/2026")]
-    [InlineData("createdTo=2026-10-15", "Created on or before 10/15/2026")]
-    [InlineData("createdFrom=2026-10-01", "Created on or after 10/01/2026")]
+    [TestCase("updatedFrom=2026-10-01", "Updated on or after 10-01-2026")]
+    [TestCase("updatedTo=2026-10-15", "Updated on or before 10-15-2026")]
+    [TestCase("createdTo=2026-10-15", "Created on or before 10-15-2026")]
+    [TestCase("createdFrom=2026-10-01", "Created on or after 10-01-2026")]
     public void Open_ended_date_filters_read_as_chips_that_can_be_removed(string filter, string chip)
     {
         SignInAs(AppRoles.CaseWorker);
@@ -100,7 +98,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll("[data-testid=filter-chips]")));
     }
 
-    [Fact]
+    [Test]
     public async Task Refresh_reloads_and_announces_the_range()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -116,7 +114,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         Assert.Contains("Refresh", cut.Find("[data-testid=refresh]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task A_page_past_the_end_shows_the_last_page()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -133,7 +131,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         Assert.Equal(2, cut.FindAll("[data-testid=case-table] tbody tr").Count);
     }
 
-    [Fact]
+    [Test]
     public async Task Going_back_to_the_first_page_keeps_focus_on_the_pager()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -152,7 +150,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         JSInterop.VerifyFocusAsyncInvoke();
     }
 
-    [Fact]
+    [Test]
     public void The_phone_sort_menu_navigates_with_field_and_direction_and_ignores_unknown_values()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -169,7 +167,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         Assert.EndsWith("cases?sort=Priority&dir=desc", Navigation.Uri, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public void Unexpected_list_failures_and_loading_are_shown()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -188,7 +186,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         loading.WaitForElement("[data-testid=list-empty]");
     }
 
-    [Fact]
+    [Test]
     public void Long_searches_are_cut_to_the_maximum_length()
     {
         var state = CaseListState.Parse(1, 25, null, new string('x', CaseFieldLimits.SearchMaxLength + 50), null, null);
@@ -197,7 +195,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
 
     // ---- Intake ----
 
-    [Fact]
+    [Test]
     public void An_unexpected_intake_failure_keeps_the_entries_and_shows_a_generic_alert()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -206,13 +204,14 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         cut.Find("#intake-title").Input("Keep this title");
 
         cut.Find("[data-testid=intake-form]").Submit();
+        cut.Find("[data-testid=confirm-intake-submit]").Click();
 
         Assert.Contains("Something went wrong and the case was not saved. Your entries are kept; try again.", cut.Find("[data-testid=intake-error]").TextContent);
         Assert.Equal("Keep this title", cut.Find("#intake-title").GetAttribute("value"));
         Assert.Equal("false", cut.Find("[data-testid=create-case]").GetAttribute("aria-busy"));
     }
 
-    [Fact]
+    [Test]
     public void Veteran_field_errors_from_the_server_are_listed_in_the_summary()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -222,12 +221,13 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         cut.Find("#intake-title").Input("A valid title");
 
         cut.Find("[data-testid=intake-form]").Submit();
+        cut.Find("[data-testid=confirm-intake-submit]").Click();
 
         Assert.Contains("Veteran: Address is too long.", cut.Find("#error-summary").TextContent);
         JSInterop.VerifyFocusAsyncInvoke();
     }
 
-    [Fact]
+    [Test]
     public void Removing_the_selected_veteran_announces_it_and_returns_to_the_ssn_field()
     {
         SignInAs(AppRoles.CaseWorker);

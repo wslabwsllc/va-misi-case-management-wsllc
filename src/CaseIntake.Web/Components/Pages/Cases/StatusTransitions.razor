@@ -11,36 +11,50 @@
    dialog (focus trapped, Esc cancels, cancelling returns focus to the button). After a change the persistent status
    heading takes focus and the change is announced; a rejected change shows an alert and the status is refreshed. *@
 <section class="@Class" aria-labelledby="status-heading" data-testid="status-section">
-    <div class="card__header">
-        <h2 id="status-heading" tabindex="-1" @ref="_heading" data-testid="status-heading">Status: @UiText.Status(Case.Status)</h2>
-    </div>
-    <ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The status was not changed")" Message="@_error" TestId="status-error" />
-    <div role="group" aria-labelledby="change-status-label" data-testid="change-status-group">
-        <p id="change-status-label" class="field__label">Change status</p>
-        @if (Case.AllowedNextStatuses.Count == 0)
+    <div class="workflow-card__head">
+        <div>
+            <span class="page-header__eyebrow">Workflow</span>
+            <h2 id="status-heading" tabindex="-1" @ref="_heading" data-testid="status-heading">Status: @UiText.Status(Case.Status)</h2>
+            @if (Case.AllowedNextStatuses.Count == 0)
+            {
+                <p class="page-header__subtitle" data-testid="no-transitions">No status changes available</p>
+            }
+            else if (NextStep is { } next)
+            {
+                <p class="page-header__subtitle" data-testid="next-step">Next step: @UiText.TransitionLabel(Case.Status, next).ToLowerInvariant()</p>
+            }
+        </div>
+        @if (Case.AllowedNextStatuses.Count > 0)
         {
-            <p class="page-header__subtitle" data-testid="no-transitions">No status changes available</p>
-        }
-        else
-        {
-            <div class="btn-row">
-                @foreach (var target in Case.AllowedNextStatuses)
+            <div role="group" aria-labelledby="change-status-label" class="btn-row" data-testid="change-status-group">
+                <span id="change-status-label" class="visually-hidden">Change status</span>
+                @foreach (var target in Case.AllowedNextStatuses.OrderBy(t => IsForward(t) ? 1 : 0))
                 {
                     var t = target;
-                    <button type="button" class="btn @(t == CaseStatus.Closed ? null : "btn--primary")" @ref="_buttons[t]"
+                    <button type="button" class="btn @(IsForward(t) && t != CaseStatus.Closed ? "btn--primary" : null)" @ref="_buttons[t]"
                             @onclick="() => AskAsync(t)" disabled="@_busy" data-testid="@($"transition-{t}")">
+                        @if (!IsForward(t))
+                        {
+                            <Icon Name="back" Small="true" />
+                        }
                         @UiText.TransitionLabel(Case.Status, t)
+                        @if (IsForward(t))
+                        {
+                            <Icon Name="arrow-right" Small="true" />
+                        }
                     </button>
                 }
             </div>
         }
     </div>
+    <ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The status was not changed")" Message="@_error" TestId="status-error" />
+    @ChildContent
 </section>
 
 <ModalDialog @ref="_dialog" Id="confirm-status" Title="@($"Change status to {UiText.Status(_pending)}?")" TestId="confirm-status-dialog"
              Description="@($"Case {Case.Id} will move from {UiText.Status(Case.Status)} to {UiText.Status(_pending)}. The change is recorded in the audit trail.")">
     <Footer>
-        <button type="button" class="btn" @onclick="CancelAsync" data-testid="confirm-cancel">Cancel</button>
+        <button type="button" class="btn btn--cancel" @onclick="CancelAsync" data-testid="confirm-cancel"><Icon Name="close" Small="true" /> Cancel</button>
         <button type="button" class="btn btn--primary" @onclick="ConfirmAsync" disabled="@_busy" aria-busy="@(_busy ? "true" : "false")" autofocus data-testid="confirm-status">
             @UiText.TransitionLabel(Case.Status, _pending)
         </button>
@@ -67,6 +81,17 @@
 
     /// <summary>Raised after a rejected change, so the page reloads the case (and its displayed status).</summary>
     [Parameter] public EventCallback OnFailed { get; set; }
+
+    /// <summary>Shown below the heading and buttons (the workflow stepper).</summary>
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private static int Rank(CaseStatus status) => (int)status;
+
+    /// <summary>A move further along New → Closed (a step back or reopen goes the other way).</summary>
+    private bool IsForward(CaseStatus target) => Rank(target) > Rank(Case.Status);
+
+    private CaseStatus? NextStep => Case.AllowedNextStatuses.Where(IsForward).Select(s => (CaseStatus?)s).FirstOrDefault()
+        ?? Case.AllowedNextStatuses.Select(s => (CaseStatus?)s).FirstOrDefault();
 
     private Task AskAsync(CaseStatus target)
     {

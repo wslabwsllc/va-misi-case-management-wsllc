@@ -6,10 +6,9 @@ namespace CaseIntake.IntegrationTests.Persistence;
 
 public class PersistenceRegistrationTests
 {
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    [InlineData("   ")]
+    [TestCase(null)]
+    [TestCase("")]
+    [TestCase("   ")]
     public void A_missing_connection_string_fails_at_startup_instead_of_falling_back(string? connectionString)
     {
         var configuration = new ConfigurationBuilder()

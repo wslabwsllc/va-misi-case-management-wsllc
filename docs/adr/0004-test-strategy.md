@@ -1,6 +1,6 @@
 # 0004. Test strategy and the `tests` service
 
-* Status: accepted
+* Status: accepted; framework superseded by [0016](0016-nunit-and-playwright-pins.md) (NUnit 4.4, Playwright 1.52)
 * Owner: E1
 
 ## Context

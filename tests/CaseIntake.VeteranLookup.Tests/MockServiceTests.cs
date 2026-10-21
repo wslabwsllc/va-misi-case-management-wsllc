@@ -9,12 +9,13 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// E4-S1 behavior of <c>POST /veterans/lookup</c>, run against the in-process mock and, inside the <c>tests</c>
 /// service, against the real <c>veteran-lookup</c> container as well.
 /// </summary>
-public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockServiceFactory>
+public class MockServiceTests : ClassFixture<MockServiceTests, MockServiceFactory>
 {
+    private static MockServiceFactory factory => Shared;
+
     private const string Route = "/veterans/lookup";
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task A_known_SSN_returns_200_with_exactly_name_and_address(string target)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -30,8 +31,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         Assert.False(string.IsNullOrWhiteSpace(body.RootElement.GetProperty("name").GetString()));
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_same_SSN_returns_the_same_body_every_time_in_either_accepted_form(string target)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -51,8 +51,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         }
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task An_unknown_SSN_returns_404(string target)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -64,8 +63,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
 
     // Specification 4.6: the service conforms to the Government definition. These requests are built only from the
     // definition (path, method, content type, required property) and the responses are checked against its schemas.
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task A_request_shaped_by_the_spec_for_a_known_SSN_gets_the_spec_200_shape(string target)
     {
         var spec = await GovernmentSpec.GetAsync();
@@ -81,8 +79,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         GovernmentSpec.AssertConforms(body.RootElement, spec.ResponseSchema("200"));
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task A_request_shaped_by_the_spec_for_an_unknown_SSN_gets_the_spec_404(string target)
     {
         var spec = await GovernmentSpec.GetAsync();
@@ -97,8 +94,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
 
     // D16: the definition's own example SSN is illustrative and not in the synthetic dataset (every dataset SSN is
     // 900-999, VeteranDatasetTests). The value is read from the definition, so no issuable SSN is written in this file.
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task The_spec_example_SSN_is_not_in_the_synthetic_dataset(string target)
     {
         var spec = await GovernmentSpec.GetAsync();
@@ -125,8 +121,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(InvalidBodies))]
+    [TestCaseSource(nameof(InvalidBodies))]
     public async Task Absent_or_malformed_JSON_and_a_missing_null_non_string_or_blank_ssn_return_400(string target, string body)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -138,8 +133,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task A_non_JSON_content_type_returns_415(string target)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -150,8 +144,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
     }
 
-    [Theory]
-    [MemberData(nameof(LookupTarget.All), MemberType = typeof(LookupTarget))]
+    [TestCaseSource(typeof(LookupTarget), nameof(LookupTarget.All))]
     public async Task Health_returns_200(string target)
     {
         using var client = LookupTarget.CreateClient(target, factory);
@@ -161,7 +154,7 @@ public class MockServiceTests(MockServiceFactory factory) : IClassFixture<MockSe
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task Lookups_log_the_outcome_but_never_the_SSN_or_veteran_details()
     {
         using var client = factory.CreateClient();

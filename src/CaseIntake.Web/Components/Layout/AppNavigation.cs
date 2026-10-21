@@ -19,21 +19,21 @@ public static class AppNavigation
 {
     public static IReadOnlyList<NavGroup> Groups { get; } =
     [
-        new(null, [new("Dashboard", "", "dashboard", Permissions.CasesView, MatchPrefix: false)]),
+        new(null, [new("Dashboard", "", "layout-dashboard", Permissions.CasesView, MatchPrefix: false)]),
         new("Cases",
         [
-            new("All cases", "cases", "cases", Permissions.CasesView),
-            new("New case", "cases/new", "add", Permissions.CasesCreate, MatchPrefix: false),
+            new("All cases", "cases", "folder-open", Permissions.CasesView),
+            new("New case", "cases/new", "file-plus", Permissions.CasesCreate, MatchPrefix: false),
         ]),
         new("My Work",
         [
-            new("My tasks", "my-work", "tasks", Permissions.CasesView),
+            new("My tasks", "my-work", "list-todo", Permissions.CasesView),
             new("Notifications", "notifications", "bell", Permissions.CasesView),
         ]),
-        new("Reports", [new("Case reports", "reports", "reports", Permissions.CasesView)]),
+        new("Reports", [new("Case reports", "reports", "chart-column", Permissions.CasesView)]),
         new("Administration",
         [
-            new("Users", "admin/users", "person", Permissions.UsersManage),
+            new("Users", "admin/users", "users-round", Permissions.UsersManage),
             new("Roles", "admin/roles", "lock", Permissions.RolesManage),
             new("Audit log", "admin/audit", "history", Permissions.AuditView),
             new("Errors", "admin/errors", "error", Permissions.ErrorsView),
@@ -48,9 +48,9 @@ public static class AppNavigation
     /// <summary>The phone bottom bar: Home, Cases, My Tasks, Notifications (More opens the full site map).</summary>
     public static IReadOnlyList<NavItem> BottomBar { get; } =
     [
-        new("Home", "", "home", Permissions.CasesView, MatchPrefix: false),
-        new("Cases", "cases", "cases", Permissions.CasesView),
-        new("My Tasks", "my-work", "tasks", Permissions.CasesView),
+        new("Home", "", "layout-dashboard", Permissions.CasesView, MatchPrefix: false),
+        new("Cases", "cases", "folder-open", Permissions.CasesView),
+        new("My Tasks", "my-work", "list-todo", Permissions.CasesView),
         new("Notifications", "notifications", "bell", Permissions.CasesView),
     ];
 

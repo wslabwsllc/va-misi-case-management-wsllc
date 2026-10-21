@@ -10,30 +10,36 @@
 @inject TimeProvider Time
 @inject ILogger<Users> Logger
 
-@* User administration (ADR 0013): find people by email, role and status, open one to change their roles, status and
-   permissions, or add a person with one or more roles and an initial password, which they change after signing in.
-   Only roles within the administrator's own access are offered. Field errors come from the service through the
+@* User administration (ADR 0013, redesign): the people list with search, role and status filters that apply as soon
+   as they change; open a person to change their roles, status and permissions; Remove takes away their access
+   (deactivation, after a confirmation with Cancel first: people are never deleted, so their history stays intact and
+   an administrator can reactivate them). Add a person with one or more roles and an initial password, with the
+   password rules checked as they type; they change it after signing in. Only roles within the administrator's own
+   access are offered, and the service enforces every rule again. Field errors come from the service through the
    validation store. *@
-<PageShell Title="Users" Breadcrumbs="@([new Crumb("Dashboard", "")])"
-           Subtitle="Find people, add them and choose what they can do. Fields marked * are required." />
+<PageShell Title="Users" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="Add people and choose what they can do." />
 
 <ErrorAlert @ref="_alert" Title="@_errorTitle" Message="@_error" TestId="users-error" />
 
 <div class="grid grid--main-side">
-    <section class="card" aria-labelledby="users-heading">
-        <h2 id="users-heading" class="card__header">People</h2>
-        <form class="filters" @onsubmit="ApplyFiltersAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter users" data-testid="user-filters">
-            <div class="field filters__search">
-                <label class="field__label" for="user-search">Search by email</label>
+    <section class="card card--flush" aria-labelledby="users-heading">
+        <div class="table-toolbar">
+            <h2 id="users-heading" class="table-toolbar__title">People
+                <span class="card__subtitle" data-testid="users-count">@PeopleText</span>
+            </h2>
+        </div>
+        <div class="filter-grid grid-toolbar" role="search" aria-label="Filter users" data-testid="user-filters">
+            <div class="field">
+                <label class="field__label" for="user-search">Search people by email</label>
                 <span class="input-icon">
                     <Icon Name="search" Small="true" />
-                    <input id="user-search" type="search" @bind="_searchDraft" @bind:event="oninput" maxlength="256" autocomplete="off"
+                    <input id="user-search" type="search" @bind="_searchDraft" @bind:event="oninput" @bind:after="SearchChangedAsync" maxlength="256" autocomplete="off"
                            spellcheck="false" enterkeyhint="search" data-testid="user-search" />
                 </span>
             </div>
             <div class="field">
                 <label class="field__label" for="user-role-filter">Role</label>
-                <select id="user-role-filter" @bind="_roleDraft" data-testid="user-role-filter">
+                <select id="user-role-filter" value="@_roleDraft" @onchange="RoleChangedAsync" data-testid="user-role-filter">
                     <option value="">All roles</option>
                     @foreach (var role in _roles)
                     {
@@ -43,17 +49,19 @@
             </div>
             <div class="field">
                 <label class="field__label" for="user-status-filter">Status</label>
-                <select id="user-status-filter" @bind="_statusDraft" data-testid="user-status-filter">
+                <select id="user-status-filter" value="@_statusDraft" @onchange="StatusChangedAsync" data-testid="user-status-filter">
                     <option value="@UserStatusFilter.All">All</option>
                     <option value="@UserStatusFilter.Active">Active</option>
                     <option value="@UserStatusFilter.Inactive">Inactive</option>
                 </select>
             </div>
-            <div class="btn-row filters__actions">
-                <button type="submit" class="btn btn--primary" data-testid="apply-user-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
-                <button type="button" class="btn" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-user-filters">Clear</button>
+            <div class="field">
+                <button type="button" class="btn btn--block" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-user-filters">
+                    <Icon Name="close" Small="true" /> Clear filters
+                </button>
             </div>
-        </form>
+        </div>
+        <p class="visually-hidden" role="status" aria-live="polite" data-testid="users-announcement">@_announcement</p>
 
         @if (_page is null)
         {
@@ -65,37 +73,50 @@
         }
         else
         {
-            <div class="table-wrap">
-                <table class="data-grid" aria-busy="@(_loading ? "true" : "false")" data-testid="users-table">
-                    <caption class="visually-hidden">Users, their roles and status (@UiText.ShowingRange(_page.Page, _page.PageSize, _page.TotalCount, "users"))</caption>
-                    <thead>
-                        <tr>
-                            <th scope="col">Email</th>
-                            <th scope="col">Roles</th>
-                            <th scope="col">Status</th>
-                            <th scope="col">Last sign-in</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        @foreach (var user in _page.Items)
+            <ul class="record-list" aria-label="People" aria-busy="@(_loading ? "true" : "false")" data-testid="users-table">
+                @foreach (var user in _page.Items)
+                {
+                    var u = user;
+                    <li class="people-row" data-testid="user-row">
+                        <span class="initials @RoleClass(u.Roles)" aria-hidden="true">@UiText.Initials(u.UserName)</span>
+                        <div class="min-w-0">
+                            <a class="people-row__name" href="@($"admin/users/{Uri.EscapeDataString(u.Id)}")">@u.UserName</a>
+                            <span class="people-row__desc">@RoleDescription(u.Roles) · @UserStatusText(u) · Last sign-in @(u.LastSignInUtc is { } last ? UiText.Time(last) : "never")</span>
+                        </div>
+                        <span class="btn-row">
+                            @if (u.Roles.Count == 0)
+                            {
+                                <span class="role-chip role-chip--none">No role</span>
+                            }
+                            @foreach (var role in u.Roles)
+                            {
+                                <span class="role-chip @RoleClass([role])">@AppRoles.DisplayName(role)</span>
+                            }
+                        </span>
+                        @if (u.IsActive)
                         {
-                            <tr data-testid="user-row">
-                                <td class="mono"><a href="@($"admin/users/{Uri.EscapeDataString(user.Id)}")">@user.UserName</a></td>
-                                <td>@AppRoles.Describe(user.Roles)</td>
-                                <td>@UserStatusText(user)</td>
-                                <td class="nowrap">@(user.LastSignInUtc is { } last ? UiText.Time(last) : "Never")</td>
-                            </tr>
+                            <button type="button" class="btn btn--danger" @onclick="() => AskRemoveAsync(u)" disabled="@_busy" data-testid="remove-user"
+                                    @ref="_removeButtons[u.Id]">
+                                <Icon Name="trash" Small="true" /> Remove<span class="visually-hidden">@($" {u.UserName}")</span>
+                            </button>
                         }
-                    </tbody>
-                </table>
-            </div>
+                        else
+                        {
+                            <a class="btn" href="@($"admin/users/{Uri.EscapeDataString(u.Id)}")" data-testid="reactivate-user">Reactivate<span class="visually-hidden">@($" {u.UserName}")</span></a>
+                        }
+                    </li>
+                }
+            </ul>
             <PagerControl Page="_page.Page" PageSize="_page.PageSize" TotalCount="_page.TotalCount" Noun="users" Label="User list pages"
-                          OnPageChanged="GoToPageAsync" />
+                          OnPageChanged="GoToPageAsync" Announce="false" />
         }
     </section>
 
-    <section class="card" aria-labelledby="add-user-heading">
-        <h2 id="add-user-heading" class="card__header">Add user</h2>
+    <section class="card" aria-labelledby="add-user-heading" id="add-user" tabindex="-1">
+        <div class="card__header lookup-header">
+            <span class="lookup-header__icon" aria-hidden="true"><Icon Name="user-plus" /></span>
+            <h2 id="add-user-heading">Add a user<span class="card__subtitle">All fields are required</span></h2>
+        </div>
         <div role="status" aria-live="polite" data-testid="user-added">
             @if (_added is not null)
             {
@@ -107,16 +128,46 @@
             <LabeledInputText Id="user-email" Label="Email address" Type="email" AutoComplete="off" Spellcheck="false" Required="true"
                               @bind-Value="_model.Email" Hint="The person signs in with this address." />
             <RoleCheckboxes IdPrefix="user-role" Options="_roles" Selected="_model.Roles" Errors="RoleErrors" />
-            <LabeledInputText Id="user-password" Label="Initial password" Type="password" AutoComplete="new-password" Required="true"
-                              @bind-Value="_model.Password" Hint="@($"{IdentityModule.PasswordHint} Share it with the person; they can change it after signing in.")" />
+            <LabeledInputText Id="user-password" Label="Initial password" Type="@(_showPassword ? "text" : "password")" AutoComplete="new-password" Required="true"
+                              Spellcheck="false" @bind-Value="_model.Password" Hint="Share it with the person; they can change it after signing in." />
+            <label class="checkbox">
+                <input type="checkbox" checked="@_showPassword" @onchange="e => _showPassword = e.Value is true" data-testid="show-new-password" />
+                Show password
+            </label>
+            <div class="strength" aria-hidden="true">
+                @for (var i = 0; i < PasswordRules.Length; i++)
+                {
+                    <span class="@(i < RulesMet ? "is-on" : null)"></span>
+                }
+            </div>
+            <ul class="password-rules" aria-label="Password rules" data-testid="password-rules">
+                @foreach (var rule in PasswordRules)
+                {
+                    var met = rule.Test(_model.Password ?? "");
+                    <li class="@(met ? "is-met" : null)">@rule.Text<span class="visually-hidden">@(met ? ": met" : ": not met yet")</span></li>
+                }
+            </ul>
             <div class="form-actions">
-                <button type="submit" class="btn btn--primary" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="add-user">
-                    <Icon Name="add" Small="true" /><span>Add user</span>
+                <button type="submit" class="btn btn--primary btn--block" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="add-user">
+                    <Icon Name="add" Small="true" /><span>@(_submitting ? "Adding…" : "Add user")</span>
                 </button>
             </div>
         </EditForm>
     </section>
 </div>
+
+<ModalDialog @ref="_removeDialog" Id="remove-user-dialog" TestId="remove-user-dialog"
+             Title="@($"Remove {_removing?.UserName}?")"
+             Description="They lose access: they are signed out within a minute and can't sign in. Nothing is deleted; their cases and history stay, and an administrator can reactivate them from their page.">
+    <Footer>
+        <button type="button" class="btn btn--cancel" autofocus @onclick="() => _removeDialog!.CloseAsync(restoreFocus: true)" data-testid="remove-user-cancel">
+            <Icon Name="close" Small="true" /> Cancel
+        </button>
+        <button type="button" class="btn btn--danger" @onclick="ConfirmRemoveAsync" disabled="@_busy" data-testid="remove-user-confirm">
+            <Icon Name="trash" Small="true" /> Remove
+        </button>
+    </Footer>
+</ModalDialog>
 
 @code {
     private sealed class UserModel
@@ -126,14 +177,32 @@
         public string? Password { get; set; }
     }
 
+    private sealed record Rule(string Text, Func<string, bool> Test);
+
+    /// <summary>Identity's default rules (see <see cref="IdentityModule.PasswordHint"/>); the service checks them again.</summary>
+    private static readonly Rule[] PasswordRules =
+    [
+        new("6+ characters", p => p.Length >= 6),
+        new("Uppercase letter", p => p.Any(char.IsUpper)),
+        new("Lowercase letter", p => p.Any(char.IsLower)),
+        new("Number", p => p.Any(char.IsDigit)),
+        new("Symbol", p => p.Any(c => !char.IsLetterOrDigit(c))),
+    ];
+
     private const int PageSize = 25;
+    private static readonly TimeSpan SearchDelay = TimeSpan.FromMilliseconds(300);
 
     private readonly CancellationTokenSource _cts = new();
+    private readonly Dictionary<string, ElementReference> _removeButtons = [];
+    private CancellationTokenSource? _searchDebounce;
+    private int _loadVersion;
     private UserModel _model = new();
     private EditContext _editContext = default!;
     private ValidationMessageStore _messages = default!;
     private FormErrorSummary? _summary;
     private ErrorAlert? _alert;
+    private ModalDialog? _removeDialog;
+    private UserSummaryDto? _removing;
     private IReadOnlyList<RoleOptionDto> _roles = [];
     private PagedResult<UserSummaryDto>? _page;
     private UserListQuery _query = new(PageSize: PageSize);
@@ -141,13 +210,16 @@
     private string _roleDraft = "";
     private UserStatusFilter _statusDraft;
     private bool _loading;
+    private bool _busy;
     private bool _showSummary;
+    private bool _showPassword;
     private bool _focusSummary;
     private bool _focusAlert;
     private bool _submitting;
     private string? _errorTitle;
     private string? _error;
     private string? _added;
+    private string? _announcement;
 
     private IReadOnlyList<KeyValuePair<string, string>> SummaryFields =>
     [
@@ -158,8 +230,14 @@
 
     private IReadOnlyList<string> RoleErrors => _editContext.GetValidationMessages(new FieldIdentifier(_model, UserFieldNames.Roles)).ToList();
 
+    private int RulesMet => PasswordRules.Count(r => r.Test(_model.Password ?? ""));
+
     private bool HasFilters => !string.IsNullOrWhiteSpace(_query.Search) || _query.Role is not null || _query.Status != UserStatusFilter.All
         || !string.IsNullOrWhiteSpace(_searchDraft) || _roleDraft.Length > 0 || _statusDraft != UserStatusFilter.All;
+
+    private string PeopleText => _page is { } p
+        ? $"{UiText.Number(p.TotalCount)} {(p.TotalCount == 1 ? "person" : "people")} · {_roles.Count} {(_roles.Count == 1 ? "role" : "roles")}"
+        : string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -174,10 +252,18 @@
         _editContext = new EditContext(_model);
         _messages = new ValidationMessageStore(_editContext);
         _showSummary = false;
+        _showPassword = false;
     }
 
-    private string UserStatusText(UserSummaryDto user) =>
+    private static string UserStatusText(UserSummaryDto user) =>
         !user.IsActive ? "Inactive" : user.IsLockedOut ? "Active, locked out" : "Active";
+
+    private string RoleDescription(IReadOnlyList<string> roles) =>
+        roles.Count == 0 ? "No role yet"
+        : _roles.FirstOrDefault(r => r.Name == roles[0])?.Description is { Length: > 0 } description ? description
+        : AppRoles.Describe(roles);
+
+    private static string RoleClass(IReadOnlyList<string> roles) => "role-chip--" + (roles.Count == 0 ? "none" : roles[0].ToLowerInvariant());
 
     private async Task LoadRolesAsync()
     {
@@ -198,10 +284,15 @@
 
     private async Task LoadAsync()
     {
+        var version = ++_loadVersion;
         _loading = true;
         try
         {
             var result = await UserAdmin.ListAsync(_query, _cts.Token);
+            if (version != _loadVersion)
+            {
+                return;   // a newer filter change superseded this response
+            }
             if (result.IsSuccess)
             {
                 _page = result.Value;
@@ -225,10 +316,43 @@
         }
         finally
         {
-            _loading = false;
+            if (version == _loadVersion)
+            {
+                _loading = false;
+            }
         }
     }
 
+    // @bind (not value= with @oninput) so a slow round trip never overwrites characters still being typed.
+    private async Task SearchChangedAsync()
+    {
+        _searchDebounce?.Cancel();
+        _searchDebounce?.Dispose();
+        var debounce = _searchDebounce = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
+        try
+        {
+            await Task.Delay(SearchDelay, debounce.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            return;
+        }
+        await ApplyFiltersAsync();
+    }
+
+    private Task RoleChangedAsync(ChangeEventArgs e)
+    {
+        _roleDraft = e.Value?.ToString() ?? "";
+        return ApplyFiltersAsync();
+    }
+
+    private Task StatusChangedAsync(ChangeEventArgs e)
+    {
+        _statusDraft = Enum.TryParse<UserStatusFilter>(e.Value?.ToString(), out var s) ? s : UserStatusFilter.All;
+        return ApplyFiltersAsync();
+    }
+
+    /// <summary>Filters apply as soon as they change and always return to the first page.</summary>
     private async Task ApplyFiltersAsync()
     {
         _query = new UserListQuery(_searchDraft?.Trim() is { Length: > 0 } s ? s : null, _roleDraft.Length > 0 ? _roleDraft : null,
@@ -239,6 +363,7 @@
 
     private async Task ClearFiltersAsync()
     {
+        _searchDebounce?.Cancel();
         _searchDraft = null;
         _roleDraft = "";
         _statusDraft = UserStatusFilter.All;
@@ -249,13 +374,62 @@
     {
         _query = _query with { Page = page };
         await LoadAsync();
+        AnnounceResults();
     }
 
     private void AnnounceResults()
     {
         if (_page is { } page && _error is null)
         {
-            Announcer.Announce(page.TotalCount == 0 ? "No users match these filters." : UiText.ShowingRange(page.Page, page.PageSize, page.TotalCount, "users") + ".");
+            _announcement = page.TotalCount == 0 ? "No users match these filters." : UiText.ShowingRange(page.Page, page.PageSize, page.TotalCount, "users") + ".";
+        }
+    }
+
+    private Task AskRemoveAsync(UserSummaryDto user)
+    {
+        _removing = user;
+        var trigger = _removeButtons.GetValueOrDefault(user.Id);
+        return _removeDialog!.OpenAsync(() => trigger.FocusSafeAsync());
+    }
+
+    /// <summary>Remove = deactivate through the same service call as the user page (it reads the current version first).</summary>
+    private async Task ConfirmRemoveAsync()
+    {
+        if (_busy || _removing is not { } user)
+        {
+            return;
+        }
+        _busy = true;
+        try
+        {
+            var detail = await UserAdmin.GetAsync(user.Id, _cts.Token);
+            var result = detail.IsSuccess
+                ? await UserAdmin.SetStatusAsync(user.Id, new SetUserStatusRequest(false, detail.Value!.ConcurrencyStamp), _cts.Token)
+                : Result<UserDetailDto>.Failure(detail.Error!);
+            await _removeDialog!.CloseAsync();
+            if (result.IsSuccess)
+            {
+                Announcer.Announce($"{user.UserName} was removed. They can no longer sign in.");
+                await LoadAsync();
+            }
+            else
+            {
+                ShowError($"{user.UserName} was not removed", result.Error!.Message);
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5023, "UserRemoveFailed"), "Removing a user failed ({ExceptionType})", ex.GetType().Name);
+            await _removeDialog!.CloseAsync();
+            ShowError($"{user.UserName} was not removed", "Something went wrong. Try again.");
+        }
+        finally
+        {
+            _busy = false;
+            _removing = null;
         }
     }
 
@@ -338,6 +512,7 @@
     public void Dispose()
     {
         _cts.Cancel();
+        _searchDebounce?.Dispose();
         _cts.Dispose();
     }
 }

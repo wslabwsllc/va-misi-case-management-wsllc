@@ -265,6 +265,23 @@ namespace CaseIntake.Persistence.Migrations
                     b.ToTable("CaseNotificationCursors", (string)null);
                 });
 
+            modelBuilder.Entity("CaseIntake.Domain.Cases.CaseNotificationRead", b =>
+                {
+                    b.Property<string>("UserId")
+                        .HasMaxLength(256)
+                        .HasColumnType("character varying(256)");
+
+                    b.Property<long>("AuditEntryId")
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTimeOffset>("ReadAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("UserId", "AuditEntryId");
+
+                    b.ToTable("CaseNotificationReads", (string)null);
+                });
+
             modelBuilder.Entity("CaseIntake.Domain.TestResults.TestArtifact", b =>
                 {
                     b.Property<Guid>("Id")
@@ -339,6 +356,9 @@ namespace CaseIntake.Persistence.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
+                    b.Property<int?>("Accessibility")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Description")
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
@@ -367,6 +387,9 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<long?>("LastRunId")
                         .HasColumnType("bigint");
 
+                    b.Property<int?>("Method")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Module")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -384,6 +407,10 @@ namespace CaseIntake.Persistence.Migrations
                         .HasMaxLength(400)
                         .HasColumnType("character varying(400)");
 
+                    b.Property<string>("Section508Provision")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
                     b.Property<string>("Story")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
@@ -396,7 +423,25 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
+                    b.Property<string>("WcagCriterion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("WcagLevel")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("WcagVersion")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<string>("Workflow")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("Accessibility");
 
                     b.HasIndex("Key")
                         .IsUnique();
@@ -461,6 +506,10 @@ namespace CaseIntake.Persistence.Migrations
                         .HasMaxLength(8000)
                         .HasColumnType("character varying(8000)");
 
+                    b.Property<string>("AssistiveTechnology")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Browser")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -468,6 +517,10 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<string>("ConsoleLog")
                         .HasMaxLength(64000)
                         .HasColumnType("character varying(64000)");
+
+                    b.Property<string>("DefectReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
 
                     b.Property<long>("DurationMs")
                         .HasColumnType("bigint");
@@ -486,6 +539,10 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<int>("Outcome")
                         .HasColumnType("integer");
 
+                    b.Property<string>("RemediationNotes")
+                        .HasMaxLength(8000)
+                        .HasColumnType("character varying(8000)");
+
                     b.Property<long>("RunId")
                         .HasColumnType("bigint");
 
@@ -503,6 +560,10 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<long>("TestCaseId")
                         .HasColumnType("bigint");
 
+                    b.Property<string>("Tester")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
                     b.Property<string>("Viewport")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
@@ -518,7 +579,7 @@ namespace CaseIntake.Persistence.Migrations
 
                     b.ToTable("TestExecutions", null, t =>
                         {
-                            t.HasCheckConstraint("CK_TestExecution_Outcome", "\"Outcome\" BETWEEN 0 AND 4");
+                            t.HasCheckConstraint("CK_TestExecution_Outcome", "\"Outcome\" BETWEEN 0 AND 5");
                         });
                 });
 
@@ -661,6 +722,9 @@ namespace CaseIntake.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int>("NotApplicable")
+                        .HasColumnType("integer");
+
                     b.Property<int>("NotExecuted")
                         .HasColumnType("integer");
 
@@ -713,7 +777,7 @@ namespace CaseIntake.Persistence.Migrations
 
                     b.ToTable("TestRuns", null, t =>
                         {
-                            t.HasCheckConstraint("CK_TestRun_Counts_NonNegative", "\"Total\" >= 0 AND \"Passed\" >= 0 AND \"Failed\" >= 0 AND \"Skipped\" >= 0 AND \"Blocked\" >= 0 AND \"NotExecuted\" >= 0");
+                            t.HasCheckConstraint("CK_TestRun_Counts_NonNegative", "\"Total\" >= 0 AND \"Passed\" >= 0 AND \"Failed\" >= 0 AND \"Skipped\" >= 0 AND \"Blocked\" >= 0 AND \"NotExecuted\" >= 0 AND \"NotApplicable\" >= 0");
 
                             t.HasCheckConstraint("CK_TestRun_Status", "\"Status\" BETWEEN 0 AND 2");
                         });

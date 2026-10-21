@@ -10,7 +10,7 @@ public class ArchitectureTests
 
     private static ProjectGraph Graph(params ProjectNode[] nodes) => new(nodes.ToDictionary(n => n.Name));
 
-    [Fact]
+    [Test]
     public void Repository_project_graph_satisfies_the_dependency_rule()
     {
         var graph = ProjectGraph.Load(RepositoryRoot.Path);
@@ -19,7 +19,7 @@ public class ArchitectureTests
         Assert.Empty(graph.Violations());
     }
 
-    [Fact]
+    [Test]
     public void Module_referencing_another_feature_module_fails()
     {
         var graph = Graph(Node("Cases", "Persistence,Domain,Contracts,Attachments"), Node("Attachments", "Persistence,Domain,Contracts"));
@@ -27,7 +27,7 @@ public class ArchitectureTests
         Assert.Contains(graph.Violations(), v => v.Contains("CaseIntake.Cases") && v.Contains("another feature module"));
     }
 
-    [Fact]
+    [Test]
     public void Domain_referencing_Contracts_fails()
     {
         var graph = Graph(Node("Domain", "Contracts"), Node("Contracts", "Domain"));
@@ -37,7 +37,7 @@ public class ArchitectureTests
         Assert.Contains(violations, v => v.StartsWith("Project reference cycle", StringComparison.Ordinal));
     }
 
-    [Fact]
+    [Test]
     public void Persistence_referencing_Identity_feature_fails()
     {
         var graph = Graph(Node("Persistence", "Domain,Contracts,Identity"), Node("Identity", "Persistence,Domain,Contracts"));
@@ -45,7 +45,7 @@ public class ArchitectureTests
         Assert.NotEmpty(graph.Violations());
     }
 
-    [Fact]
+    [Test]
     public void Contracts_using_EF_Core_fails()
     {
         var graph = Graph(Node("Contracts", "Domain", "Microsoft.EntityFrameworkCore"), Node("Domain"));
@@ -53,7 +53,7 @@ public class ArchitectureTests
         Assert.Contains(graph.Violations(), v => v.Contains("must not use EF Core"));
     }
 
-    [Fact]
+    [Test]
     public void VeteranLookup_client_referencing_Persistence_fails()
     {
         var graph = Graph(Node("VeteranLookup.Client", "Contracts,Persistence"));
@@ -61,7 +61,7 @@ public class ArchitectureTests
         Assert.NotEmpty(graph.Violations());
     }
 
-    [Fact]
+    [Test]
     public void Domain_and_Contracts_assemblies_have_no_EF_or_Identity_dependency()
     {
         foreach (var assembly in new[] { typeof(CaseIntake.Domain.Cases.CaseStatus).Assembly, typeof(CaseIntake.Contracts.Common.Error).Assembly })
@@ -73,7 +73,7 @@ public class ArchitectureTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Domain_assembly_does_not_depend_on_Contracts()
     {
         var result = Types.InAssembly(typeof(CaseIntake.Domain.Cases.CaseStatus).Assembly).ShouldNot()
@@ -82,7 +82,7 @@ public class ArchitectureTests
         Assert.True(result.IsSuccessful);
     }
 
-    [Fact]
+    [Test]
     public void Shared_contract_types_are_defined_exactly_once()
     {
         var assemblies = new[]

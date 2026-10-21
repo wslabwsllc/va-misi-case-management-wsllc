@@ -184,7 +184,7 @@ per user; administrators also define roles. Auditors, supervisors and administra
 (sign-ins, access denials, user and role changes, cases, attachments, test results), open any entry and export it as
 CSV ([ADR 0014](docs/adr/0014-system-audit-log.md)). Administrators also see recorded errors (Administration > Errors, with the
 reference shown on the error page) and System health ([ADR 0015](docs/adr/0015-error-log-and-system-health.md)). Every user
-changes their own password from the header (Change password). Times are US Eastern with EDT or EST, in en-US format;
+changes their own password from the header (Change password). Times are US Eastern, labelled ET (never EST or EDT), in en-US format;
 Section 508 evidence is in [docs/section-508](docs/section-508/README.md).
 There is no self-registration or password reset by email. Roles and permissions: [ADR 0007](docs/adr/0007-roles-and-permissions.md)
 and [ADR 0013](docs/adr/0013-database-roles-and-permissions.md). Guided tour: [docs/demo.md](docs/demo.md).
@@ -357,6 +357,54 @@ separator (for example `Attachments__MaxBytes=5242880`). In Docker, set them und
 | Test results page is empty | wait a minute for the background import, or press **Import new runs** |
 
 More: [docs/docker-troubleshooting.md](docs/docker-troubleshooting.md).
+
+</details>
+
+---
+
+<details>
+<summary><b>Runtime and versions</b></summary>
+
+Exact pins (checked against `global.json`, `Directory.Packages.props` and the Dockerfile by `VersionConsistencyTests`;
+the full list is in [docs/versions.md](docs/versions.md)):
+
+| Component | Version |
+|---|---|
+| .NET SDK | 10.0.402 (`global.json`, roll-forward disabled) |
+| .NET runtime and ASP.NET Core / Blazor shared framework | 10.0.13 |
+| Entity Framework Core (`Microsoft.EntityFrameworkCore`, `.Design`, Identity EF stores) | 10.0.13 |
+| Npgsql EF Core provider and Npgsql | 10.0.3 |
+| PostgreSQL | 18.6 (`postgres:18.6-trixie`, digest pinned) |
+| Runtime image | `mcr.microsoft.com/dotnet/aspnet:10.0.13-noble` (digest pinned) |
+| Browser tests | Microsoft.Playwright 1.52.0 (Chromium build fixed by it), Deque.AxeCore.Playwright 4.13.0 |
+| Test framework | NUnit 4.4.0 with NUnit3TestAdapter 5.2.0 and NUnit.Analyzers 4.10.0; bUnit 2.11.3 for components |
+
+</details>
+
+---
+
+<details>
+<summary><b>Known limitations</b></summary>
+
+The complete, maintained list is in [docs/assumptions-and-limitations.md](docs/assumptions-and-limitations.md)
+(Limitations and Known gaps). The ones an evaluator meets first:
+
+- **Local evaluation only:** plain HTTP on `http://localhost:8080` (no HTTPS, no HSTS, the sign-in cookie is not
+  `Secure`), demo passwords in `docker-compose.yml`, synthetic data only, no Government systems.
+- **Identity:** local ASP.NET Core Identity with seeded demo accounts; no SSO, PIV, 2FA, self-registration or email
+  password reset (an administrator resets a password; the sign-in page's "Forgot password?" explains this).
+- **Attachments:** no malware scanning; files cannot be deleted; type checks are leading-byte checks, not proof of
+  safety.
+- **Operations:** no backups, disaster recovery, high availability, monitoring or alerting; logs go to stdout.
+- **Sessions:** sign-out clears the cookie but does not revoke a copy captured earlier (valid until it expires or the
+  security stamp changes); role changes reach an open session within one minute.
+- **Accessibility:** automated axe, keyboard and reflow checks run with the test suite; the manual screen-reader
+  (NVDA, JAWS), zoom, contrast and forced-colours reviews in
+  [docs/section-508/accessibility-test-matrix.md](docs/section-508/accessibility-test-matrix.md) have not been
+  performed yet. This is not a Section 508 certification or conformance claim.
+- **Dashboard trend:** the resolution trend places a case by its last update, an approximation of its completion date.
+- **Not yet verified:** the clean-clone cold start on a host by a non-author and the offline (no egress) run; see
+  [docs/verification.md](docs/verification.md).
 
 </details>
 

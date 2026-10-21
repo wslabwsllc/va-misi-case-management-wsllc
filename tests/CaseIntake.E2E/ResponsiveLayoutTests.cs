@@ -9,18 +9,18 @@ namespace CaseIntake.E2E;
 /// (sidebar or bottom bar), KPI cards and charts, case cards or table, forms, sheets, touch target size, no horizontal
 /// overflow, no JavaScript errors, and an axe scan per layout.
 /// </summary>
-public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed class ResponsiveLayoutTests : E2ETestBase
 {
-    [Fact]
+    [Test]
     public Task Phone_390x844_uses_the_mobile_app_shell() => PhoneAsync(Viewports.Phone390);
 
-    [Fact]
+    [Test]
     public Task Phone_375x812_uses_the_mobile_app_shell() => PhoneAsync(Viewports.Phone375);
 
-    [Fact]
+    [Test]
     public Task Tablet_768x1024_uses_the_collapsible_sidebar() => WideAsync(Viewports.Tablet768);
 
-    [Fact]
+    [Test]
     public Task Desktop_1440x900_uses_the_full_enterprise_layout() => WideAsync(Viewports.Desktop1440);
 
     private static async Task ExpectNoHorizontalOverflowAsync(IPage page, string where)
@@ -51,13 +51,13 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
                 Assert.True(box is { Width: >= 44, Height: >= 44 }, $"Bottom navigation target is {box?.Width}x{box?.Height}px");
             }
         });
-        await s.StepAsync("Dashboard: headline KPI cards in two columns, the case trend chart, no overflow", async () =>
+        await s.StepAsync("Dashboard: KPI cards in two columns, the charts stacked, no overflow", async () =>
         {
             await Expect(page.GetByTestId("kpi-total")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("kpi-overdue")).ToBeVisibleAsync();
-            await Expect(page.GetByTestId("kpi-resolved")).ToBeHiddenAsync();
+            await Expect(page.GetByTestId("kpi-resolved")).ToBeVisibleAsync();   // all seven KPI cards, two per row
             await Expect(page.GetByTestId("chart-volume").Locator("svg.chart__svg")).ToBeVisibleAsync();
-            await Expect(page.GetByTestId("chart-status")).ToBeHiddenAsync();
+            await Expect(page.GetByTestId("chart-status").Locator("svg.chart__svg")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("fab-new-case")).ToBeVisibleAsync();
             await ExpectNoHorizontalOverflowAsync(page, "dashboard");
         });
@@ -84,11 +84,13 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
         {
             await page.GetByTestId("mobile-back").TapAsync();
             await page.GetByTestId("fab-new-case").TapAsync();
-            await ExpectPageAsync(page, "New case");
+            await ExpectPageAsync(page, "Open a new case", "New case - Case Intake and Triage");
             await Expect(page.Locator("#lookup-ssn")).ToHaveAttributeAsync("inputmode", "numeric");
             await Expect(page.Locator("#lookup-ssn")).ToHaveAttributeAsync("autocomplete", "off");
             var title = await page.Locator("#intake-title").BoundingBoxAsync();
-            Assert.True(title is { Height: >= 44 } && title.Width >= viewport.Width - 64, $"Title input is {title?.Width}x{title?.Height}px");
+            // Full width of the form card: per side a 16 px page gutter, the card's 1 px border and 16 px padding.
+            const int insetPerSide = 16 + 1 + 16;
+            Assert.True(title is { Height: >= 44 } && title.Width >= viewport.Width - (2 * insetPerSide), $"Title input is {title?.Width}x{title?.Height}px");
             await ExpectNoHorizontalOverflowAsync(page, "new case");
         });
         await s.AxeAsync($"Phone new case {Viewports.Label(viewport)}");
@@ -130,9 +132,9 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
             await Expect(page.GetByTestId("user-roles")).ToBeVisibleAsync();
             await Expect(page.GetByTestId("fab-new-case")).ToBeHiddenAsync();
         });
-        await s.StepAsync("All six KPI cards and the dashboard charts render", async () =>
+        await s.StepAsync("All seven KPI cards and the dashboard charts render", async () =>
         {
-            foreach (var kpi in new[] { "kpi-total", "kpi-open", "kpi-pending", "kpi-overdue", "kpi-resolved", "kpi-mine" })
+            foreach (var kpi in new[] { "kpi-total", "kpi-open", "kpi-pending", "kpi-overdue", "kpi-resolved", "kpi-mine", "kpi-tasks" })
             {
                 await Expect(page.GetByTestId(kpi)).ToBeVisibleAsync();
             }
@@ -140,8 +142,8 @@ public sealed class ResponsiveLayoutTests(PlaywrightFixture fixture) : E2ETestBa
             {
                 await Expect(page.GetByTestId(chart).Locator("svg.chart__svg")).ToBeVisibleAsync();
             }
-            // Issue #21: bars and columns are links to the matching cases.
-            await Expect(page.GetByTestId("chart-status").Locator("svg a.chart__point")).ToHaveCountAsync(5);
+            // Issue #21: every value is a link to the matching cases (the donut through its legend).
+            await Expect(page.GetByTestId("chart-status-legend").Locator("a")).ToHaveCountAsync(5);
             await ExpectNoHorizontalOverflowAsync(page, "dashboard");
         });
         await s.ScreenshotAsync($"Dashboard {Viewports.Label(viewport)}");
