@@ -27,7 +27,9 @@ public static partial class EvidenceRedactor
     [GeneratedRegex(@"(?i)(cookie|set-cookie)(\s*[:=]\s*)[^\r\n]+", RegexOptions.CultureInvariant)]
     private static partial Regex CookieHeader();
 
-    [GeneratedRegex(@"(?i)(CaseIntake\.Auth|\.AspNetCore\.[A-Za-z.]+)=[^;\s]+", RegexOptions.CultureInvariant)]
+    // Cookie names, wherever they appear: the auth cookie and its chunks (CaseIntake.AuthC1, C2, ...) and every
+    // .AspNetCore.* cookie, whose names can carry base64url suffixes (.AspNetCore.Antiforgery.<digits, - and _>).
+    [GeneratedRegex(@"(?i)(CaseIntake\.Auth(?:C\d+)?|\.AspNetCore\.[A-Za-z0-9._-]+)=[^;\s]+", RegexOptions.CultureInvariant)]
     private static partial Regex AuthCookie();
 
     /// <summary>Additional literal secrets known to the deployment (for example the demo password).</summary>

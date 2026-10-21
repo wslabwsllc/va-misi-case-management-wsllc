@@ -23,6 +23,11 @@ public sealed class FakeUserAdministrationService : IUserAdministrationService
     public List<object> Requests { get; } = [];
     public List<UserListQuery> Queries { get; } = [];
     public Error? NextError { get; set; }
+    /// <summary>Thrown by the next create.</summary>
+    public Exception? NextException { get; set; }
+    /// <summary>Returned (or thrown) by every list call while set.</summary>
+    public Error? ListError { get; set; }
+    public Exception? ListException { get; set; }
 
     public static UserDetailDto Detail(string id, string userName, IReadOnlyList<string> roles, bool isActive = true,
         IReadOnlyDictionary<string, PermissionEffect>? overrides = null, bool canManage = true, string? reason = null,
@@ -41,6 +46,14 @@ public sealed class FakeUserAdministrationService : IUserAdministrationService
     public Task<Result<PagedResult<UserSummaryDto>>> ListAsync(UserListQuery query, CancellationToken ct)
     {
         Queries.Add(query);
+        if (ListException is { } thrown)
+        {
+            throw thrown;
+        }
+        if (ListError is { } failure)
+        {
+            return Task.FromResult(Result<PagedResult<UserSummaryDto>>.Failure(failure));
+        }
         var matches = Users
             .Where(u => query.Search is null || u.UserName.Contains(query.Search, StringComparison.OrdinalIgnoreCase))
             .Where(u => query.Role is null || u.Roles.Contains(query.Role))
@@ -58,6 +71,11 @@ public sealed class FakeUserAdministrationService : IUserAdministrationService
     public Task<Result<UserSummaryDto>> CreateAsync(CreateUserRequest request, CancellationToken ct)
     {
         Requests.Add(request);
+        if (NextException is { } ex)
+        {
+            NextException = null;
+            throw ex;
+        }
         if (TakeError() is { } error)
         {
             return Task.FromResult(Result<UserSummaryDto>.Failure(error));

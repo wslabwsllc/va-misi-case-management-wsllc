@@ -171,6 +171,41 @@ public class UsersPageTests : WebTestContext
 
         Assert.Equal("", cut.Find("[data-testid=users-error]").TextContent.Trim());
     }
+
+    [Test]
+    public void A_list_failure_or_exception_is_shown_and_the_table_is_empty()
+    {
+        UserAdmin.ListError = new(ErrorKind.Forbidden, "Forbidden", "You cannot list users.");
+        var failed = Render<Users>();
+        Assert.Contains("The user list could not be loaded", failed.Find("[data-testid=users-error]").TextContent);
+        Assert.Contains("You cannot list users.", failed.Find("[data-testid=users-error]").TextContent);
+        Assert.Empty(failed.FindAll("[data-testid=users-table] tbody tr"));
+
+        UserAdmin.ListError = null;
+        UserAdmin.ListException = new InvalidOperationException("db");
+        var thrown = Render<Users>();
+        Assert.Contains("Reload the page to try again.", thrown.Find("[data-testid=users-error]").TextContent);
+        Assert.DoesNotContain("db", thrown.Find("[data-testid=users-error]").TextContent);
+        Assert.Empty(thrown.FindAll("[data-testid=users-table] tbody tr"));
+    }
+
+    [Test]
+    public void An_unexpected_create_failure_shows_a_generic_message()
+    {
+        UserAdmin.NextException = new InvalidOperationException("smtp");
+        var cut = Render<Users>();
+        cut.Find("#user-email").Input("clerk@example.test");
+        cut.Find("#user-role-auditor").Change(true);
+        cut.Find("#user-password").Input("Initial-Passw0rd!");
+
+        cut.Find("[data-testid=add-user-form]").Submit();
+
+        var alert = cut.Find("[data-testid=users-error]").TextContent;
+        Assert.Contains("The user was not added", alert);
+        Assert.Contains("Something went wrong. Try again.", alert);
+        Assert.DoesNotContain("smtp", cut.Markup);
+        Assert.Single(UserAdmin.Users);
+    }
 }
 
 public class UserDetailPageTests : WebTestContext
