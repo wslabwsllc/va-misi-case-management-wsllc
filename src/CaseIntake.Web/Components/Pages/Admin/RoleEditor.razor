@@ -1,0 +1,399 @@
+@page "/admin/roles/new"
+@page "/admin/roles/{Id}"
+@attribute [Authorize(Policy = Permissions.RolesManage)]
+@implements IDisposable
+@using System.Collections.Immutable
+@using CaseIntake.Contracts.Common
+@using CaseIntake.Web.Services
+@inject IRoleAdministrationService RoleAdmin
+@inject ICurrentUser CurrentUser
+@inject StatusAnnouncer Announcer
+@inject NavigationManager Navigation
+@inject ILogger<RoleEditor> Logger
+
+@* Create or edit a role (ADR 0013): name, description and permissions grouped as in the catalog. Permissions the
+   administrator does not hold are shown but cannot be changed. Built-in roles keep their names; Administrator is
+   read-only; a custom role without members can be deleted after confirming. *@
+<PageShell Title="@Title" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Roles", "admin/roles")])"
+           Subtitle="@(IsNew ? "Name the role and choose its permissions. Fields marked * are required." : "Changes apply to everyone in the role within a minute.")" />
+
+<ErrorAlert @ref="_alert" Title="@_errorTitle" Message="@_error" TestId="role-error" />
+<div role="status" aria-live="polite" data-testid="role-saved">
+    @if (_saved is not null)
+    {
+        <p class="message message--success"><Icon Name="success" /><span class="message__body">@_saved</span></p>
+    }
+</div>
+
+@if (_notFound)
+{
+    <EmptyState Title="Role not found" Message="This role no longer exists." IconName="admin" TestId="role-not-found">
+        <a class="btn" href="admin/roles">Back to roles</a>
+    </EmptyState>
+}
+else if (!IsNew && _role is null)
+{
+    <LoadingIndicator Text="Loading role…" />
+}
+else
+{
+    @if (_role is { CanManage: false } readOnly)
+    {
+        <p class="message message--info" data-testid="role-read-only"><Icon Name="info" /><span class="message__body">@readOnly.CannotManageReason</span></p>
+    }
+
+    <div class="grid grid--main-side">
+        <section class="card" aria-labelledby="role-form-heading">
+            <h2 id="role-form-heading" class="card__header">@(IsNew ? "New role" : "Role details")</h2>
+            <EditForm EditContext="_editContext" OnSubmit="SaveAsync" id="role-form" novalidate class="form" data-testid="role-form">
+                <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
+                @if (_role is { IsBuiltIn: true } builtIn)
+                {
+                    <div class="field">
+                        <span class="field__label" id="role-name-label">Name</span>
+                        <p aria-labelledby="role-name-label" data-testid="role-name-fixed">@AppRoles.DisplayName(builtIn.Name) <span class="page-header__subtitle">(built-in roles keep their names)</span></p>
+                    </div>
+                }
+                else
+                {
+                    <LabeledInputText Id="role-name" Label="Name" Required="true" AutoComplete="off" MaxCharacters="@RoleFieldNames.NameMaxLength"
+                                      @bind-Value="_model.Name" disabled="@(!CanEdit)" Hint="Shown wherever roles are listed, for example Records reviewer." />
+                }
+                <LabeledTextArea Id="role-description" Label="Description" Rows="3" MaxCharacters="@RoleFieldNames.DescriptionMaxLength"
+                                 @bind-Value="_model.Description" disabled="@(!CanEdit)" Hint="What people in this role do." />
+
+                <div class="field" id="role-permissions" tabindex="-1" data-testid="role-permissions">
+                    <span class="field__label">Permissions</span>
+                    @if (PermissionErrors.Count > 0)
+                    {
+                        <div class="field__error" id="role-permissions-error"><Icon Name="error" Small="true" /><span>@string.Join(" ", PermissionErrors)</span></div>
+                    }
+                    @foreach (var group in PermissionCatalog.Groups)
+                    {
+                        <fieldset class="permission-group" aria-describedby="@(PermissionErrors.Count > 0 ? "role-permissions-error" : null)">
+                            <legend>@group</legend>
+                            <div class="checkbox-list">
+                                @foreach (var definition in PermissionCatalog.All.Where(p => p.Group == group))
+                                {
+                                    var name = definition.Name;
+                                    var id = $"perm-{name.Replace('.', '-')}";
+                                    var editable = CanEdit && _actor.HasPermission(name);
+                                    <label class="checkbox">
+                                        <input type="checkbox" id="@id" checked="@_model.Permissions.Contains(name)" disabled="@(!editable)"
+                                               @onchange="e => Toggle(name, e)" aria-describedby="@($"{id}-description")" data-testid="@id" />
+                                        <span>
+                                            @definition.Label
+                                            <span class="cell-sub" id="@($"{id}-description")">
+                                                @definition.Description
+                                                @if (CanEdit && !editable)
+                                                {
+                                                    @(" You don't hold this permission, so you can't change it.")
+                                                }
+                                            </span>
+                                        </span>
+                                    </label>
+                                }
+                            </div>
+                        </fieldset>
+                    }
+                </div>
+
+                @if (CanEdit)
+                {
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn--primary" disabled="@_busy" aria-busy="@(_busy ? "true" : "false")" data-testid="save-role">
+                            <Icon Name="save" Small="true" /> @(IsNew ? "Create role" : "Save role")
+                        </button>
+                        <a class="btn" href="admin/roles">Cancel</a>
+                    </div>
+                }
+            </EditForm>
+        </section>
+
+        @if (_role is { } role)
+        {
+            <section class="card" aria-labelledby="members-heading" data-testid="role-members">
+                <h2 id="members-heading" class="card__header">Members (@role.Members.Count)</h2>
+                @if (role.Members.Count == 0)
+                {
+                    <p class="page-header__subtitle">Nobody has this role.</p>
+                }
+                else
+                {
+                    <ul class="compact-list">
+                        @foreach (var member in role.Members)
+                        {
+                            <li class="mono">@member</li>
+                        }
+                    </ul>
+                }
+                <p class="card__note">Add or remove members on each person's page under <a href="admin/users">Users</a>.</p>
+                @if (!role.IsBuiltIn && role.CanManage)
+                {
+                    <div class="form-actions">
+                        <button type="button" class="btn btn--danger" @ref="_deleteButton" @onclick="OpenDeleteAsync" disabled="@(_busy || role.Members.Count > 0)"
+                                aria-describedby="@(role.Members.Count > 0 ? "delete-role-hint" : null)" data-testid="delete-role">
+                            Delete role
+                        </button>
+                    </div>
+                    @if (role.Members.Count > 0)
+                    {
+                        <p class="field__hint" id="delete-role-hint">Remove everyone from this role before deleting it.</p>
+                    }
+                }
+            </section>
+
+            <ModalDialog @ref="_deleteDialog" Id="delete-role-dialog" TestId="delete-role-dialog" Title="@($"Delete the {role.Name} role?")"
+                         Description="The role and its permissions are removed. This can't be undone.">
+                <Footer>
+                    <button type="button" class="btn" @onclick="() => _deleteDialog!.CloseAsync(restoreFocus: true)" autofocus data-testid="delete-role-cancel">Cancel</button>
+                    <button type="button" class="btn btn--danger" @onclick="ConfirmDeleteAsync" disabled="@_busy" data-testid="delete-role-confirm">Delete</button>
+                </Footer>
+            </ModalDialog>
+        }
+    </div>
+
+    @if (_role is { } historyRole)
+    {
+        <AuditHistory EntityType="@CaseIntake.Contracts.Auditing.AuditEntityTypes.Role" EntityId="@historyRole.Id" Version="@historyRole.ConcurrencyStamp" />
+    }
+}
+
+@code {
+    private sealed class RoleModel
+    {
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public HashSet<string> Permissions { get; } = new(StringComparer.Ordinal);
+    }
+
+    private static readonly IReadOnlyList<KeyValuePair<string, string>> SummaryFields =
+    [
+        new(RoleFieldNames.Name, "role-name"),
+        new(RoleFieldNames.Description, "role-description"),
+        new(RoleFieldNames.Permissions, "role-permissions"),
+    ];
+
+    private readonly CancellationTokenSource _cts = new();
+    private OperationActor _actor = new(null, null, ImmutableHashSet<string>.Empty, ImmutableHashSet<string>.Empty);
+    private RoleDetailDto? _role;
+    private RoleModel _model = new();
+    private EditContext _editContext = default!;
+    private ValidationMessageStore _messages = default!;
+    private FormErrorSummary? _summary;
+    private ErrorAlert? _alert;
+    private ModalDialog? _deleteDialog;
+    private ElementReference _deleteButton;
+    private bool _notFound;
+    private bool _busy;
+    private bool _showSummary;
+    private bool _focusSummary;
+    private bool _focusAlert;
+    private string? _errorTitle;
+    private string? _error;
+    private string? _saved;
+
+    [Parameter] public string? Id { get; set; }
+
+    private bool IsNew => Id is null;
+    private bool CanEdit => IsNew || _role is { CanManage: true };
+    private string Title => IsNew ? "New role" : _role is null ? "Role" : $"Role: {AppRoles.DisplayName(_role.Name)}";
+
+    private IReadOnlyList<string> PermissionErrors =>
+        _editContext.GetValidationMessages(new FieldIdentifier(_model, RoleFieldNames.Permissions)).ToList();
+
+    protected override async Task OnParametersSetAsync()
+    {
+        Show(null);
+        _notFound = false;
+        try
+        {
+            _actor = await CurrentUser.GetAsync(_cts.Token);
+            if (IsNew)
+            {
+                return;
+            }
+            var result = await RoleAdmin.GetAsync(Id!, _cts.Token);
+            if (result.IsSuccess)
+            {
+                Show(result.Value!);
+            }
+            else if (result.Error!.Kind == ErrorKind.NotFound)
+            {
+                _notFound = true;
+            }
+            else
+            {
+                ShowError("The role could not be loaded", result.Error.Message);
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5026, "RoleDetailFailed"), "Loading a role failed ({ExceptionType})", ex.GetType().Name);
+            ShowError("The role could not be loaded", "Reload the page to try again.");
+        }
+    }
+
+    private void Show(RoleDetailDto? role)
+    {
+        _role = role;
+        _model = new() { Name = role?.Name, Description = role?.Description };
+        _model.Permissions.UnionWith(role?.Permissions ?? []);
+        _editContext = new EditContext(_model);
+        _messages = new ValidationMessageStore(_editContext);
+        _showSummary = false;
+    }
+
+    private void Toggle(string permission, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            _model.Permissions.Add(permission);
+        }
+        else
+        {
+            _model.Permissions.Remove(permission);
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        if (_busy || !CanEdit)
+        {
+            return;
+        }
+        _busy = true;
+        ClearMessages();
+        try
+        {
+            var permissions = PermissionCatalog.All.Select(p => p.Name).Where(_model.Permissions.Contains).ToList();
+            var request = new SaveRoleRequest(_model.Name ?? "", _model.Description, permissions, _role?.ConcurrencyStamp);
+            var result = IsNew
+                ? await RoleAdmin.CreateAsync(request, _cts.Token)
+                : await RoleAdmin.UpdateAsync(_role!.Id, request, _cts.Token);
+            if (result.IsSuccess)
+            {
+                var saved = result.Value!;
+                if (IsNew)
+                {
+                    Announcer.Announce($"The {saved.Name} role was created.");
+                    Navigation.NavigateTo($"admin/roles/{Uri.EscapeDataString(saved.Id)}");
+                    return;
+                }
+                Show(saved);
+                _saved = $"The {saved.Name} role was saved.";
+                Announcer.Announce(_saved);
+                return;
+            }
+
+            var error = result.Error!;
+            if (error.FieldErrors is { Count: > 0 } fieldErrors)
+            {
+                _messages.Clear();
+                foreach (var (field, messages) in fieldErrors)
+                {
+                    _messages.Add(new FieldIdentifier(_model, field), messages);
+                }
+                _showSummary = true;
+                _focusSummary = true;
+                _editContext.NotifyValidationStateChanged();
+                return;
+            }
+            if (error.Kind is ErrorKind.Conflict && !IsNew)
+            {
+                var latest = await RoleAdmin.GetAsync(_role!.Id, _cts.Token);
+                if (latest.IsSuccess)
+                {
+                    Show(latest.Value!);
+                }
+            }
+            ShowError(IsNew ? "The role was not created" : "The role was not saved", error.Message);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5027, "RoleSaveFailed"), "Saving a role failed ({ExceptionType})", ex.GetType().Name);
+            ShowError(IsNew ? "The role was not created" : "The role was not saved", "Something went wrong. Try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task OpenDeleteAsync() => _deleteDialog!.OpenAsync(() => _deleteButton.FocusSafeAsync());
+
+    private async Task ConfirmDeleteAsync()
+    {
+        if (_busy || _role is null)
+        {
+            return;
+        }
+        _busy = true;
+        ClearMessages();
+        try
+        {
+            var result = await RoleAdmin.DeleteAsync(_role.Id, _role.ConcurrencyStamp, _cts.Token);
+            if (result.IsSuccess)
+            {
+                Announcer.Announce($"The {result.Value} role was deleted.");
+                Navigation.NavigateTo("admin/roles");
+                return;
+            }
+            await _deleteDialog!.CloseAsync();
+            ShowError("The role was not deleted", result.Error!.Message);
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5028, "RoleDeleteFailed"), "Deleting a role failed ({ExceptionType})", ex.GetType().Name);
+            await _deleteDialog!.CloseAsync();
+            ShowError("The role was not deleted", "Something went wrong. Try again.");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ClearMessages()
+    {
+        _error = null;
+        _errorTitle = null;
+        _saved = null;
+    }
+
+    private void ShowError(string title, string message)
+    {
+        _errorTitle = title;
+        _error = message;
+        _focusAlert = true;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusSummary && _summary is not null)
+        {
+            _focusSummary = false;
+            await _summary.FocusAsync();
+        }
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

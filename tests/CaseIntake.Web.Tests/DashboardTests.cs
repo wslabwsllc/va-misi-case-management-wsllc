@@ -114,9 +114,9 @@ public class DashboardTests : WebTestContext
         Assert.Contains("Refreshing…", cut.Find("[data-testid=dashboard-refresh]").TextContent);
 
         cut.WaitForAssertion(() => Assert.Equal("7", Kpi(cut, "kpi-total")), TimeSpan.FromSeconds(5));
-        cut.WaitForAssertion(() => Assert.Equal("Dashboard refreshed at 08:00:42", Announcer.Message), TimeSpan.FromSeconds(5));
+        cut.WaitForAssertion(() => Assert.Equal("Dashboard refreshed at 08:00:42 AM EDT", Announcer.Message), TimeSpan.FromSeconds(5));
         Assert.Contains("Refresh", cut.Find("[data-testid=dashboard-refresh]").TextContent);
-        Assert.Contains("Updated 2026-10-19 08:00:42.", cut.Find(".page-header__subtitle").TextContent);
+        Assert.Contains("Updated 08:00:42 AM EDT on 10/19/2026.", cut.Find(".page-header__subtitle").TextContent);
     }
 
     [Fact]

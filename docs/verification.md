@@ -306,3 +306,74 @@ extended `BuildProvider` (a warm-up timeout budget and a request recorder). Both
 | SSN-shaped value scan of `veteran-lookup` and `web` container logs | 0 matches |
 
 The apt-snapshot test noted above as failing on main passes after PR #27.
+
+# Verification record (Change 1, part 1: database permissions and user and role administration)
+
+Base revision: `6fecbca` (main) plus **uncommitted** changes on branch `feat/roles-permissions-admin`. Host: Windows
+Server 2025, .NET SDK 10.0.402. **Docker is not usable by this account** (not in `docker-users`), so
+`docker compose run --rm tests` was not run. PostgreSQL-backed tests ran against a portable PostgreSQL **18.6** server
+through `TESTKIT_POSTGRES_ADMIN`; the browser suite ran against the published web app and lookup mock on the host
+(`E2E_BASE_URL=http://localhost:8090`, fresh migrated database), with Playwright's Chromium.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln` | 0 warnings, 0 errors |
+| `dotnet ef migrations has-pending-model-changes` | no changes (migration `C1_DatabasePermissions` added) |
+| Migrator on an empty database, then again | exit 0 both; run 1: 6 roles, 6 users, 6 memberships, 47 role permissions (2+5+8+13+3+16), 72 cases; run 2: nothing added |
+| `dotnet test` Attachments / Cases / Identity / VeteranLookup / Web | 86 / 153 / 136 / 87 / 176 passed, 0 failed |
+| `dotnet test` IntegrationTests | 398 passed, 2 failed. Both failures are on `main` too (baseline run on `6fecbca`, same host): `AuthenticationTests.Signing_out_clears_the_cookie_and_protected_pages_redirect_to_login_again` and `An_anonymous_visitor_at_the_site_root_gets_the_landing_page_with_a_sign_in_link` expect an absolute login URL, while the site-root redirect now answers with the relative `/welcome` |
+| `dotnet test` E2E, full suite | 21 of 22 passed. `ResponsiveLayoutTests.Tablet_768x1024_uses_the_collapsible_sidebar` ("dashboard: the page is 3px wider than the viewport") fails identically against a build of `main` on this host (Windows font metrics); the last recorded container run (`20261020T175437Z-d2f4a65d`) passed every E2E test |
+| `dotnet test` E2E, new and changed administration tests | 4 of 4 passed: keyboard-only role, user, override and deactivation flow with axe on every page and the dialog; phone 390x844 width with axe on Users, user detail, Roles and role editor; supervisor read-only view of the administrator; supervisor adds a user (role checkbox) |
+
+## Not verified / open (Change 1, part 1)
+
+- `docker compose up --build` and `docker compose run --rm tests`: blocked on this host (Docker permissions).
+- Manual accessibility checks of the new pages (screen reader, zoom, high contrast): not performed; see
+  [accessibility-review.md](accessibility-review.md).
+- The two `AuthenticationTests` failures above predate this change and are not fixed here.
+
+# Verification record (Change 1, part 2: system-wide audit log)
+
+Base revision: `6fecbca` (main) plus **uncommitted** parts 1 and 2 on branch `feat/roles-permissions-admin` (kept in one
+working tree at the tech lead's request). Host and setup as for part 1: Windows Server 2025, .NET SDK 10.0.402,
+portable PostgreSQL 18.6 through `TESTKIT_POSTGRES_ADMIN`, published web app and lookup mock on the host for the
+browser suite. Docker is not usable by this account, so `docker compose run --rm tests` was not run.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln` | 0 warnings, 0 errors |
+| `dotnet ef migrations has-pending-model-changes` | no changes (`C1_DatabasePermissions` regenerated for `DefaultPermissionsApplied`; `C2_AuditLog` added) |
+| Migrator on an empty database, then again | exit 0 both; run 1: 6 roles, 6 users, 6 memberships, 50 role permissions (3+5+8+14+3+17); run 2: nothing added |
+| `dotnet test` Attachments / Cases / Identity / VeteranLookup / Web | 86 / 153 / 140 / 87 / 184 passed, 0 failed |
+| `dotnet test` IntegrationTests | 408 passed, 2 failed: the same two `AuthenticationTests` that fail on `main` (relative `/welcome` redirect). In one earlier full run `A_logout_post_without_an_antiforgery_token_is_rejected_and_the_user_stays_signed_in` also failed once; it passed in 3 isolated runs of its class and in the final full run (intermittent under load; not investigated further) |
+| `dotnet test` E2E, full suite | 23 of 24 passed; the failing `ResponsiveLayoutTests.Tablet_768x1024_uses_the_collapsible_sidebar` (3 px overflow) fails identically on `main` on this host |
+
+## Not verified / open (Change 1, part 2)
+
+- `docker compose up --build` and `docker compose run --rm tests`: blocked on this host (Docker permissions).
+- Manual accessibility checks of the audit pages: not performed.
+- The intermittent logout antiforgery test failure above was seen once and not reproduced.
+
+# Verification record (Change 1, parts 3 to 5)
+
+Base revision: `6fecbca` (main) plus **uncommitted** parts 1 to 5 on branch `feat/roles-permissions-admin`. Host and
+setup as for parts 1 and 2 (Windows Server 2025, .NET SDK 10.0.402, PostgreSQL 18.6 through `TESTKIT_POSTGRES_ADMIN`,
+published web app and lookup mock on the host for the browser suite). Docker is not usable by this account, so
+`docker compose run --rm tests` was not run.
+
+| Command | Result |
+|---|---|
+| `dotnet build CaseIntake.sln` | 0 warnings, 0 errors |
+| `dotnet ef migrations has-pending-model-changes` | no changes (`C3_ErrorLog` added) |
+| Migrator on an empty database | exit 0 |
+| `dotnet test` Attachments / Cases / Identity / VeteranLookup / Web | 86 / 153 / 152 / 87 / 200 passed, 0 failed |
+| `dotnet test` IntegrationTests | 414 passed, 2 failed: the two `AuthenticationTests` that fail on `main` (relative `/welcome` redirect) |
+| `dotnet test` E2E, full suite (final build) | 28 of 29 passed; the failing `ResponsiveLayoutTests.Tablet_768x1024_uses_the_collapsible_sidebar` fails identically on `main` on this host. The five `AccessibilitySweepTests` pass: axe clean on all 22 signed-in and 3 public pages |
+
+Findings fixed during this work: the error page showed the trace ID instead of the operation ID (now the stored error's
+reference); a focused control could scroll under the sticky header (scroll padding added, now checked on every page).
+
+## Not verified / open (Change 1, parts 3 to 5)
+
+- `docker compose up --build` and `docker compose run --rm tests`: blocked on this host (Docker permissions).
+- Manual accessibility procedures M1 to M9 ([section-508/manual-test-procedures.md](section-508/manual-test-procedures.md)): not performed.

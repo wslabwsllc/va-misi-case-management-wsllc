@@ -37,9 +37,8 @@ public static class UiText
     /// <summary>The owner's user name, or "Unassigned".</summary>
     public static string Owner(string? assignedTo) => string.IsNullOrEmpty(assignedTo) ? "Unassigned" : assignedTo;
 
-    /// <summary>"2026-10-24", or "No due date".</summary>
-    public static string DueDate(DateOnly? dueOn) =>
-        dueOn is { } due ? due.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "No due date";
+    /// <summary>"10/24/2026", or "No due date".</summary>
+    public static string DueDate(DateOnly? dueOn) => dueOn is { } due ? Date(due) : "No due date";
 
     /// <summary>A short due-date status relative to today (ET): "Overdue by 3 days", "Due today", "Due in 5 days".</summary>
     public static string? DueState(CaseStatus status, DateOnly? dueOn, DateOnly today)
@@ -69,11 +68,26 @@ public static class UiText
     public static string TransitionLabel(CaseStatus from, CaseStatus to) =>
         CaseWorkflow.IsReopen(from, to) ? $"Reopen (move to {Status(to)})" : $"Move to {Status(to)}";
 
+    /// <summary>The culture every displayed date, time and number follows (Change 1, part 4).</summary>
+    public static CultureInfo Culture { get; } = CultureInfo.GetCultureInfo("en-US");
+
     /// <summary>
-    /// Stored UTC times are shown in Eastern time without a zone suffix; the column header or field label says "(ET)".
+    /// A stored UTC instant in US Eastern time with its zone, en-US style: "10/21/2026 09:05 AM EDT" ("EST" in winter).
+    /// Every timestamp the UI shows goes through here.
     /// </summary>
-    public static string Time(DateTimeOffset value) =>
-        EasternTime.From(value).ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
+    public static string Time(DateTimeOffset value) => Eastern(value, "MM/dd/yyyy hh:mm tt");
+
+    /// <summary>A compact label for charts and tight cells: "10/21 09:05 AM EDT".</summary>
+    public static string ShortTime(DateTimeOffset value) => Eastern(value, "MM/dd hh:mm tt");
+
+    /// <summary>Time of day with seconds, for "refreshed at" messages: "09:05:30 AM EDT".</summary>
+    public static string ClockTime(DateTimeOffset value) => Eastern(value, "hh:mm:ss tt");
+
+    /// <summary>A calendar date, en-US style: "10/21/2026". Dates carry no zone (due dates are Eastern calendar days).</summary>
+    public static string Date(DateOnly value) => value.ToString("MM/dd/yyyy", Culture);
+
+    private static string Eastern(DateTimeOffset value, string format) =>
+        EasternTime.From(value).ToString(format, Culture) + " " + EasternTime.Abbreviation(value);
 
     /// <summary>For machine-readable exports (CSV), which stay in UTC.</summary>
     public static string IsoUtc(DateTimeOffset value) =>

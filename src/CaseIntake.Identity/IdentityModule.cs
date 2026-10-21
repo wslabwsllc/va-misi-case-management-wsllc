@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace CaseIntake.Identity;
@@ -83,6 +84,9 @@ public static class IdentityModule
                     .AddRequirements(new PermissionRequirement(permission)));
             }
         });
+        services.TryAddSingleton(TimeProvider.System);
+        services.AddSingleton<IPermissionStore, DatabasePermissionStore>();
+        services.AddSingleton<PermissionResolver>();
         services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
         services.AddSingleton<IAuthorizationMiddlewareResultHandler, DenialLoggingAuthorizationResultHandler>();
 
@@ -94,6 +98,14 @@ public static class IdentityModule
         services.AddScoped<AccountSignIn>();
         services.AddScoped<AccountPasswordChange>();
         services.AddScoped<IUserAdministrationService, UserAdministrationService>();
+        services.AddScoped<IRoleAdministrationService, RoleAdministrationService>();
+        services.AddScoped<Contracts.Auditing.IAuditLogService, Auditing.AuditLogService>();
+        services.AddScoped<Contracts.Diagnostics.IErrorLogService, Diagnostics.ErrorLogService>();
+        services.AddScoped<Contracts.Diagnostics.ISystemHealthService, Diagnostics.SystemHealthService>();
+        // Captured Error and Critical log events are stored by one background writer (ADR 0015).
+        services.AddSingleton<Diagnostics.ErrorLogWriter>();
+        services.AddSingleton<Contracts.Diagnostics.IErrorLogSink>(sp => sp.GetRequiredService<Diagnostics.ErrorLogWriter>());
+        services.AddHostedService(sp => sp.GetRequiredService<Diagnostics.ErrorLogWriter>());
         return services;
     }
 

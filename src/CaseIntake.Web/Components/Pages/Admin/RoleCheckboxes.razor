@@ -1,0 +1,70 @@
+@using CaseIntake.Web.Services
+
+@* The role choice of the add-user and edit-user forms: one checkbox per role in a fieldset whose legend names the group.
+   A role that grants more than the administrator holds is shown disabled with the reason, so the list never hides who
+   could hold which role. Errors are tied to the group with aria-describedby. *@
+<fieldset class="field" id="@($"{IdPrefix}-group")" tabindex="-1"
+          aria-describedby="@Describedby" data-testid="@($"{IdPrefix}-group")">
+    <legend class="field__label">
+        Roles<span class="field__required"><span class="field__asterisk" aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span></span>
+    </legend>
+    <p class="field__hint" id="@($"{IdPrefix}-hint")">Choose one or more. A person gets every permission of each of their roles.</p>
+    <div class="checkbox-list">
+        @foreach (var role in Options)
+        {
+            var name = role.Name;
+            var id = InputId(IdPrefix, name);
+            <label class="checkbox">
+                <input type="checkbox" id="@id" checked="@Selected.Contains(name)" disabled="@(!role.Assignable)"
+                       @onchange="e => Toggle(name, e)" aria-describedby="@(role.Assignable ? null : $"{id}-locked")"
+                       data-testid="@id" />
+                <span>
+                    @AppRoles.DisplayName(name)
+                    @if (!string.IsNullOrEmpty(role.Description))
+                    {
+                        <span class="cell-sub">@role.Description</span>
+                    }
+                    @if (!role.Assignable)
+                    {
+                        <span class="cell-sub" id="@($"{id}-locked")">You can't add or remove this role: it has permissions you don't have.</span>
+                    }
+                </span>
+            </label>
+        }
+    </div>
+    @if (Errors.Count > 0)
+    {
+        <div class="field__error" id="@($"{IdPrefix}-error")"><Icon Name="error" Small="true" /><span>@string.Join(" ", Errors)</span></div>
+    }
+</fieldset>
+
+@code {
+    [Parameter, EditorRequired] public string IdPrefix { get; set; } = "role";
+    [Parameter, EditorRequired] public IReadOnlyList<RoleOptionDto> Options { get; set; } = [];
+
+    /// <summary>The checked role names; changed in place.</summary>
+    [Parameter, EditorRequired] public HashSet<string> Selected { get; set; } = [];
+    [Parameter] public IReadOnlyList<string> Errors { get; set; } = [];
+
+    private string Describedby => Errors.Count > 0 ? $"{IdPrefix}-hint {IdPrefix}-error" : $"{IdPrefix}-hint";
+
+    /// <summary>The checkbox ID for a role (role names may contain spaces).</summary>
+    public static string InputId(string prefix, string role) =>
+        $"{prefix}-{new string([.. role.Select(c => char.IsAsciiLetterOrDigit(c) ? char.ToLowerInvariant(c) : '-')])}";
+
+    /// <summary>Where the error summary sends focus: the first role the administrator can choose.</summary>
+    public static string FirstInputId(string prefix, IReadOnlyList<RoleOptionDto> options) =>
+        options.FirstOrDefault(o => o.Assignable) is { } first ? InputId(prefix, first.Name) : $"{prefix}-group";
+
+    private void Toggle(string role, ChangeEventArgs e)
+    {
+        if (e.Value is true)
+        {
+            Selected.Add(role);
+        }
+        else
+        {
+            Selected.Remove(role);
+        }
+    }
+}

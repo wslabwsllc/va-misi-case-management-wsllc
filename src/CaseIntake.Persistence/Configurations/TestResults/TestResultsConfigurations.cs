@@ -140,6 +140,7 @@ internal sealed class TestResultAuditEntryConfiguration : IEntityTypeConfigurati
         builder.Property(a => a.Actor).HasMaxLength(TestResultFieldLimits.ShortTextMaxLength).IsRequired();
         builder.Property(a => a.Action).HasMaxLength(TestResultFieldLimits.AuditActionMaxLength).IsRequired();
         builder.Property(a => a.Details).HasMaxLength(TestResultFieldLimits.MessageMaxLength);
+        builder.Property(a => a.CorrelationId).HasMaxLength(64);
         builder.HasIndex(a => a.OccurredAtUtc);
     }
 }

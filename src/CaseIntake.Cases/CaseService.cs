@@ -31,6 +31,7 @@ public sealed class CaseService(
     /// </summary>
     public async Task<Result<CaseDetailDto>> AssignAsync(long id, AssignCaseRequest request, CancellationToken ct)
     {
+        using var operation = AuditOperation.BeginIfNone(logger, "AssignCase");
         ArgumentNullException.ThrowIfNull(request);
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesView))
@@ -85,6 +86,7 @@ public sealed class CaseService(
 
     public async Task<Result<CaseDetailDto>> CreateAsync(CreateCaseRequest request, CancellationToken ct)
     {
+        using var operation = AuditOperation.BeginIfNone(logger, "CreateCase");
         ArgumentNullException.ThrowIfNull(request);
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesCreate))
@@ -145,6 +147,7 @@ public sealed class CaseService(
 
     public async Task<Result<CaseDetailDto>> UpdateAsync(long id, UpdateCaseRequest request, CancellationToken ct)
     {
+        using var operation = AuditOperation.BeginIfNone(logger, "UpdateCase");
         ArgumentNullException.ThrowIfNull(request);
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesEdit))
@@ -193,6 +196,7 @@ public sealed class CaseService(
 
     public async Task<Result<CaseDetailDto>> ChangeStatusAsync(long id, ChangeStatusRequest request, CancellationToken ct)
     {
+        using var operation = AuditOperation.BeginIfNone(logger, "ChangeCaseStatus");
         ArgumentNullException.ThrowIfNull(request);
         var actor = await currentUser.GetAsync(ct);
         if (!actor.HasPermission(Permissions.CasesView))

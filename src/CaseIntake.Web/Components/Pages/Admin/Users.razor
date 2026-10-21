@@ -1,47 +1,96 @@
 @page "/admin/users"
 @attribute [Authorize(Policy = Permissions.UsersManage)]
 @implements IDisposable
+@using CaseIntake.Contracts.Cases
 @using CaseIntake.Contracts.Common
 @using CaseIntake.Identity
 @using CaseIntake.Web.Services
 @inject IUserAdministrationService UserAdmin
 @inject StatusAnnouncer Announcer
+@inject TimeProvider Time
 @inject ILogger<Users> Logger
 
-@* User administration: supervisors add an account with one role and an initial password, which the user then changes
-   on the change-password page. Field errors come from the service (Identity's rules) through the validation store. *@
+@* User administration (ADR 0013): find people by email, role and status, open one to change their roles, status and
+   permissions, or add a person with one or more roles and an initial password, which they change after signing in.
+   Only roles within the administrator's own access are offered. Field errors come from the service through the
+   validation store. *@
 <PageShell Title="Users" Breadcrumbs="@([new Crumb("Dashboard", "")])"
-           Subtitle="Add people and choose what they can do. Fields marked * are required." />
+           Subtitle="Find people, add them and choose what they can do. Fields marked * are required." />
 
-<ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The user was not added")" Message="@_error" TestId="users-error" />
+<ErrorAlert @ref="_alert" Title="@_errorTitle" Message="@_error" TestId="users-error" />
 
 <div class="grid grid--main-side">
     <section class="card" aria-labelledby="users-heading">
         <h2 id="users-heading" class="card__header">People</h2>
-        @if (_users is null)
+        <form class="filters" @onsubmit="ApplyFiltersAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter users" data-testid="user-filters">
+            <div class="field filters__search">
+                <label class="field__label" for="user-search">Search by email</label>
+                <span class="input-icon">
+                    <Icon Name="search" Small="true" />
+                    <input id="user-search" type="search" @bind="_searchDraft" @bind:event="oninput" maxlength="256" autocomplete="off"
+                           spellcheck="false" enterkeyhint="search" data-testid="user-search" />
+                </span>
+            </div>
+            <div class="field">
+                <label class="field__label" for="user-role-filter">Role</label>
+                <select id="user-role-filter" @bind="_roleDraft" data-testid="user-role-filter">
+                    <option value="">All roles</option>
+                    @foreach (var role in _roles)
+                    {
+                        <option value="@role.Name">@AppRoles.DisplayName(role.Name)</option>
+                    }
+                </select>
+            </div>
+            <div class="field">
+                <label class="field__label" for="user-status-filter">Status</label>
+                <select id="user-status-filter" @bind="_statusDraft" data-testid="user-status-filter">
+                    <option value="@UserStatusFilter.All">All</option>
+                    <option value="@UserStatusFilter.Active">Active</option>
+                    <option value="@UserStatusFilter.Inactive">Inactive</option>
+                </select>
+            </div>
+            <div class="btn-row filters__actions">
+                <button type="submit" class="btn btn--primary" data-testid="apply-user-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
+                <button type="button" class="btn" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-user-filters">Clear</button>
+            </div>
+        </form>
+
+        @if (_page is null)
         {
             <LoadingIndicator Text="Loading users…" />
         }
+        else if (_page.TotalCount == 0)
+        {
+            <EmptyState Title="No users match these filters" Message="Try a different search, or clear the filters." IconName="search" TestId="users-empty" />
+        }
         else
         {
-            <table class="data-grid" data-testid="users-table">
-                <caption class="visually-hidden">Users and their roles</caption>
-                <thead>
-                    <tr>
-                        <th scope="col">Email</th>
-                        <th scope="col">Role</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach (var user in _users)
-                    {
+            <div class="table-wrap">
+                <table class="data-grid" aria-busy="@(_loading ? "true" : "false")" data-testid="users-table">
+                    <caption class="visually-hidden">Users, their roles and status (@UiText.ShowingRange(_page.Page, _page.PageSize, _page.TotalCount, "users"))</caption>
+                    <thead>
                         <tr>
-                            <td class="mono">@user.UserName</td>
-                            <td>@AppRoles.Describe(user.Roles)</td>
+                            <th scope="col">Email</th>
+                            <th scope="col">Roles</th>
+                            <th scope="col">Status</th>
+                            <th scope="col">Last sign-in</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @foreach (var user in _page.Items)
+                        {
+                            <tr data-testid="user-row">
+                                <td class="mono"><a href="@($"admin/users/{Uri.EscapeDataString(user.Id)}")">@user.UserName</a></td>
+                                <td>@AppRoles.Describe(user.Roles)</td>
+                                <td>@UserStatusText(user)</td>
+                                <td class="nowrap">@(user.LastSignInUtc is { } last ? UiText.Time(last) : "Never")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <PagerControl Page="_page.Page" PageSize="_page.PageSize" TotalCount="_page.TotalCount" Noun="users" Label="User list pages"
+                          OnPageChanged="GoToPageAsync" />
         }
     </section>
 
@@ -57,23 +106,7 @@
             <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" />
             <LabeledInputText Id="user-email" Label="Email address" Type="email" AutoComplete="off" Spellcheck="false" Required="true"
                               @bind-Value="_model.Email" Hint="The person signs in with this address." />
-            <div class="field">
-                <label class="field__label" for="user-role">
-                    Role<span class="field__required"><span class="field__asterisk" aria-hidden="true"> *</span><span class="visually-hidden"> (required)</span></span>
-                </label>
-                <select id="user-role" @bind="_model.Role" aria-required="true"
-                        aria-invalid="@(RoleErrors.Count > 0 ? "true" : null)" aria-describedby="@(RoleErrors.Count > 0 ? "user-role-error" : null)">
-                    <option value="">Choose a role</option>
-                    @foreach (var role in RolePermissionMap.Roles)
-                    {
-                        <option value="@role">@AppRoles.DisplayName(role)</option>
-                    }
-                </select>
-                @if (RoleErrors.Count > 0)
-                {
-                    <div class="field__error" id="user-role-error"><Icon Name="error" Small="true" /><span>@string.Join(" ", RoleErrors)</span></div>
-                }
-            </div>
+            <RoleCheckboxes IdPrefix="user-role" Options="_roles" Selected="_model.Roles" Errors="RoleErrors" />
             <LabeledInputText Id="user-password" Label="Initial password" Type="password" AutoComplete="new-password" Required="true"
                               @bind-Value="_model.Password" Hint="@($"{IdentityModule.PasswordHint} Share it with the person; they can change it after signing in.")" />
             <div class="form-actions">
@@ -89,16 +122,11 @@
     private sealed class UserModel
     {
         public string? Email { get; set; }
-        public string? Role { get; set; }
+        public HashSet<string> Roles { get; } = new(StringComparer.Ordinal);
         public string? Password { get; set; }
     }
 
-    private static readonly IReadOnlyList<KeyValuePair<string, string>> SummaryFields =
-    [
-        new(UserFieldNames.Email, "user-email"),
-        new(UserFieldNames.Role, "user-role"),
-        new(UserFieldNames.Password, "user-password"),
-    ];
+    private const int PageSize = 25;
 
     private readonly CancellationTokenSource _cts = new();
     private UserModel _model = new();
@@ -106,19 +134,37 @@
     private ValidationMessageStore _messages = default!;
     private FormErrorSummary? _summary;
     private ErrorAlert? _alert;
-    private IReadOnlyList<UserSummaryDto>? _users;
+    private IReadOnlyList<RoleOptionDto> _roles = [];
+    private PagedResult<UserSummaryDto>? _page;
+    private UserListQuery _query = new(PageSize: PageSize);
+    private string? _searchDraft;
+    private string _roleDraft = "";
+    private UserStatusFilter _statusDraft;
+    private bool _loading;
     private bool _showSummary;
     private bool _focusSummary;
     private bool _focusAlert;
     private bool _submitting;
+    private string? _errorTitle;
     private string? _error;
     private string? _added;
 
-    private IReadOnlyList<string> RoleErrors => _editContext.GetValidationMessages(new FieldIdentifier(_model, UserFieldNames.Role)).ToList();
+    private IReadOnlyList<KeyValuePair<string, string>> SummaryFields =>
+    [
+        new(UserFieldNames.Email, "user-email"),
+        new(UserFieldNames.Roles, RoleCheckboxes.FirstInputId("user-role", _roles)),
+        new(UserFieldNames.Password, "user-password"),
+    ];
+
+    private IReadOnlyList<string> RoleErrors => _editContext.GetValidationMessages(new FieldIdentifier(_model, UserFieldNames.Roles)).ToList();
+
+    private bool HasFilters => !string.IsNullOrWhiteSpace(_query.Search) || _query.Role is not null || _query.Status != UserStatusFilter.All
+        || !string.IsNullOrWhiteSpace(_searchDraft) || _roleDraft.Length > 0 || _statusDraft != UserStatusFilter.All;
 
     protected override async Task OnInitializedAsync()
     {
         NewForm();
+        await LoadRolesAsync();
         await LoadAsync();
     }
 
@@ -130,13 +176,43 @@
         _showSummary = false;
     }
 
-    private async Task LoadAsync()
+    private string UserStatusText(UserSummaryDto user) =>
+        !user.IsActive ? "Inactive" : user.IsLockedOut ? "Active, locked out" : "Active";
+
+    private async Task LoadRolesAsync()
     {
         try
         {
-            var result = await UserAdmin.ListAsync(_cts.Token);
-            _users = result.IsSuccess ? result.Value : [];
-            _error = result.IsSuccess ? null : result.Error!.Message;
+            var result = await UserAdmin.ListRoleOptionsAsync(_cts.Token);
+            _roles = result.IsSuccess ? result.Value! : [];
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5022, "RoleOptionsFailed"), "Role options failed ({ExceptionType})", ex.GetType().Name);
+            _roles = [];
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        try
+        {
+            var result = await UserAdmin.ListAsync(_query, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _page = result.Value;
+                _error = null;
+                _errorTitle = null;
+            }
+            else
+            {
+                _page ??= new([], 1, PageSize, 0);
+                ShowError("The user list could not be loaded", result.Error!.Message);
+            }
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
         {
@@ -144,8 +220,42 @@
         catch (Exception ex)
         {
             Logger.LogError(new EventId(5020, "UserListFailed"), "User list failed ({ExceptionType})", ex.GetType().Name);
-            _users = [];
-            _error = "The user list could not be loaded. Reload the page to try again.";
+            _page ??= new([], 1, PageSize, 0);
+            ShowError("The user list could not be loaded", "Reload the page to try again.");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _query = new UserListQuery(_searchDraft?.Trim() is { Length: > 0 } s ? s : null, _roleDraft.Length > 0 ? _roleDraft : null,
+            _statusDraft, 1, PageSize);
+        await LoadAsync();
+        AnnounceResults();
+    }
+
+    private async Task ClearFiltersAsync()
+    {
+        _searchDraft = null;
+        _roleDraft = "";
+        _statusDraft = UserStatusFilter.All;
+        await ApplyFiltersAsync();
+    }
+
+    private async Task GoToPageAsync(int page)
+    {
+        _query = _query with { Page = page };
+        await LoadAsync();
+    }
+
+    private void AnnounceResults()
+    {
+        if (_page is { } page && _error is null)
+        {
+            Announcer.Announce(page.TotalCount == 0 ? "No users match these filters." : UiText.ShowingRange(page.Page, page.PageSize, page.TotalCount, "users") + ".");
         }
     }
 
@@ -156,11 +266,13 @@
             return;
         }
         _error = null;
+        _errorTitle = null;
         _added = null;
         _submitting = true;
         try
         {
-            var result = await UserAdmin.CreateAsync(new CreateUserRequest(_model.Email ?? "", _model.Role ?? "", _model.Password ?? ""), _cts.Token);
+            var roles = _roles.Where(r => _model.Roles.Contains(r.Name)).Select(r => r.Name).ToList();
+            var result = await UserAdmin.CreateAsync(new CreateUserRequest(_model.Email ?? "", roles, _model.Password ?? ""), _cts.Token);
             if (result.IsSuccess)
             {
                 var user = result.Value!;
@@ -185,8 +297,7 @@
             }
             else
             {
-                _error = result.Error.Message;
-                _focusAlert = true;
+                ShowError("The user was not added", result.Error.Message);
             }
         }
         catch (OperationCanceledException) when (_cts.IsCancellationRequested)
@@ -195,13 +306,19 @@
         catch (Exception ex)
         {
             Logger.LogError(new EventId(5021, "UserCreateFailed"), "Adding a user failed ({ExceptionType})", ex.GetType().Name);
-            _error = "Something went wrong and the user was not added. Try again.";
-            _focusAlert = true;
+            ShowError("The user was not added", "Something went wrong. Try again.");
         }
         finally
         {
             _submitting = false;
         }
+    }
+
+    private void ShowError(string title, string message)
+    {
+        _errorTitle = title;
+        _error = message;
+        _focusAlert = true;
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

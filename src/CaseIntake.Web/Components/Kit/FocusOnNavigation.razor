@@ -30,7 +30,8 @@
         if (_focusAfterRender)
         {
             _focusAfterRender = false;
-            await Interop.FocusSelectorAsync(Selector);
+            // Wait briefly: on a permission cache miss AuthorizeRouteView first shows "Checking your access", without the h1.
+            await Interop.FocusSelectorAsync(Selector, waitMilliseconds: 3000);
         }
     }
 }

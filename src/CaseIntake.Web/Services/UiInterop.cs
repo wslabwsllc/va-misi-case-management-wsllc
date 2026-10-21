@@ -16,8 +16,11 @@ public sealed class UiInterop(IJSRuntime js) : IAsyncDisposable, IDisposable
 
     private Task<IJSObjectReference> Module => _module ??= js.InvokeAsync<IJSObjectReference>("import", ModulePath).AsTask();
 
-    /// <summary>Focuses the first element matching <paramref name="selector"/> (used after navigation).</summary>
-    public Task FocusSelectorAsync(string selector) => InvokeAsync("focusSelector", selector);
+    /// <summary>
+    /// Focuses the first element matching <paramref name="selector"/> (used after navigation). With
+    /// <paramref name="waitMilliseconds"/>, an element that appears within that time is focused when it does.
+    /// </summary>
+    public Task FocusSelectorAsync(string selector, int waitMilliseconds = 0) => InvokeAsync("focusSelector", selector, waitMilliseconds);
 
     /// <summary>Opens a native <c>&lt;dialog&gt;</c> modally (built-in focus trap and Esc) and reports close/cancel.</summary>
     public Task ShowDialogAsync<T>(ElementReference dialog, DotNetObjectReference<T> callbacks) where T : class =>

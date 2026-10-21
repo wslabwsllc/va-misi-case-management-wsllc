@@ -19,6 +19,8 @@ public class AuthorizationPolicyTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddIdentityModule(new ConfigurationBuilder().Build());
+        // The default matrix in memory instead of the database (no user rows: role claims only).
+        services.AddSingleton<IPermissionStore>(new InMemoryPermissionStore());
         return services.BuildServiceProvider();
     }
 

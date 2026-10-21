@@ -31,6 +31,9 @@ public static class ServiceDefaultsExtensions
             options.IncludeScopes = true);
         builder.Logging.Configure(options => options.ActivityTrackingOptions =
             ActivityTrackingOptions.TraceId | ActivityTrackingOptions.SpanId | ActivityTrackingOptions.ParentId);
+        // Error and Critical events are also stored in the error log when the host registers a sink (ADR 0015).
+        builder.Services.AddSingleton<ILoggerProvider>(sp =>
+            new ErrorCaptureLoggerProvider(sp, sp.GetService<TimeProvider>() ?? TimeProvider.System));
 
         // EF would otherwise log statements at Information; HTTP client logging is limited to warnings (no bodies ever).
         builder.Logging.AddFilter("Microsoft.EntityFrameworkCore.Database.Command", LogLevel.Warning);

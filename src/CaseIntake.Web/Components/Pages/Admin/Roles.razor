@@ -1,0 +1,117 @@
+@page "/admin/roles"
+@attribute [Authorize(Policy = Permissions.RolesManage)]
+@implements IDisposable
+@using CaseIntake.Web.Services
+@inject IRoleAdministrationService RoleAdmin
+@inject ILogger<Roles> Logger
+
+@* Role administration (ADR 0013): every role with its members and permissions; built-in roles cannot be renamed or
+   deleted, and Administrator always keeps every permission. *@
+<PageShell Title="Roles" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="Choose what each role can do. Changes apply to everyone in the role within a minute.">
+    <Actions>
+        <a class="btn btn--primary" href="admin/roles/new" data-testid="new-role"><Icon Name="add" Small="true" /> New role</a>
+    </Actions>
+</PageShell>
+
+<ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The roles could not be loaded")" Message="@_error" TestId="roles-error" />
+
+<section class="card" aria-labelledby="roles-heading">
+    <h2 id="roles-heading" class="card__header">Roles</h2>
+    @if (_roles is null)
+    {
+        <LoadingIndicator Text="Loading roles…" />
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data-grid" data-testid="roles-table">
+                <caption class="visually-hidden">Roles, their members and permissions</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">Role</th>
+                        <th scope="col">Type</th>
+                        <th scope="col" class="num">Members</th>
+                        <th scope="col">Permissions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var role in _roles)
+                    {
+                        <tr data-testid="role-row">
+                            <td>
+                                <a href="@($"admin/roles/{Uri.EscapeDataString(role.Id)}")">@AppRoles.DisplayName(role.Name)</a>
+                                @if (!string.IsNullOrEmpty(role.Description))
+                                {
+                                    <span class="cell-sub">@role.Description</span>
+                                }
+                            </td>
+                            <td>@(role.IsLocked ? "Built in, fixed" : role.IsBuiltIn ? "Built in" : "Custom")</td>
+                            <td class="num">@role.MemberCount</td>
+                            <td>@PermissionSummary(role.Permissions)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private IReadOnlyList<RoleSummaryDto>? _roles;
+    private ErrorAlert? _alert;
+    private string? _error;
+    private bool _focusAlert;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var result = await RoleAdmin.ListAsync(_cts.Token);
+            _roles = result.IsSuccess ? result.Value : [];
+            _error = result.IsSuccess ? null : result.Error!.Message;
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5025, "RoleListFailed"), "Role list failed ({ExceptionType})", ex.GetType().Name);
+            _roles = [];
+            _error = "Reload the page to try again.";
+        }
+        _focusAlert = _error is not null;
+    }
+
+    /// <summary>"All 16 permissions", "None", or the count and the first few labels.</summary>
+    internal static string PermissionSummary(IReadOnlyList<string> permissions)
+    {
+        if (permissions.Count == 0)
+        {
+            return "None";
+        }
+        if (permissions.Count == PermissionCatalog.All.Length)
+        {
+            return $"All {permissions.Count} permissions";
+        }
+        var labels = permissions.Take(3).Select(PermissionCatalog.Label);
+        var more = permissions.Count > 3 ? $" and {permissions.Count - 3} more" : "";
+        return $"{permissions.Count}: {string.Join(", ", labels)}{more}";
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

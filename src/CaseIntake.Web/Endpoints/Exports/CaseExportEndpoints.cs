@@ -80,11 +80,7 @@ public static partial class CaseExportEndpoints
     }
 
     /// <summary>Quotes a cell and neutralizes leading formula characters (=, +, -, @, tab, carriage return).</summary>
-    internal static string Cell(string value)
-    {
-        var safe = value.Length > 0 && value[0] is '=' or '+' or '-' or '@' or '\t' or '\r' ? "'" + value : value;
-        return "\"" + safe.Replace("\"", "\"\"", StringComparison.Ordinal) + "\"";
-    }
+    internal static string Cell(string value) => CsvText.Cell(value);
 
     [LoggerMessage(EventId = 5101, EventName = "CasesExported", Level = LogLevel.Information,
         Message = "{Rows} cases exported to CSV by {ActorId}")]

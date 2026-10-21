@@ -1,0 +1,254 @@
+@page "/admin/errors"
+@attribute [Authorize(Policy = Permissions.ErrorsView)]
+@implements IDisposable
+@using System.Globalization
+@using CaseIntake.Contracts.Cases
+@using CaseIntake.Contracts.Diagnostics
+@using CaseIntake.Web.Services
+@inject IErrorLogService ErrorLog
+@inject NavigationManager Navigation
+@inject StatusAnnouncer Announcer
+@inject ILogger<Errors> Logger
+
+@* The stored error log (ADR 0015): every Error and Critical log event, newest first, with its handling status. A user
+   who saw the error page can quote its reference, which is the operation ID searched here. Filters are in the query
+   string (focus stays on the form when they change). *@
+<PageShell Title="Errors" Breadcrumbs="@([new Crumb("Dashboard", "")])"
+           Subtitle="Errors the application recorded, newest first. Times are US Eastern (EDT or EST)." />
+
+<ErrorAlert @ref="_alert" Title="@(_error is null ? null : "The error log could not be loaded")" Message="@_error" TestId="errors-error" />
+
+<div class="card filters-card">
+    <form class="filters" @onsubmit="ApplyAsync" @onsubmit:preventDefault="true" role="search" aria-label="Filter errors" data-testid="error-filters">
+        <div class="field">
+            <label class="field__label" for="errors-from">From (ET)</label>
+            <input id="errors-from" type="date" @bind="_from" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="errors-to">To (ET)</label>
+            <input id="errors-to" type="date" @bind="_to" />
+        </div>
+        <div class="field">
+            <label class="field__label" for="errors-status">Status</label>
+            <select id="errors-status" @bind="_status" data-testid="errors-status">
+                <option value="">All</option>
+                @foreach (var status in Enum.GetValues<ErrorStatus>())
+                {
+                    <option value="@status">@status</option>
+                }
+            </select>
+        </div>
+        <div class="field">
+            <label class="field__label" for="errors-level">Level</label>
+            <select id="errors-level" @bind="_level">
+                <option value="">All</option>
+                @foreach (var level in Enum.GetValues<ErrorLevel>())
+                {
+                    <option value="@level">@level</option>
+                }
+            </select>
+        </div>
+        <div class="field filters__search">
+            <label class="field__label" for="errors-search">Search message, source, exception, page or reference</label>
+            <span class="input-icon">
+                <Icon Name="search" Small="true" />
+                <input id="errors-search" type="search" @bind="_search" maxlength="@ErrorQuery.SearchMaxLength" autocomplete="off" spellcheck="false" data-testid="errors-search" />
+            </span>
+        </div>
+        <div class="btn-row filters__actions">
+            <button type="submit" class="btn btn--primary" data-testid="apply-error-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
+            <button type="button" class="btn" @onclick="ClearAsync" disabled="@(ToQuery(_query with { Page = 1 }).Length == 0)">Clear</button>
+        </div>
+    </form>
+    @if (_query.Fingerprint is { } fingerprint)
+    {
+        <div class="filter-chips" role="group" aria-label="Same error filter">
+            <span class="chip">
+                Same error as @fingerprint
+                <button type="button" class="chip__remove" @onclick="() => NavigateAsync(_query with { Fingerprint = null, Page = 1 })" aria-label="Remove filter: same error">
+                    <Icon Name="close" Small="true" />
+                </button>
+            </span>
+        </div>
+    }
+</div>
+
+<section class="card card--flush mt-4" aria-labelledby="errors-heading">
+    <h2 id="errors-heading" class="card__header">Recorded errors</h2>
+    @if (_page is null)
+    {
+        <LoadingIndicator Text="Loading errors…" />
+    }
+    else if (_page.TotalCount == 0)
+    {
+        <EmptyState Title="No errors match these filters" Message="Nothing was recorded, or try other filters." IconName="success" TestId="errors-empty" />
+    }
+    else
+    {
+        <div class="table-wrap">
+            <table class="data-grid" data-testid="errors-table">
+                <caption class="visually-hidden">Recorded errors (@UiText.ShowingRange(_page.Page, _page.PageSize, _page.TotalCount, "errors"))</caption>
+                <thead>
+                    <tr>
+                        <th scope="col">When</th>
+                        <th scope="col">Level</th>
+                        <th scope="col">Status</th>
+                        <th scope="col">Message</th>
+                        <th scope="col">Source</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var e in _page.Items)
+                    {
+                        <tr data-testid="error-row">
+                            <td class="nowrap"><a href="@($"admin/errors/{e.Id}")" aria-label="@($"Error {e.Id}, {UiText.Time(e.OccurredAtUtc)}")">@UiText.Time(e.OccurredAtUtc)</a></td>
+                            <td><span class="error-level error-level--@e.Level.ToString().ToLowerInvariant()">@e.Level</span></td>
+                            <td>@e.Status</td>
+                            <td class="audit-summary">@Shorten(e.Message)@if (e.ExceptionType is { } type) { <span class="cell-sub mono">@type</span> }</td>
+                            <td class="cell-sub mono">@e.Category</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="card__footer">
+            <PagerControl Page="_page.Page" PageSize="_page.PageSize" TotalCount="_page.TotalCount" Noun="errors" Label="Error log pages"
+                          OnPageChanged="page => NavigateAsync(_query with { Page = page })" />
+        </div>
+    }
+</section>
+
+@code {
+    private const int PageSize = 50;
+    private readonly CancellationTokenSource _cts = new();
+    private ErrorQuery _query = new(PageSize: PageSize);
+    private PagedResult<ErrorSummaryDto>? _page;
+    private ErrorAlert? _alert;
+    private string? _error;
+    private bool _focusAlert;
+    private bool _announce;
+    private DateOnly? _from;
+    private DateOnly? _to;
+    private string _status = "";
+    private string _level = "";
+    private string? _search;
+
+    [SupplyParameterFromQuery(Name = "from")] private string? QueryFrom { get; set; }
+    [SupplyParameterFromQuery(Name = "to")] private string? QueryTo { get; set; }
+    [SupplyParameterFromQuery(Name = "status")] private string? QueryStatus { get; set; }
+    [SupplyParameterFromQuery(Name = "level")] private string? QueryLevel { get; set; }
+    [SupplyParameterFromQuery(Name = "q")] private string? QuerySearch { get; set; }
+    [SupplyParameterFromQuery(Name = "same")] private string? QueryFingerprint { get; set; }
+    [SupplyParameterFromQuery(Name = "page")] private string? QueryPage { get; set; }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        static DateOnly? Date(string? v) => DateOnly.TryParseExact(v, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var d) ? d : null;
+        _query = new ErrorQuery(Date(QueryFrom), Date(QueryTo),
+            Enum.TryParse<ErrorLevel>(QueryLevel, out var l) && Enum.IsDefined(l) ? l : null,
+            Enum.TryParse<ErrorStatus>(QueryStatus, out var s) && Enum.IsDefined(s) ? s : null,
+            string.IsNullOrWhiteSpace(QuerySearch) ? null : QuerySearch.Trim(),
+            string.IsNullOrWhiteSpace(QueryFingerprint) ? null : QueryFingerprint.Trim(),
+            int.TryParse(QueryPage, NumberStyles.None, CultureInfo.InvariantCulture, out var p) && p > 0 ? p : 1, PageSize);
+        (_from, _to, _status, _level, _search) = (_query.FromDate, _query.ToDate, _query.Status?.ToString() ?? "", _query.Level?.ToString() ?? "", _query.Search);
+        try
+        {
+            var result = await ErrorLog.ListAsync(_query, _cts.Token);
+            if (result.IsSuccess)
+            {
+                _page = result.Value;
+                _error = null;
+                if (_announce)
+                {
+                    _announce = false;
+                    Announcer.Announce(_page!.TotalCount == 0 ? "No errors match these filters." : UiText.ShowingRange(_page.Page, _page.PageSize, _page.TotalCount, "errors") + ".");
+                }
+            }
+            else
+            {
+                _page ??= new([], 1, PageSize, 0);
+                _error = result.Error!.FieldErrors is { Count: > 0 } f ? string.Join(" ", f.Values.SelectMany(m => m)) : result.Error.Message;
+                _focusAlert = true;
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(new EventId(5033, "ErrorListFailed"), "Error log failed ({ExceptionType})", ex.GetType().Name);
+            _page ??= new([], 1, PageSize, 0);
+            _error = "Reload the page to try again.";
+            _focusAlert = true;
+        }
+    }
+
+    private static string Shorten(string message) => message.Length <= 200 ? message : message[..200] + "…";
+
+    internal static string ToQuery(ErrorQuery q)
+    {
+        var parts = new List<string>();
+        void Add(string name, string? value)
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                parts.Add($"{name}={Uri.EscapeDataString(value)}");
+            }
+        }
+        Add("from", q.FromDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add("to", q.ToDate?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        Add("status", q.Status?.ToString());
+        Add("level", q.Level?.ToString());
+        Add("q", q.Search);
+        Add("same", q.Fingerprint);
+        Add("page", q.Page > 1 ? q.Page.ToString(CultureInfo.InvariantCulture) : null);
+        return string.Join("&", parts);
+    }
+
+    internal static string Href(ErrorQuery q) => ToQuery(q) is { Length: > 0 } s ? $"admin/errors?{s}" : "admin/errors";
+
+    private Task ApplyAsync()
+    {
+        _announce = true;
+        return NavigateAsync(_query with
+        {
+            FromDate = _from, ToDate = _to,
+            Status = Enum.TryParse<ErrorStatus>(_status, out var s) ? s : null,
+            Level = Enum.TryParse<ErrorLevel>(_level, out var l) ? l : null,
+            Search = string.IsNullOrWhiteSpace(_search) ? null : _search.Trim(),
+            Page = 1,
+        });
+    }
+
+    private Task ClearAsync()
+    {
+        _announce = true;
+        return NavigateAsync(new ErrorQuery(PageSize: PageSize));
+    }
+
+    private async Task NavigateAsync(ErrorQuery query)
+    {
+        var target = Href(query);
+        if (string.Equals(Navigation.ToBaseRelativePath(Navigation.Uri), target, StringComparison.Ordinal))
+        {
+            await OnParametersSetAsync();
+            return;
+        }
+        Navigation.NavigateTo(target);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_focusAlert && _alert is not null)
+        {
+            _focusAlert = false;
+            await _alert.FocusAsync();
+        }
+    }
+
+    public void Dispose()
+    {
+        _cts.Cancel();
+        _cts.Dispose();
+    }
+}

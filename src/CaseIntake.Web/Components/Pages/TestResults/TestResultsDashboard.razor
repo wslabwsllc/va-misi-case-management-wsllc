@@ -82,7 +82,7 @@ else if (_data is { Latest: { } latest } d)
     <div class="grid grid--3">
         <section class="card">
             <Chart Id="tr-trend" Title="Pass vs. fail trend" Description="Recent runs, oldest to newest." Kind="ChartKind.Line"
-                   Categories="_trendLabels" CategoryHeader="Run (ET)" TestId="tr-chart-trend"
+                   Categories="_trendLabels" CategoryHeader="Run" TestId="tr-chart-trend"
                    Series="@([new ChartSeries("Passed", [.. _trend.Select(r => (double)r.Counts.Passed)], "--series-3"), new ChartSeries("Failed", [.. _trend.Select(r => (double)r.Counts.Failed)], "--series-2")])" />
         </section>
         <section class="card">
@@ -97,7 +97,7 @@ else if (_data is { Latest: { } latest } d)
                    Series="@([new ChartSeries("Failed", [.. d.FailuresByModule.Select(m => (double)m.Count)], "--series-2")])" />
         </section>
         <section class="card">
-            <Chart Id="tr-duration" Title="Execution duration trend" Description="Whole-run duration in seconds." CategoryHeader="Run (ET)" TestId="tr-chart-duration"
+            <Chart Id="tr-duration" Title="Execution duration trend" Description="Whole-run duration in seconds." CategoryHeader="Run" TestId="tr-chart-duration"
                    Categories="_trendLabels"
                    Series="@([new ChartSeries("Duration (s)", [.. _trend.Select(r => Math.Round(r.Duration.TotalSeconds))], "--series-4")])" />
         </section>
