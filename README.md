@@ -255,7 +255,7 @@ docker compose --profile tests down -v --rmi local   # uninstall: containers, AL
 
 | Volume | Contents |
 |---|---|
-| `pgdata18` | PostgreSQL databases (`caseintake`, and `caseintake_e2e` for browser tests) |
+| `pgdata18-alpine` | PostgreSQL databases (`caseintake`, and `caseintake_e2e` for browser tests) |
 | `attachments` | uploaded case attachments |
 | `dataprotection` | Data Protection keys, so sign-in cookies survive restarts |
 | `testresults` | test runs (TRX files, evidence) shown in the Test results module |
@@ -278,7 +278,8 @@ dotnet build
 # 2. PostgreSQL 18 on localhost:5432 (a standalone container, separate from the Compose database)
 docker run -d --name caseintake-pg -p 5432:5432 \
   -e POSTGRES_USER=caseintake -e POSTGRES_PASSWORD=caseintake_local_only -e POSTGRES_DB=caseintake \
-  postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+  -e POSTGRES_INITDB_ARGS="--locale-provider=icu --icu-locale=en-US" \
+  postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873
 
 # 3. Schema and seed data (safe to rerun; run again after pulling new migrations)
 dotnet run --project src/CaseIntake.MigrationService

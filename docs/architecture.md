@@ -37,7 +37,7 @@ flowchart LR
     end
 
     subgraph volumes["Named volumes"]
-        pg[(pgdata18)]
+        pg[(pgdata18-alpine)]
         att[(attachments)]
         dp[(dataprotection)]
         tr[(testresults)]
