@@ -90,6 +90,11 @@ public static class EffectivePermissions
                 result.Remove(permission);
             }
         }
+        // A case cannot be created without a veteran lookup, so creating always grants it (even over a Deny).
+        if (result.Contains(Permissions.CasesCreate))
+        {
+            result.Add(Permissions.VeteranLookup);
+        }
         return result.ToImmutable();
     }
 }

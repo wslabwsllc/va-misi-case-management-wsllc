@@ -20,12 +20,12 @@
 @* Case intake (E5-S4, redesign). Validation uses the shared CaseRequestValidator, so the messages are exactly the
    server's. Submit validates first, then asks "Are you sure you want to submit?"; Cancel there keeps every value, and
    only Submit sends the request, once (the button is disabled and shows progress while it runs). Success navigates to
-   the new case; a failure keeps the values and shows the error. The optional veteran lookup is a separate form (Enter
+   the new case; a failure keeps the values and shows the error. The required veteran lookup is a separate form (Enter
    in the SSN box looks up instead of creating the case). The SSN is cleared after every completed lookup; only the
    last four digits of a found veteran are kept, and only if the user chooses "Use this veteran". A new or failed
    lookup clears any previously selected veteran. *@
 <PageShell Title="Open a new case" DocumentTitle="New case" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])"
-           Subtitle="Only the title is required. You can add the rest later." ShowBackButton="true" />
+           Subtitle="The title and a veteran are required. You can add the rest later." ShowBackButton="true" />
 
 <ErrorAlert @ref="_submitAlert" Title="@(_submitError is null ? null : "The case was not created")" Message="@_submitError" TestId="intake-error" />
 
@@ -73,9 +73,9 @@
             <section class="card" aria-labelledby="lookup-heading" data-testid="lookup-section">
                 <div class="card__header lookup-header">
                     <span class="lookup-header__icon" aria-hidden="true"><Icon Name="person" /></span>
-                    <h2 id="lookup-heading">Veteran lookup<span class="card__subtitle">Optional</span></h2>
+                    <h2 id="lookup-heading">Veteran lookup<span class="card__subtitle">Required</span></h2>
                 </div>
-                <p class="page-header__subtitle">Attach the veteran's name and address to this case. You can also create the case without a lookup.</p>
+                <p class="page-header__subtitle">Attach the veteran's name and address to this case. A case cannot be submitted without a veteran.</p>
                 <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
                     <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
                                       Hint="Nine digits, with or without dashes (NNN-NN-NNNN)."
@@ -364,7 +364,7 @@
                     ShowLookupProblem("Access denied: your role is not allowed to look up veterans.", "error");
                     break;
                 default:
-                    ShowLookupProblem("The veteran lookup service is unavailable right now. You can continue the intake without it and try again later.", "warning");
+                    ShowLookupProblem("The veteran lookup service is unavailable right now. Your entries are kept; try the lookup again before submitting.", "warning");
                     break;
             }
         }
@@ -375,7 +375,7 @@
         catch (Exception ex)
         {
             Logger.LogError(new EventId(5004, "VeteranLookupUiFailed"), "Veteran lookup from intake failed ({ExceptionType})", ex.GetType().Name);
-            ShowLookupProblem("The veteran lookup service is unavailable right now. You can continue the intake without it and try again later.", "warning");
+            ShowLookupProblem("The veteran lookup service is unavailable right now. Your entries are kept; try the lookup again before submitting.", "warning");
         }
         finally
         {

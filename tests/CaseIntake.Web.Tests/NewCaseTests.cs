@@ -1,3 +1,4 @@
+using CaseIntake.Contracts.Cases;
 using CaseIntake.Contracts.Common;
 using CaseIntake.Contracts.Security;
 using CaseIntake.Contracts.VeteranLookup;
@@ -104,7 +105,7 @@ public class NewCaseTests : WebTestContext
     }
 
     [TestCase(VeteranLookupOutcome.InvalidInput, "Invalid SSN format")]
-    [TestCase(VeteranLookupOutcome.Unavailable, "unavailable right now. You can continue the intake")]
+    [TestCase(VeteranLookupOutcome.Unavailable, "unavailable right now. Your entries are kept")]
     [TestCase(VeteranLookupOutcome.Forbidden, "Access denied")]
     public void Lookup_problems_are_reported_in_an_alert_and_the_SSN_is_cleared(VeteranLookupOutcome outcome, string text)
     {
@@ -171,12 +172,13 @@ public class NewCaseTests : WebTestContext
         CaseService.CreateError = new Error(ErrorKind.ExternalUnavailable, "Down", "The case service is unavailable.");
         var cut = RenderPage();
         cut.Find("#intake-title").Input("Keep this title");
+        AttachVeteran(cut);
 
         SubmitAndConfirm(cut);
 
         Assert.Contains("The case service is unavailable.", cut.Find("[data-testid=intake-error]").TextContent);
         Assert.Equal("Keep this title", cut.Find("#intake-title").GetAttribute("value"));
-        JSInterop.VerifyFocusAsyncInvoke();
+        JSInterop.VerifyFocusAsyncInvoke(calledTimes: 2);   // "Use this veteran" focuses Remove, then the alert
     }
 
     [Test]
@@ -186,6 +188,7 @@ public class NewCaseTests : WebTestContext
             new Dictionary<string, string[]> { [CaseFieldNames.Title] = ["Title is taken by server rule."] });
         var cut = RenderPage();
         cut.Find("#intake-title").Input("A valid title");
+        AttachVeteran(cut);
 
         SubmitAndConfirm(cut);
 
@@ -208,6 +211,7 @@ public class NewCaseTests : WebTestContext
     {
         var cut = RenderPage();
         cut.Find("#intake-title").Input("Valid intake title");
+        AttachVeteran(cut);
 
         cut.Find("[data-testid=intake-form]").Submit();
 
@@ -226,6 +230,7 @@ public class NewCaseTests : WebTestContext
     {
         var cut = RenderPage();
         cut.Find("#intake-title").Input("Keep me as typed");
+        AttachVeteran(cut);
         cut.Find("#intake-description").Input("Line one\nLine two");
         cut.Find("[data-testid=intake-priority-High]").Change(true);
 
@@ -251,10 +256,23 @@ public class NewCaseTests : WebTestContext
     }
 
     [Test]
+    public void Submit_without_an_attached_veteran_is_rejected_and_never_opens_the_confirmation()
+    {
+        var cut = RenderPage();
+        cut.Find("#intake-title").Input("Valid intake title");
+
+        cut.Find("[data-testid=intake-form]").Submit();
+
+        Assert.Contains($"Veteran: {CaseRequestValidator.VeteranRequiredMessage}", cut.Find("#error-summary").TextContent);
+        Assert.Empty(cut.FindAll("[data-testid=confirm-intake] .modal__footer"));
+    }
+
+    [Test]
     public async Task Confirming_creates_exactly_one_case_and_opens_it()
     {
         var cut = RenderPage();
         cut.Find("#intake-title").Input("Only one case");
+        AttachVeteran(cut);
         cut.Find("[data-testid=intake-form]").Submit();
         var submit = cut.Find("[data-testid=confirm-intake-submit]");
 

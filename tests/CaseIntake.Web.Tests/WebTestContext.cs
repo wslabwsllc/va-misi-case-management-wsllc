@@ -109,6 +109,15 @@ public abstract class WebTestContext : BunitContext
         CurrentUser.Actor = FakeCurrentUser.ForRole(role, $"id-{role}");
     }
 
+    /// <summary>Looks up a synthetic veteran and chooses "Use this veteran" (intake requires one).</summary>
+    protected void AttachVeteran(IRenderedComponent<Components.Pages.Cases.NewCase> cut)
+    {
+        Lookup.Returns("900-00-0000", new VeteranLookupResult(VeteranLookupOutcome.Found, "Pat Example", "1 Example Way"));
+        cut.Find("#lookup-ssn").Input("900-00-0000");
+        cut.Find("[data-testid=lookup-form]").Submit();
+        cut.Find("[data-testid=use-veteran]").Click();
+    }
+
     /// <summary>Submits the case edit form and confirms "Are you sure you want to submit?" (nothing is sent before that).</summary>
     protected static void SubmitEdit(IRenderedComponent<Components.Pages.Cases.CaseDetail> cut)
     {

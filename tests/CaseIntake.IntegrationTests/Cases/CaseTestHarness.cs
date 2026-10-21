@@ -79,7 +79,7 @@ internal sealed class CaseTestHarness
         Actor = TestActors.Supervisor;
         try
         {
-            return Ok(await Service.CreateAsync(new CreateCaseRequest(title, description, veteran), CancellationToken.None));
+            return Ok(await Service.CreateAsync(new CreateCaseRequest(title, description, veteran ?? Builders.Veteran()), CancellationToken.None));
         }
         finally
         {

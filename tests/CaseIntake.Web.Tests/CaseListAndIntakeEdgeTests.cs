@@ -202,6 +202,7 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
         CaseService.CreateException = new InvalidOperationException("db");
         var cut = Render<NewCase>();
         cut.Find("#intake-title").Input("Keep this title");
+        AttachVeteran(cut);
 
         cut.Find("[data-testid=intake-form]").Submit();
         cut.Find("[data-testid=confirm-intake-submit]").Click();
@@ -219,12 +220,13 @@ public class CaseListAndIntakeEdgeTests : WebTestContext
             new Dictionary<string, string[]> { [CaseFieldNames.VeteranAddress] = ["Address is too long."] });
         var cut = Render<NewCase>();
         cut.Find("#intake-title").Input("A valid title");
+        AttachVeteran(cut);
 
         cut.Find("[data-testid=intake-form]").Submit();
         cut.Find("[data-testid=confirm-intake-submit]").Click();
 
         Assert.Contains("Veteran: Address is too long.", cut.Find("#error-summary").TextContent);
-        JSInterop.VerifyFocusAsyncInvoke();
+        JSInterop.VerifyFocusAsyncInvoke(calledTimes: 2);   // "Use this veteran" focuses Remove, then the summary
     }
 
     [Test]

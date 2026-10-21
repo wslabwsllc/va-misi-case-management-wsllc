@@ -97,6 +97,15 @@ public abstract class E2ETestBase
         await Expect(dialog).ToBeHiddenAsync();
     }
 
+    /// <summary>Looks up the mock's known veteran and attaches them; intake requires a veteran.</summary>
+    protected static async Task AttachVeteranAsync(IPage page)
+    {
+        await page.Locator("#lookup-ssn").FillAsync("900-12-3456");
+        await PressAsync(page.GetByTestId("lookup-button"));
+        await PressAsync(page.GetByTestId("use-veteran"));
+        await Expect(page.GetByTestId("selected-veteran")).ToBeVisibleAsync();
+    }
+
     /// <summary>The dashboard's heading is a greeting for the time of day (Eastern).</summary>
     protected static readonly Regex DashboardHeading = new("^Good (morning|afternoon|evening)");
 

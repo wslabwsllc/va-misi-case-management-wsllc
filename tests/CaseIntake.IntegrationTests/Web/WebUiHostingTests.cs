@@ -182,7 +182,7 @@ public sealed partial class WebUiHostingTests : ClassFixture<WebUiHostingTests, 
     {
         var cases = ActivatorUtilities.CreateInstance<CaseService>(fixture.Factory.Services,
             new FakeCurrentUser { Actor = FakeCurrentUser.ForRole(AppRoles.CaseWorker, "seed-user") });
-        await cases.CreateAsync(new CreateCaseRequest("=SUM(1,2) exported title", null, null), CancellationToken.None);
+        await cases.CreateAsync(new CreateCaseRequest("=SUM(1,2) exported title", null, Builders.Veteran()), CancellationToken.None);
         using var client = fixture.NewSession();
         await client.SignInAsync(DemoAccountsHttp.QualityAnalyst);
 
