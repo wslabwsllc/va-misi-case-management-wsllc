@@ -224,7 +224,7 @@
                                         <span class="cell-sub">@dueState</span>
                                     }
                                 </td>
-                                <td class="nowrap">@UiText.Time(c.UpdatedAtUtc)</td>
+                                <td class="nowrap">@UiText.TimeNoZone(c.UpdatedAtUtc)</td>
                                 <td class="cell-actions">
                                     @* Row menu: a disclosure of links (no script), raised above the row's covering link. *@
                                     <details class="row-menu row-raise" data-testid="row-menu">
@@ -292,8 +292,8 @@
         new(CaseSortField.Priority, "Priority"),
         new(CaseSortField.Category, "Category"),
         new(CaseSortField.Owner, "Owner"),
-        new(CaseSortField.DueOn, "Due date"),
-        new(CaseSortField.UpdatedAt, "Updated"),
+        new(CaseSortField.DueOn, "Due date (ET)"),
+        new(CaseSortField.UpdatedAt, "Updated (ET)"),
         new(null, "Actions"),
     ];
 

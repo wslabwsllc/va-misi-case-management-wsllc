@@ -5,6 +5,7 @@
    that is not a real date stays in the field with an inline error (aria-invalid) and leaves the bound value unchanged,
    so nothing is ever applied or submitted from a half-typed date. Parsing is calendar-only: no time zone, no day shift. *@
 <span class="field__hint" id="@FormatId">@UiText.DateHint</span>
+<span class="input-wrap input-action">
 <input @attributes="AdditionalAttributes"
        id="@Id"
        type="text"
@@ -17,6 +18,11 @@
        @onchange="OnChangeAsync"
        aria-invalid="@(_invalid || Invalid ? "true" : null)"
        aria-describedby="@DescribedByValue" />
+@* The calendar is the browser's own picker on a hidden ISO date input; ParseDate accepts its yyyy-MM-dd value. *@
+<input type="date" class="date-picker-proxy" tabindex="-1" aria-hidden="true" value="@Value?.ToString("yyyy-MM-dd")" @onchange="OnChangeAsync" />
+<button type="button" class="btn btn--subtle btn--icon input-action__button" aria-label="Choose date from calendar"
+        data-date-picker><Icon Name="calendar" Small="true" /></button>
+</span>
 @if (_invalid)
 {
     <div class="field__error" id="@LocalErrorId">

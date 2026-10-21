@@ -58,7 +58,7 @@ public class AuditLogPageTests : WebTestContext
         cut.Find("[data-testid=audit-filters]").Submit();
 
         Assert.EndsWith("admin/audit?category=Users&q=permissions", Navigation.Uri);
-        foreach (var input in cut.FindAll("[data-testid=audit-filters] input, [data-testid=audit-filters] select"))
+        foreach (var input in cut.FindAll("[data-testid=audit-filters] input:not([aria-hidden]), [data-testid=audit-filters] select"))
         {
             Assert.NotNull(cut.Find($"label[for='{input.Id}']"));
         }
