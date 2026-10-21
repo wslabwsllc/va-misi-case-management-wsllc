@@ -142,9 +142,9 @@ Consequences of this design:
 |---|---|
 | `src/CaseIntake.Domain` | `Case` (private setters, mutation methods), `CaseWorkflow`, `CaseAuditEntry`/`AuditEvent`, triage rules, `Attachment`, test-result entities, `EasternTime` |
 | `src/CaseIntake.Contracts` | `ICaseService`, `ICaseAssignmentService`, `ICaseNotificationService`, `IAttachmentService`, `IVeteranLookupClient`, `ITestResultsService`, `IUserAdministrationService`, `ICurrentUser`/`OperationActor`, `RolePermissionMap`, `Result<T>`/`Error`, event ID ranges |
-| `src/CaseIntake.Persistence` | `AppDbContext` (Identity + all module tables), entity configurations per module, migrations, `AuditAppender`, `AuditTrailGuard`, UTC converters, `DatabaseInitializer`, `SeedRunner` |
+| `src/CaseIntake.Persistence` | `AppDbContext` (Identity + all module tables), entity configurations per module, migrations, `AuditAppender`, `AuditTrailGuard`, `SystemAudit` (system audit log), `PermissionQueries` (stored role permissions and overrides), UTC converters, `DatabaseInitializer`, `SeedRunner` |
 | `src/CaseIntake.Cases` | `CaseService` (intake, detail, edit, list, status, assignment, audit trail), `CaseAssigneeDirectory`, `CaseNotificationService`, case seed |
-| `src/CaseIntake.Identity` | cookie auth, permission policies, `ICurrentUser` adapters, revalidation, sign-in/out, password change, user administration, security headers, demo-user seed |
+| `src/CaseIntake.Identity` | cookie auth, permission policies, `PermissionResolver`, `ICurrentUser` adapters, revalidation, sign-in/out, password change, user and role administration (`AdministrationRules`), audit log and error log services, System Health, security headers, demo-user and default-permission seed |
 | `src/CaseIntake.Attachments` | `AttachmentService`, `FileSystemAttachmentStore`, file signature checks, startup reconciler |
 | `src/CaseIntake.VeteranLookup.Client` | typed `HttpClient` with a Polly retry/timeout pipeline |
 | `src/CaseIntake.VeteranLookup.Mock` | standalone minimal API that serves the Government contract verbatim |
@@ -242,7 +242,7 @@ last line of defence.
 - `Components/Kit`: the accessible component kit (labelled inputs, `FormErrorSummary`, `ModalDialog`, `PagerControl`,
   `StatusPill`, `PriorityBadge`, `KpiTile`, SVG `Chart`, `FocusOnNavigation`, `StatusAnnouncerOutlet`).
 - `Components/Pages`: Home (dashboard), Cases (list, new, detail with workflow stepper, triage, attachments, audit
-  trail), My work, Notifications, Reports, Admin/Users, TestResults/*.
+  trail), My work, Notifications, Reports, Admin (Users, Roles, Audit log, Errors, System health), TestResults/*.
 - Circuit-scoped UI services: `ShellState` (title, breadcrumbs, back target, focus memory), `StatusAnnouncer` (polite
   live region), `PageActivity` (progress bar), `UiInterop` (JS module), `CaseDashboardService`.
 - `CaseActivitySignal` is a **process-wide singleton** event that carries no data. When a page changes a case it
@@ -263,24 +263,35 @@ Authentication is local ASP.NET Core Identity with cookie authentication (`CaseI
 ([ADR 0007](adr/0007-roles-and-permissions.md)). Data Protection keys persist on the `dataprotection` volume, so
 cookies survive container recreation.
 
-**Permissions, not roles, are checked.** `RolePermissionMap` in `Contracts` is the single source of truth. A user's
-permissions are the union over their role claims, computed at call time by `OperationActorFactory`. One authorization
-policy is registered for each entry in `RolePermissionMap.AllPermissions`, with the policy name equal to the permission
-name, and the fallback policy requires an authenticated user. `AllPermissions` is a list kept separately from the
-per-role grants, so a permission granted to a role but missing from it has no policy.
+**Permissions, not roles, are checked.** Since Change 1 ([ADR 0013](adr/0013-database-roles-and-permissions.md)) the
+database is the source of truth for who holds what: role permissions and per-user Allow/Deny overrides are stored in
+PostgreSQL and changed on the Roles and Users pages. A user's effective permissions are the union over their roles,
+plus Allow overrides, minus Deny overrides (Deny always wins; an inactive user holds nothing), resolved by
+`PermissionResolver` and built into the actor snapshot by `OperationActorFactory`. `RolePermissionMap` in `Contracts`
+defines the permission names and the **defaults** the seed writes into each built-in role once; administrators' later
+changes are never overwritten. One authorization policy is registered for each entry in
+`RolePermissionMap.AllPermissions`, with the policy name equal to the permission name, and the fallback policy requires
+an authenticated user. `PermissionCatalog` describes every permission for the UI, and a test keeps it equal to
+`AllPermissions`.
 
-| Permission | Auditor | IntakeClerk | CaseWorker | Supervisor | QualityAnalyst |
-|---|:-:|:-:|:-:|:-:|:-:|
-| `cases.view` | ✓ | ✓ | ✓ | ✓ | ✓ |
-| `attachments.download` | ✓ | ✓ | ✓ | ✓ | |
-| `cases.create`, `veteran.lookup`, `attachments.upload` | | ✓ | ✓ | ✓ | |
-| `cases.edit` | | | ✓ | ✓ | |
-| `cases.transition.Triaged.InProgress`, `…InProgress.Resolved` | | | ✓ | ✓ | |
-| `cases.transition.New.Triaged`, `…Resolved.Closed`, `…Resolved.InProgress` | | | | ✓ | |
-| `cases.assign`, `users.manage` | | | | ✓ | |
-| `testresults.view`, `testresults.manage` | | | | | ✓ |
+Default grants (seeded; administrators can change all but Administrator's):
 
-The four case roles nest (Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor). QualityAnalyst is separate.
+| Permission | Auditor | IntakeClerk | CaseWorker | Supervisor | QualityAnalyst | Administrator |
+|---|:-:|:-:|:-:|:-:|:-:|:-:|
+| `cases.view` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| `attachments.download` | ✓ | ✓ | ✓ | ✓ | | ✓ |
+| `cases.create`, `veteran.lookup`, `attachments.upload` | | ✓ | ✓ | ✓ | | ✓ |
+| `cases.edit` | | | ✓ | ✓ | | ✓ |
+| `cases.transition.Triaged.InProgress`, `…InProgress.Resolved` | | | ✓ | ✓ | | ✓ |
+| `cases.transition.New.Triaged`, `…Resolved.Closed`, `…Resolved.InProgress` | | | | ✓ | | ✓ |
+| `cases.assign`, `users.manage` | | | | ✓ | | ✓ |
+| `audit.view` | ✓ | | | ✓ | | ✓ |
+| `testresults.view`, `testresults.manage` | | | | | ✓ | ✓ |
+| `roles.manage`, `errors.view`, `errors.manage`, `system.health` | | | | | | ✓ |
+
+The four case roles nest (Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor). QualityAnalyst is separate, and
+Administrator always holds every permission. Administration never escalates: nobody grants, removes or overrides a
+permission they do not hold, manages a user who holds one, or changes their own account (`AdministrationRules`).
 
 The same `OperationActor` snapshot backs three enforcement points, so they cannot disagree:
 
@@ -290,8 +301,9 @@ The same `OperationActor` snapshot backs three enforcement points, so they canno
    buttons appear.
 
 **Session revalidation.** `IdentityRevalidatingAuthenticationStateProvider` re-checks each open circuit against the
-database every `Identity:RevalidationInterval` (1 minute). A deleted user or a changed security stamp (password or
-role change) replaces the circuit's principal with an anonymous user. Cookie-authenticated HTTP requests use the same
+database every `Identity:RevalidationInterval` (1 minute). A deleted or deactivated user, or a changed security stamp
+(password or role change), replaces the circuit's principal with an anonymous user. Permission and override changes
+need no new sign-in: they apply at the next permission check. Cookie-authenticated HTTP requests use the same
 interval through `SecurityStampValidatorOptions`.
 
 **Security headers** (`SecurityHeadersMiddleware`, on every response): a CSP with `script-src 'self'` and no inline
@@ -344,8 +356,8 @@ block, but only if the actor holds `cases.assign` and the user is assignable. Th
 | has `cases.edit` only (CaseWorker) | **take** an unassigned case for themselves, or **hand back** their own |
 | anyone else, or any Closed case | nothing |
 
-Assignable users are members of any role that grants `cases.edit`. `CaseAssigneeDirectory` derives that list from the
-permission map, so it is never hard-coded.
+Assignable users are active users who hold `cases.edit` through their roles or an override. `CaseAssigneeDirectory`
+reads that list from the stored permissions (`PermissionQueries`), so it is never hard-coded.
 
 ### Optimistic concurrency
 
@@ -478,12 +490,20 @@ flowchart LR
 
 One database and one `AppDbContext` (derived from `IdentityDbContext<AppUser, AppRole, string>`). Each module owns
 its entity configurations under `Persistence/Configurations/<Module>/`. Migrations are named
-`<Epic>_<Change>`: `E1_Baseline`, `E2_Cases`, `E4_Attachments`, `E5_TestResults`, `E5_CaseTriageAndNotifications`.
+`<Epic>_<Change>`: `E1_Baseline`, `E2_Cases`, `E4_Attachments`, `E5_TestResults`, `E5_CaseTriageAndNotifications`,
+and for Change 1 `C1_DatabasePermissions`, `C2_AuditLog`, `C3_ErrorLog`. The Change 1 tables (`Permissions`,
+`RolePermissions`, `UserPermissionOverrides`, `AuditLogEntries`, `ErrorLogEntries`) are described in
+[ADR 0013](adr/0013-database-roles-and-permissions.md), [ADR 0014](adr/0014-system-audit-log.md) and
+[ADR 0015](adr/0015-error-log-and-system-health.md).
 
 ```mermaid
 erDiagram
     AspNetUsers ||--o{ AspNetUserRoles : has
     AspNetRoles ||--o{ AspNetUserRoles : has
+    AspNetRoles ||--o{ RolePermissions : grants
+    Permissions ||--o{ RolePermissions : "granted as"
+    AspNetUsers ||--o{ UserPermissionOverrides : "Allow or Deny"
+    Permissions ||--o{ UserPermissionOverrides : overrides
     Cases ||--o{ CaseAuditEntries : "audited by (restrict delete)"
     Cases ||--o{ Attachments : has
     AspNetUsers ||..o| CaseNotificationCursors : "UserId (no FK)"
@@ -574,6 +594,9 @@ analyzers, the banned-API analyzer, and lock-file restores. `Directory.Packages.
 
 ([ADR 0004](adr/0004-test-strategy.md), [testing.md](testing.md))
 
+Every suite uses NUnit 4.4 and the browser suite Playwright 1.52 ([ADR 0016](adr/0016-nunit-and-playwright-pins.md));
+`tests/CaseIntake.Testing` holds the shared NUnit support (class fixtures, `IAsyncLifetime`, `TheoryData`, `Assert`).
+
 | Suite | Scope | Hosts |
 |---|---|---|
 | `Cases.Tests`, `Identity.Tests`, `Attachments.Tests`, `VeteranLookup.Tests` | domain rules, the permission matrix, sanitizing, client retries, contract conformance | none, or an in-process mock |
@@ -597,7 +620,7 @@ imports these results itself ([§8](#8-test-results-module)), which closes the l
 |---|---|
 | a new feature module | new `src/CaseIntake.X` referencing only `Persistence`/`Domain`/`Contracts`; public interface in `Contracts/X`; an `AddXModule(configuration)` extension; a call in `Program.cs`; add the name to `FeatureModules` in `ProjectGraph.cs` |
 | a table | entity in `Domain`, configuration in `Persistence/Configurations/X`, `DbSet` in `AppDbContext`, then `dotnet ef migrations add <Epic>_<Change> -p src/CaseIntake.Persistence -s src/CaseIntake.Persistence -o Migrations` |
-| a permission | constant in `Permissions`; add it to `RolePermissionMap.AllPermissions` (this is what registers the policy); grant it to roles in `RolePermissionMap`; update the matrix and counts in `RolePermissionMapTests`; `[Authorize(Policy = …)]` on the page **and** a check in the service |
+| a permission | constant in `Permissions`; add it to `RolePermissionMap.AllPermissions` (this is what registers the policy) and describe it in `PermissionCatalog`; set its default roles in `RolePermissionMap` (the seed grants new defaults to existing databases once; administrators can change them afterwards on the Roles page); update the matrix and counts in `RolePermissionMapTests`; `[Authorize(Policy = …)]` on the page **and** a check in the service |
 | a workflow edge | add it to `CaseWorkflow.Edges` and `RolePermissionMap.TransitionPermissions` (which gives it to Supervisor and registers its policy); if case workers may take it, also add it to the `Casework` grants; update `RolePermissionMapTests`. The UI buttons, dashboard "pending tasks" and audit then follow automatically |
 | an audited case action | a constant in `AuditActions` (never rename existing ones), a factory on `AuditEvent`, and `AuditAppender.Append` in the same context as the change |
 | seed data | an `ISeedContributor` with an `Order`, registered in the migrator with `AddSeedContributor<T>()`; it must be idempotent |
