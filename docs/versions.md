@@ -28,7 +28,7 @@ run natively on the build machine while the final images are linux/amd64.
 |---|---|
 | SDK build stages and test image | `mcr.microsoft.com/dotnet/sdk:10.0.402-noble@sha256:0d99ebf1ccad15037b5c98c9fe8979d6b8dbac23812feae2277a0b277b5c5ffa` |
 | App and lookup mock runtime | `mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac` |
-| Database (Compose `db`, Testcontainers) | `postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336` |
+| Database (`docker/db/Dockerfile` base for Compose `db`; Testcontainers) | `postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873` |
 | Image vulnerability scan (`scripts/scan-images.sh`; not part of the build or tests) | `aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa` |
 
 ## OS packages
@@ -88,7 +88,8 @@ Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
    `dotnet restore CaseIntake.sln --force-evaluate` and commit the changed `packages.lock.json` files.
 2. For an image, look up the new digest with `docker buildx imagetools inspect <image>:<tag>` (the `Digest:` line of
    the index) and update every reference: `Dockerfile`, `src/CaseIntake.VeteranLookup.Mock/Dockerfile`,
-   `docker-compose.yml`, `PostgresDatabaseFixture.PostgresImage`, `scripts/scan-images.sh` (Trivy) and the README.
+   `docker-compose.yml`, `docker/db/Dockerfile`, `PostgresDatabaseFixture.PostgresImage`, `scripts/scan-images.sh`
+   (Trivy) and the README.
 3. OS packages follow the live mirror on every uncached build. For a pinned build pass `APT_SNAPSHOT` (not older than the base images' build date).
 4. Update the tables above.
 5. Run `docker compose run --rm tests`; the consistency test fails until the files agree.
