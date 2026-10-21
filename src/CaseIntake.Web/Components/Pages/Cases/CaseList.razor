@@ -37,7 +37,7 @@
         <label class="field__label" for="case-search">Search by case ID, title or description</label>
         <span class="input-icon input-icon--lg">
             <Icon Name="search" Small="true" />
-            <input id="case-search" type="search" value="@_searchDraft" @oninput="OnSearchInput" @onkeydown="OnSearchKeyDown"
+            <input id="case-search" type="search" @bind="_searchDraft" @bind:event="oninput" @bind:after="SearchChangedAsync" @onkeydown="OnSearchKeyDown"
                    maxlength="@CaseFieldLimits.SearchMaxLength" enterkeyhint="search" autocomplete="off" aria-describedby="case-search-hint" />
         </span>
         <span class="field__hint" id="case-search-hint">Results update as you type.</span>
@@ -503,9 +503,9 @@
     /// <summary>Any filter change: back to page 1, applied immediately.</summary>
     private Task ApplyAsync(Func<CaseListState, CaseListState> change) => NavigateAsync(change(_state) with { Page = 1 });
 
-    private async Task OnSearchInput(ChangeEventArgs e)
+    // @bind (not value= with @oninput) so a slow round trip never overwrites characters still being typed.
+    private async Task SearchChangedAsync()
     {
-        _searchDraft = e.Value?.ToString();
         _searchDebounce?.Cancel();
         _searchDebounce?.Dispose();
         var debounce = _searchDebounce = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);

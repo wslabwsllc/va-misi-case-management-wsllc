@@ -84,7 +84,7 @@ else
                         <label class="field__label" for="execution-search">Test name</label>
                         <span class="input-icon">
                             <Icon Name="search" Small="true" />
-                            <input id="execution-search" type="search" value="@_search" @oninput="OnSearchInput" maxlength="200" autocomplete="off" />
+                            <input id="execution-search" type="search" @bind="_search" @bind:event="oninput" @bind:after="SearchChangedAsync" maxlength="200" autocomplete="off" />
                         </span>
                     </div>
                     <div class="field">
@@ -331,9 +331,9 @@ else
         return ApplyAsync(new TestExecutionQuery(RunId, PageSize: TestResultsQueryString.ExecutionPageSize));
     }
 
-    private async Task OnSearchInput(ChangeEventArgs e)
+    // @bind (not value= with @oninput) so a slow round trip never overwrites characters still being typed.
+    private async Task SearchChangedAsync()
     {
-        _search = e.Value?.ToString();
         _debounce?.Cancel();
         var debounce = _debounce = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         try

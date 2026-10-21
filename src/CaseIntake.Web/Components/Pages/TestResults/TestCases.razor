@@ -31,7 +31,7 @@
             <label class="field__label" for="testcase-search">Name, story or requirement</label>
             <span class="input-icon">
                 <Icon Name="search" Small="true" />
-                <input id="testcase-search" type="search" value="@_search" @oninput="OnSearchInput" maxlength="200" autocomplete="off" />
+                <input id="testcase-search" type="search" @bind="_search" @bind:event="oninput" @bind:after="SearchChangedAsync" maxlength="200" autocomplete="off" />
             </span>
         </div>
         <div class="field">
@@ -192,9 +192,9 @@
         return ApplyAsync(new TestCaseQuery(PageSize: TestResultsQueryString.CasePageSize));
     }
 
-    private async Task OnSearchInput(ChangeEventArgs e)
+    // @bind (not value= with @oninput) so a slow round trip never overwrites characters still being typed.
+    private async Task SearchChangedAsync()
     {
-        _search = e.Value?.ToString();
         _debounce?.Cancel();
         var debounce = _debounce = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
         try

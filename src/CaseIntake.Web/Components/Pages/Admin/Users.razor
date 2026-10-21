@@ -33,7 +33,7 @@
                 <label class="field__label" for="user-search">Search people by email</label>
                 <span class="input-icon">
                     <Icon Name="search" Small="true" />
-                    <input id="user-search" type="search" value="@_searchDraft" @oninput="OnSearchInput" maxlength="256" autocomplete="off"
+                    <input id="user-search" type="search" @bind="_searchDraft" @bind:event="oninput" @bind:after="SearchChangedAsync" maxlength="256" autocomplete="off"
                            spellcheck="false" enterkeyhint="search" data-testid="user-search" />
                 </span>
             </div>
@@ -323,9 +323,9 @@
         }
     }
 
-    private async Task OnSearchInput(ChangeEventArgs e)
+    // @bind (not value= with @oninput) so a slow round trip never overwrites characters still being typed.
+    private async Task SearchChangedAsync()
     {
-        _searchDraft = e.Value?.ToString();
         _searchDebounce?.Cancel();
         _searchDebounce?.Dispose();
         var debounce = _searchDebounce = CancellationTokenSource.CreateLinkedTokenSource(_cts.Token);
