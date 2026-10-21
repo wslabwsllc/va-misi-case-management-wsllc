@@ -72,7 +72,7 @@ public sealed record TestReportFile(byte[] Content, string FileName, string Cont
 
 public sealed record ImportSummaryDto(int Imported, int Skipped, int Executions, int Artifacts, IReadOnlyList<string> Problems);
 
-/// <summary>Run list filters. Dates are UTC calendar days, inclusive.</summary>
+/// <summary>Run list filters. Dates are US Eastern calendar days (by run start), inclusive.</summary>
 public sealed record TestRunQuery(int Page = 1, int PageSize = 25, TestRunStatus? Status = null, string? Environment = null,
     string? Search = null, DateOnly? FromDate = null, DateOnly? ToDate = null);
 

@@ -116,6 +116,7 @@ internal sealed partial class TestResultImporter(
         {
             throw new InvalidDataException("run.json runKey does not match its folder.");
         }
+        Validate(manifest);
 
         List<string> problems = [];
         var secrets = KnownSecrets();
@@ -149,6 +150,7 @@ internal sealed partial class TestResultImporter(
         var evidence = await ReadEvidenceAsync(folder, problems, ct);
         var catalog = await ReadCatalogAsync(folder, problems, ct);
         var suiteSummaries = new List<object>();
+        var suiteStatuses = new List<string>();
         var cases = new Dictionary<string, TestCase>(StringComparer.Ordinal);
         // One execution per test per run (unique index), even if two suites report the same test name.
         var seenInRun = new HashSet<string>(StringComparer.Ordinal);
@@ -262,9 +264,11 @@ internal sealed partial class TestResultImporter(
             }
 
             suiteSummaries.Add(new { name = suite.Name, type = type.ToString(), status = suiteStatus, tests = results.Count, message = EvidenceRedactor.RedactAndCap(suite.Message, 500, secrets) });
+            suiteStatuses.Add(suiteStatus);
         }
 
-        artifactCount += await AddServerLogsAsync(db, run, folder, manifest.ServerLogs, secrets, problems, ct);
+        List<string> rawLogs = [];
+        artifactCount += await AddServerLogsAsync(db, run, folder, manifest.ServerLogs, secrets, problems, rawLogs, ct);
 
         run.SuitesJson = JsonSerializer.Serialize(suiteSummaries);
         run.Total = run.Executions.Count;
@@ -273,7 +277,7 @@ internal sealed partial class TestResultImporter(
         run.Skipped = run.Executions.Count(e => e.Outcome == TestOutcome.Skipped);
         run.Blocked = run.Executions.Count(e => e.Outcome == TestOutcome.Blocked);
         run.NotExecuted = run.Executions.Count(e => e.Outcome == TestOutcome.NotExecuted);
-        run.Status = DeriveStatus(manifest, suiteSummaries.Count, run);
+        run.Status = DeriveStatus(manifest, suiteStatuses, run);
 
         db.TestResultAuditEntries.Add(new TestResultAuditEntry
         {
@@ -281,19 +285,40 @@ internal sealed partial class TestResultImporter(
             Details = string.Create(CultureInfo.InvariantCulture, $"Run {run.RunKey}: {run.Total} results, {artifactCount} evidence files"),
         });
         await db.SaveChangesAsync(ct);
+        DeleteRawLogs(rawLogs, problems);
 
         await UpdateLastOutcomesAsync(db, run, cases.Values, ct);
         TestResultsLog.RunImported(logger, run.RunKey, run.Total, run.Failed, run.NotExecuted, artifactCount);
         return new RunImport(run.Executions.Count, artifactCount, problems);
     }
 
-    private static TestRunStatus DeriveStatus(RunManifest manifest, int suites, TestRun run)
+    /// <summary>
+    /// Rejects a run.json whose lists or suite names are JSON null, so it is reported as a broken run instead of failing
+    /// the whole import pass.
+    /// </summary>
+    private static void Validate(RunManifest manifest)
     {
-        if (string.Equals(manifest.Status, nameof(TestRunStatus.FailedToStart), StringComparison.OrdinalIgnoreCase) || (suites > 0 && run.Total == run.NotExecuted && manifest.Suites.All(s => s.Status != "Completed")))
+        if (manifest.Suites is null || manifest.ServerLogs is null)
+        {
+            throw new InvalidDataException("run.json suites and serverLogs must be lists.");
+        }
+        if (manifest.Suites.Any(s => s is null || string.IsNullOrWhiteSpace(s.Name)))
+        {
+            throw new InvalidDataException("run.json lists a suite without a name.");
+        }
+    }
+
+    /// <summary>
+    /// Uses the suite statuses as imported (a Completed suite whose TRX is missing or too large is NoResults), not as the
+    /// manifest reports them, so a run with suites that produced nothing never reads as Completed.
+    /// </summary>
+    private static TestRunStatus DeriveStatus(RunManifest manifest, List<string> suiteStatuses, TestRun run)
+    {
+        if (string.Equals(manifest.Status, nameof(TestRunStatus.FailedToStart), StringComparison.OrdinalIgnoreCase) || (suiteStatuses.Count > 0 && run.Total == run.NotExecuted && suiteStatuses.All(s => s != "Completed")))
         {
             return TestRunStatus.FailedToStart;
         }
-        return manifest.Suites.Any(s => s.Status != "Completed" || s.Trx is null) || run.NotExecuted > 0 || string.Equals(manifest.Status, nameof(TestRunStatus.Partial), StringComparison.OrdinalIgnoreCase)
+        return suiteStatuses.Any(s => s != "Completed") || run.NotExecuted > 0 || string.Equals(manifest.Status, nameof(TestRunStatus.Partial), StringComparison.OrdinalIgnoreCase)
             ? TestRunStatus.Partial
             : TestRunStatus.Completed;
     }
@@ -351,7 +376,11 @@ internal sealed partial class TestResultImporter(
         return title.Length <= TestResultFieldLimits.NameMaxLength ? title : title[..TestResultFieldLimits.NameMaxLength];
     }
 
-    private async Task<int> AddServerLogsAsync(AppDbContext db, TestRun run, string folder, List<string> logs, IReadOnlyCollection<string> secrets, List<string> problems, CancellationToken ct)
+    /// <summary>
+    /// Writes a redacted copy of each server log and references it. The raw files are returned in
+    /// <paramref name="rawLogs"/> and removed only after the run is saved, so a failed save can be retried.
+    /// </summary>
+    private async Task<int> AddServerLogsAsync(AppDbContext db, TestRun run, string folder, List<string> logs, IReadOnlyCollection<string> secrets, List<string> problems, List<string> rawLogs, CancellationToken ct)
     {
         var added = 0;
         foreach (var name in logs)
@@ -369,11 +398,11 @@ internal sealed partial class TestResultImporter(
             }
             try
             {
-                // Only a redacted copy is kept and served; the raw file is removed.
+                // Only a redacted copy is kept and served; the raw file is removed once the run is saved.
                 var redactedPath = Path.ChangeExtension(path, ".redacted.log");
                 var text = await File.ReadAllTextAsync(path, ct);
                 await File.WriteAllTextAsync(redactedPath, EvidenceRedactor.Redact(text, secrets), ct);
-                File.Delete(path);
+                rawLogs.Add(path);
                 added += AddArtifact(db, run, null, TestArtifactKind.ServerLog, redactedPath, "Server log (redacted)", problems) ? 1 : 0;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -382,6 +411,21 @@ internal sealed partial class TestResultImporter(
             }
         }
         return added;
+    }
+
+    private static void DeleteRawLogs(List<string> rawLogs, List<string> problems)
+    {
+        foreach (var path in rawLogs)
+        {
+            try
+            {
+                File.Delete(path);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                problems.Add($"A raw server log could not be removed ({ex.GetType().Name}); only its redacted copy is shown.");
+            }
+        }
     }
 
     private bool AddArtifact(AppDbContext db, TestRun run, TestExecution? execution, TestArtifactKind kind, string fullPath, string? caption, List<string> problems)
