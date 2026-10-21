@@ -217,6 +217,15 @@ public class EffectivePermissionsTests
     }
 
     [Test]
+    public void Creating_cases_always_grants_veteran_lookup_even_over_a_deny()
+    {
+        var result = EffectivePermissions.Compute(true, [Permissions.CasesCreate],
+            new Dictionary<string, PermissionEffect> { [Permissions.VeteranLookup] = PermissionEffect.Deny });
+
+        Assert.Contains(Permissions.VeteranLookup, result);
+    }
+
+    [Test]
     public void An_inactive_user_holds_nothing_even_with_allow_overrides()
     {
         var result = EffectivePermissions.Compute(false, FromRoles,

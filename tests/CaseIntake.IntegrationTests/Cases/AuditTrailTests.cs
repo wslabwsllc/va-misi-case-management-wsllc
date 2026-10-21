@@ -77,7 +77,7 @@ public class AuditTrailTests : ClassFixture<AuditTrailTests, PostgresDatabaseFix
 
         await using var check = database.CreateContext();
         var stored = await check.CaseAuditEntries.SingleAsync(a => a.CaseId == detail.Id);
-        Assert.Null(stored.Details);
+        Assert.Equal("Veteran snapshot recorded", stored.Details);   // unchanged by the "tampered" attempt
     }
 
     [Test]

@@ -25,6 +25,7 @@ public static class CaseFieldNames
 {
     public const string Title = "Title";
     public const string Description = "Description";
+    public const string Veteran = "Veteran";
     public const string VeteranName = "Veteran.Name";
     public const string VeteranAddress = "Veteran.Address";
     public const string VeteranSsnLast4 = "Veteran.SsnLast4";

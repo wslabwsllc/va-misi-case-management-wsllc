@@ -276,6 +276,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal(3, cut.FindAll("#intake-owner option").Count);   // Unassigned and the two people who work cases
 
         cut.Find("#intake-title").Input("Triage at intake");
+        AttachVeteran(cut);
         cut.Find("#intake-category").Change("Travel");
         cut.Find("#intake-owner").Change("caseworker@example.test");
         cut.Find("[data-testid=intake-form]").Submit();

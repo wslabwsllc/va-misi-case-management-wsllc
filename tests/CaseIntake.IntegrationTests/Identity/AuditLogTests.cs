@@ -160,7 +160,7 @@ public class AuditLogTests : ClassFixture<AuditLogTests, IdentityWebFixture>
     {
         var actor = FakeCurrentUser.ForRole(AppRoles.Supervisor, DemoUsers.Supervisor.Id);
         var cases = ActivatorUtilities.CreateInstance<CaseService>(Services, new FakeCurrentUser { Actor = actor });
-        var created = (await cases.CreateAsync(new CreateCaseRequest($"Audit log case {Guid.NewGuid():N}", null, null), CancellationToken.None)).Value!;
+        var created = (await cases.CreateAsync(new CreateCaseRequest($"Audit log case {Guid.NewGuid():N}", null, TestKit.Builders.Veteran()), CancellationToken.None)).Value!;
         await cases.ChangeStatusAsync(created.Id, new ChangeStatusRequest(Domain.Cases.CaseStatus.Triaged, created.Version), CancellationToken.None);
 
         var entries = await AboutAsync(AuditEntityTypes.Case, created.Id.ToString(System.Globalization.CultureInfo.InvariantCulture));

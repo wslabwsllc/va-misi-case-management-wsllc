@@ -20,7 +20,7 @@ public class CaseIntakeTests : ClassFixture<CaseIntakeTests, PostgresDatabaseFix
         var harness = new CaseTestHarness(database) { Actor = TestActors.CaseWorker };
 
         var created = CaseTestHarness.Ok(await harness.Service.CreateAsync(
-            new CreateCaseRequest("  Leaking roof at clinic  ", "Synthetic description.", null), CancellationToken.None));
+            new CreateCaseRequest("  Leaking roof at clinic  ", "Synthetic description.", Builders.Veteran()), CancellationToken.None));
 
         Assert.True(created.Id > 0);
         Assert.Equal("Leaking roof at clinic", created.Title);
@@ -72,7 +72,7 @@ public class CaseIntakeTests : ClassFixture<CaseIntakeTests, PostgresDatabaseFix
         var harness = new CaseTestHarness(database);
         var before = await CountCasesAsync();
 
-        var error = CaseTestHarness.Fail(await harness.Service.CreateAsync(new CreateCaseRequest(title, description, null), CancellationToken.None), ErrorKind.Validation);
+        var error = CaseTestHarness.Fail(await harness.Service.CreateAsync(new CreateCaseRequest(title, description, Builders.Veteran()), CancellationToken.None), ErrorKind.Validation);
 
         Assert.NotEmpty(error.FieldErrors!);
         Assert.Equal(before, await CountCasesAsync());
@@ -88,6 +88,19 @@ public class CaseIntakeTests : ClassFixture<CaseIntakeTests, PostgresDatabaseFix
             new CreateCaseRequest("Valid title", null, new VeteranSnapshot(new string('n', 201), "1 Example Way", "12-4")), CancellationToken.None), ErrorKind.Validation);
 
         Assert.Equal([CaseFieldNames.VeteranName, CaseFieldNames.VeteranSsnLast4], error.FieldErrors!.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(before, await CountCasesAsync());
+    }
+
+    [Test]
+    public async Task A_case_without_a_veteran_is_rejected_without_persistence()
+    {
+        var harness = new CaseTestHarness(database);
+        var before = await CountCasesAsync();
+
+        var error = CaseTestHarness.Fail(await harness.Service.CreateAsync(
+            new CreateCaseRequest("Valid title", null, null), CancellationToken.None), ErrorKind.Validation);
+
+        Assert.Equal([CaseFieldNames.Veteran], error.FieldErrors!.Keys);
         Assert.Equal(before, await CountCasesAsync());
     }
 

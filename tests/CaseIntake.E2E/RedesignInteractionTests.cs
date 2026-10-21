@@ -105,6 +105,7 @@ public sealed class RedesignInteractionTests : E2ETestBase
             await page.Locator("#intake-title").FillAsync("Kept after cancel");
             await page.Locator("#intake-description").FillAsync("First line\nSecond line");
             await page.GetByTestId("intake-priority-High").CheckAsync();
+            await AttachVeteranAsync(page);
             await PressAsync(page.GetByTestId("create-case"));
             var dialog = page.GetByTestId("confirm-intake");
             await Expect(dialog.Locator("h2")).ToHaveTextAsync("Are you sure you want to submit?");

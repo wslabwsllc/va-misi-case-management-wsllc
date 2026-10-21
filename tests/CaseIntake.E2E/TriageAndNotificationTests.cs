@@ -55,6 +55,7 @@ public sealed partial class TriageAndNotificationTests : E2ETestBase
                 await page.GetByTestId("intake-priority-Urgent").CheckAsync();   // the priority radio group (segmented buttons)
                 await Expect(page.Locator("#intake-due-hint")).ToContainTextAsync("Urgent priority: 2 days");
                 await page.Locator("#intake-category").SelectOptionAsync("Claims");
+                await AttachVeteranAsync(page);
                 await PressAsync(page.GetByTestId("create-case"));
                 await ConfirmSubmitAsync(page, "confirm-intake");
                 await Expect(page).ToHaveURLAsync(CaseUrl());

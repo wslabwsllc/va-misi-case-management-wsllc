@@ -81,9 +81,9 @@ public sealed class CaseTriageTests : ClassFixture<CaseTriageTests, PostgresData
     {
         _harness.Actor = TestActors.Supervisor;   // choosing an owner at intake needs cases.assign
         var urgent = CaseTestHarness.Ok(await _harness.Service.CreateAsync(
-            new CreateCaseRequest("Urgent intake", null, null, new CaseTriage(CasePriority.Urgent, CaseCategory.Claims, null, null)), CancellationToken.None));
+            new CreateCaseRequest("Urgent intake", null, Builders.Veteran(), new CaseTriage(CasePriority.Urgent, CaseCategory.Claims, null, null)), CancellationToken.None));
         var explicitDue = CaseTestHarness.Ok(await _harness.Service.CreateAsync(
-            new CreateCaseRequest("Explicit due", null, null, new CaseTriage(CasePriority.Low, CaseCategory.Records, " caseworker@example.test ", new DateOnly(2027, 1, 15))), CancellationToken.None));
+            new CreateCaseRequest("Explicit due", null, Builders.Veteran(), new CaseTriage(CasePriority.Low, CaseCategory.Records, " caseworker@example.test ", new DateOnly(2027, 1, 15))), CancellationToken.None));
 
         Assert.Equal(new DateOnly(2026, 10, 18), urgent.DueOn);
         Assert.Equal(new DateOnly(2027, 1, 15), explicitDue.DueOn);
@@ -95,20 +95,20 @@ public sealed class CaseTriageTests : ClassFixture<CaseTriageTests, PostgresData
     public async Task Only_supervisors_choose_an_owner_at_intake_and_only_people_who_work_cases_can_own_one()
     {
         _harness.Actor = TestActors.CaseWorker;
-        var workerAssigns = await _harness.Service.CreateAsync(new CreateCaseRequest("Worker assigns at intake", null, null,
+        var workerAssigns = await _harness.Service.CreateAsync(new CreateCaseRequest("Worker assigns at intake", null, Builders.Veteran(),
             new CaseTriage(CasePriority.High, CaseCategory.Billing, "caseworker@example.test", null)), CancellationToken.None);
         Assert.Equal("Your role cannot choose the owner of a case.", workerAssigns.Error!.FieldErrors![CaseFieldNames.AssignedTo].Single());
 
         _harness.Actor = TriageIdentity.IntakeClerk;
-        var clerkAssigns = await _harness.Service.CreateAsync(new CreateCaseRequest("Clerk assigns", null, null,
+        var clerkAssigns = await _harness.Service.CreateAsync(new CreateCaseRequest("Clerk assigns", null, Builders.Veteran(),
             new CaseTriage(CasePriority.High, CaseCategory.Billing, "caseworker@example.test", null)), CancellationToken.None);
-        var clerkLeavesOpen = await _harness.Service.CreateAsync(new CreateCaseRequest("Clerk leaves owner empty", null, null,
+        var clerkLeavesOpen = await _harness.Service.CreateAsync(new CreateCaseRequest("Clerk leaves owner empty", null, Builders.Veteran(),
             new CaseTriage(CasePriority.High, CaseCategory.Billing, null, null)), CancellationToken.None);
 
         _harness.Actor = TestActors.Supervisor;
-        var toClerk = await _harness.Service.CreateAsync(new CreateCaseRequest("Assigned to a clerk", null, null,
+        var toClerk = await _harness.Service.CreateAsync(new CreateCaseRequest("Assigned to a clerk", null, Builders.Veteran(),
             new CaseTriage(CasePriority.Medium, CaseCategory.General, "intakeclerk@example.test", null)), CancellationToken.None);
-        var toNobody = await _harness.Service.CreateAsync(new CreateCaseRequest("Assigned to nobody known", null, null,
+        var toNobody = await _harness.Service.CreateAsync(new CreateCaseRequest("Assigned to nobody known", null, Builders.Veteran(),
             new CaseTriage(CasePriority.Medium, CaseCategory.General, "ghost@example.test", null)), CancellationToken.None);
 
         Assert.Equal("Your role cannot choose the owner of a case.", clerkAssigns.Error!.FieldErrors![CaseFieldNames.AssignedTo].Single());
@@ -229,7 +229,7 @@ public sealed class CaseTriageTests : ClassFixture<CaseTriageTests, PostgresData
     [Test]
     public async Task Invalid_triage_values_are_rejected_before_the_database()
     {
-        var result = await _harness.Service.CreateAsync(new CreateCaseRequest("Bad triage", null, null,
+        var result = await _harness.Service.CreateAsync(new CreateCaseRequest("Bad triage", null, Builders.Veteran(),
             new CaseTriage((CasePriority)9, (CaseCategory)99, null, new DateOnly(1999, 12, 31))), CancellationToken.None);
 
         Assert.Equal([CaseFieldNames.Category, CaseFieldNames.DueOn, CaseFieldNames.Priority], result.Error!.FieldErrors!.Keys.Order());

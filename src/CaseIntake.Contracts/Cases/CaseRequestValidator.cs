@@ -12,6 +12,7 @@ public static class CaseRequestValidator
 {
     public const string ValidationCode = "Validation";
     public const string ValidationMessage = "Some fields need attention.";
+    public const string VeteranRequiredMessage = "Look up and attach a veteran before submitting.";
 
     /// <returns>A <see cref="ErrorKind.Validation"/> error with field errors, or null when the request is valid.</returns>
     public static Error? Validate(CreateCaseRequest request)
@@ -21,6 +22,10 @@ public static class CaseRequestValidator
         if (request.Veteran is { } veteran)
         {
             errors.AddRange(CaseTextRules.ValidateVeteran(veteran.Name, veteran.Address, veteran.SsnLast4));
+        }
+        else
+        {
+            errors.Add(new FieldError(CaseFieldNames.Veteran, VeteranRequiredMessage));
         }
         if (request.Triage is { } triage)
         {

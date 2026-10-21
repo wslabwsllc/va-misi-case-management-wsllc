@@ -1,11 +1,13 @@
 using CaseIntake.Contracts.Cases;
 using CaseIntake.Contracts.Common;
 using CaseIntake.Domain.Cases;
+using CaseIntake.TestKit;
 
 namespace CaseIntake.Cases.Tests;
 
 public class CaseTextRulesTests
 {
+    private static readonly VeteranSnapshot Veteran = Builders.Veteran();
     private const string Supplementary = "\U0001D538";   // MATHEMATICAL DOUBLE-STRUCK CAPITAL A: one scalar, two UTF-16 units
 
     [TestCase(0, false)]
@@ -15,7 +17,7 @@ public class CaseTextRulesTests
     [TestCase(201, false)]
     public void Title_length_boundaries(int length, bool valid)
     {
-        var error = CaseRequestValidator.Validate(new CreateCaseRequest(new string('t', length), null, null));
+        var error = CaseRequestValidator.Validate(new CreateCaseRequest(new string('t', length), null, Veteran));
 
         AssertTitle(valid, error);
     }
@@ -24,7 +26,7 @@ public class CaseTextRulesTests
     [TestCase(4001, false)]
     public void Description_length_boundaries(int length, bool valid)
     {
-        var error = CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", new string('d', length), null));
+        var error = CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", new string('d', length), Veteran));
 
         if (valid)
         {
@@ -42,13 +44,13 @@ public class CaseTextRulesTests
     [TestCase(null)]
     [TestCase("")]
     public void Description_is_optional(string? description) =>
-        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", description, null)));
+        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", description, Veteran)));
 
     [TestCase("     ")]
     [TestCase("\t\n  ")]
     public void Whitespace_only_title_is_required_error(string title)
     {
-        var error = CaseRequestValidator.Validate(new CreateCaseRequest(title, null, null));
+        var error = CaseRequestValidator.Validate(new CreateCaseRequest(title, null, Veteran));
 
         Assert.Equal([CaseTextRules.TitleRequiredMessage], error!.FieldErrors![CaseFieldNames.Title]);
     }
@@ -56,9 +58,9 @@ public class CaseTextRulesTests
     [Test]
     public void Title_is_trimmed_before_counting()
     {
-        Assert.NotNull(CaseRequestValidator.Validate(new CreateCaseRequest("   abcd   ", null, null)));
-        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest("   abcde   ", null, null)));
-        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest(" " + new string('x', 200) + " ", null, null)));
+        Assert.NotNull(CaseRequestValidator.Validate(new CreateCaseRequest("   abcd   ", null, Veteran)));
+        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest("   abcde   ", null, Veteran)));
+        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest(" " + new string('x', 200) + " ", null, Veteran)));
         Assert.Equal("abcde", CaseTextRules.NormalizeTitle("  abcde \t"));
     }
 
@@ -69,8 +71,8 @@ public class CaseTextRulesTests
         var twoHundredOne = string.Concat(Enumerable.Repeat(Supplementary, 201));
         var fourThousand = string.Concat(Enumerable.Repeat(Supplementary, 4000));  // 8000 UTF-16 units
 
-        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest(five, fourThousand, null)));
-        Assert.NotNull(CaseRequestValidator.Validate(new CreateCaseRequest(twoHundredOne, null, null)));
+        Assert.Null(CaseRequestValidator.Validate(new CreateCaseRequest(five, fourThousand, Veteran)));
+        Assert.NotNull(CaseRequestValidator.Validate(new CreateCaseRequest(twoHundredOne, null, Veteran)));
         Assert.Equal(5, CaseTextRules.CountScalarValues(five));
     }
 
@@ -87,8 +89,8 @@ public class CaseTextRulesTests
     public void Malformed_utf16_and_nul_are_rejected(string text)
     {
         Assert.Null(CaseTextRules.CountScalarValues(text));
-        Assert.True(CaseRequestValidator.Validate(new CreateCaseRequest(text, null, null))!.FieldErrors!.ContainsKey(CaseFieldNames.Title));
-        Assert.True(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", text, null))!.FieldErrors!.ContainsKey(CaseFieldNames.Description));
+        Assert.True(CaseRequestValidator.Validate(new CreateCaseRequest(text, null, Veteran))!.FieldErrors!.ContainsKey(CaseFieldNames.Title));
+        Assert.True(CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", text, Veteran))!.FieldErrors!.ContainsKey(CaseFieldNames.Description));
     }
 
     [Test]
@@ -102,10 +104,19 @@ public class CaseTextRulesTests
     [Test]
     public void Multiple_field_errors_are_reported_together()
     {
-        var error = CaseRequestValidator.Validate(new CreateCaseRequest("", new string('d', 4001), null));
+        var error = CaseRequestValidator.Validate(new CreateCaseRequest("", new string('d', 4001), Veteran));
 
         Assert.Equal(CaseRequestValidator.ValidationCode, error!.Code);
         Assert.Equal([CaseFieldNames.Description, CaseFieldNames.Title], error.FieldErrors!.Keys.Order(StringComparer.Ordinal));
+    }
+
+    [Test]
+    public void A_case_without_a_veteran_is_rejected()
+    {
+        var error = CaseRequestValidator.Validate(new CreateCaseRequest("Valid title", null, null));
+
+        Assert.Equal([CaseFieldNames.Veteran], error!.FieldErrors!.Keys);
+        Assert.Equal([CaseRequestValidator.VeteranRequiredMessage], error.FieldErrors[CaseFieldNames.Veteran]);
     }
 
     [TestCase("Pat Example", "1 Example Way", "1234", null)]
