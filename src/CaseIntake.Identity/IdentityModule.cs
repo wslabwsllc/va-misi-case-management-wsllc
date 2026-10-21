@@ -9,6 +9,7 @@ using CaseIntake.Persistence.Seeding;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Components.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -55,12 +56,14 @@ public static class IdentityModule
             options.ExpireTimeSpan = TimeSpan.FromHours(8);
             options.SlidingExpiration = true;
             // A visitor opening the site root sees the landing page; deep links still go to sign-in with a return URL.
+            // The Location stays absolute, like the default handler's login redirect.
             var redirectToLogin = options.Events.OnRedirectToLogin;
             options.Events.OnRedirectToLogin = context =>
             {
                 if (context.Request.Path == "/")
                 {
-                    context.RedirectUri = context.Request.PathBase + AccountRoutes.Welcome;
+                    var request = context.Request;
+                    context.RedirectUri = UriHelper.BuildAbsolute(request.Scheme, request.Host, request.PathBase, AccountRoutes.Welcome);
                 }
                 return redirectToLogin(context);
             };
