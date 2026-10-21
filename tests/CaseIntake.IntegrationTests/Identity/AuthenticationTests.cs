@@ -37,7 +37,7 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
 
         using var root = await session.Client.GetAsync("/");
         Assert.Equal(HttpStatusCode.Redirect, root.StatusCode);
-        Assert.Equal("/welcome", root.Headers.Location!.AbsolutePath);
+        Assert.Equal("http://localhost/welcome", root.Headers.Location!.ToString());
 
         using var page = await session.Client.GetAsync("/welcome");
         Assert.Equal(HttpStatusCode.OK, page.StatusCode);
@@ -146,9 +146,13 @@ public class AuthenticationTests(IdentityWebFixture fixture) : IClassFixture<Ide
         var cleared = AuthCookie(logout);
         Assert.NotNull(cleared);
         Assert.Contains("expires=Thu, 01 Jan 1970", cleared, StringComparison.OrdinalIgnoreCase);
-        using var after = await session.Client.GetAsync("/");
+        // Signed out means anonymous again: the site root shows the landing page and protected pages go back to sign-in.
+        using var root = await session.Client.GetAsync("/");
+        Assert.Equal(HttpStatusCode.Redirect, root.StatusCode);
+        Assert.Equal("http://localhost/welcome", root.Headers.Location!.ToString());
+        using var after = await session.Client.GetAsync("/cases");
         Assert.Equal(HttpStatusCode.Redirect, after.StatusCode);
-        Assert.StartsWith("http://localhost/account/login", after.Headers.Location!.ToString(), StringComparison.Ordinal);
+        Assert.Equal("http://localhost/account/login?ReturnUrl=%2Fcases", after.Headers.Location!.ToString());
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3004);
     }
 
