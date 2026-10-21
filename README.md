@@ -461,6 +461,7 @@ Phones and tablets: the app adapts below 1024 px and 768 px and is installable a
 <summary><b>Documents</b></summary>
 
 - [Architecture](docs/architecture.md)
+- [Architecture overview](docs/architecture-overview.md)
 - [ADRs](docs/adr/README.md)
 - [Versions](docs/versions.md)
 - [Assumptions and limitations](docs/assumptions-and-limitations.md)
@@ -471,6 +472,8 @@ Phones and tablets: the app adapts below 1024 px and 768 px and is installable a
 - [Accessibility review](docs/accessibility-review.md).
 - [Epic plan](docs/Epic_Plan.md)
 - [Implementation prompt](docs/implementation-prompt.md)
+- [Contributors](docs/contributors.md)
+- [Contributor declaration](docs/contributor-declaration.md)
 Traceability and the requirement-change note are produced at G3/G4.
 
 </details>
@@ -480,10 +483,13 @@ Traceability and the requirement-change note are produced at G3/G4.
 <details>
 <summary><b>Contributors</b></summary>
 
-- Dr. Janar Senthurpandi
+- Rikhin Bhuta
 - Alhagie Bai Cham
 - Kabir Shaikh
-- Rikhin Bhuta
+- Dr. Janarthanan Senthurpandi
 - Antony Pon Jeyakumar Selvaraj
+
+Who built what: [docs/contributors.md](docs/contributors.md). Formal declaration (Amendment 0002):
+[docs/contributor-declaration.md](docs/contributor-declaration.md).
 
 </details>
