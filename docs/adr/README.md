@@ -19,5 +19,6 @@ MADR-style records (context, decision, alternatives, tradeoffs, consequences). C
 | [0013](0013-database-roles-and-permissions.md) | Database-backed roles, permissions and user administration | E3 | accepted |
 | [0014](0014-system-audit-log.md) | System-wide audit log, correlation IDs and the audit viewer | E3 | accepted |
 | [0015](0015-error-log-and-system-health.md) | Stored error log, System Health and error pages | E3 | accepted |
+| [0016](0016-nunit-and-playwright-pins.md) | NUnit 4.4 and Playwright 1.52 for every test suite (supersedes the framework choice in 0004) | E1 | accepted |
 
 The render-mode and accessibility records required by E1-S8 are 0010 and 0011.

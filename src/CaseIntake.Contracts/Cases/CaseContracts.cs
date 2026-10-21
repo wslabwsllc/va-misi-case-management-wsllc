@@ -15,7 +15,11 @@ public sealed record VeteranSnapshot(string Name, string Address, string SsnLast
 public sealed record CaseSummaryDto(long Id, string Title, CaseStatus Status,
     DateTimeOffset CreatedAtUtc, DateTimeOffset UpdatedAtUtc,
     CasePriority Priority = CasePriority.Medium, CaseCategory Category = CaseCategory.General,
-    string? AssignedTo = null, DateOnly? DueOn = null);
+    string? AssignedTo = null, DateOnly? DueOn = null, string? DescriptionPreview = null)
+{
+    /// <summary>Characters of the description carried by list rows (the list shows two lines; the case page shows all).</summary>
+    public const int PreviewLength = 200;
+}
 public sealed record CaseDetailDto(long Id, string Title, string? Description, CaseStatus Status,
     DateTimeOffset CreatedAtUtc, string CreatedBy, DateTimeOffset UpdatedAtUtc, string UpdatedBy,
     uint Version, VeteranSnapshot? Veteran, IReadOnlyList<CaseStatus> AllowedNextStatuses,
@@ -33,7 +37,9 @@ public enum SortDirection { Ascending, Descending }
 /// <summary>
 /// Case list query. Every filter is optional and they combine with AND. <paramref name="AssignedTo"/> matches the owner's
 /// user name exactly (<see cref="UnassignedFilter"/> = no owner); <paramref name="OverdueOnly"/> keeps open cases whose
-/// due date is before today (UTC); the date ranges are inclusive UTC instants.
+/// due date is before today (UTC); the created and updated ranges are inclusive UTC instants and the due range is
+/// inclusive calendar days. <paramref name="Search"/> matches the title or description, or the case ID exactly when it
+/// is a number (an optional leading "#" is ignored).
 /// </summary>
 public sealed record CaseListQuery(int Page = 1, int PageSize = 25,
     IReadOnlyCollection<CaseStatus>? Statuses = null, string? Search = null,
@@ -41,7 +47,8 @@ public sealed record CaseListQuery(int Page = 1, int PageSize = 25,
     IReadOnlyCollection<CasePriority>? Priorities = null, IReadOnlyCollection<CaseCategory>? Categories = null,
     string? AssignedTo = null, bool OverdueOnly = false,
     DateTimeOffset? CreatedFromUtc = null, DateTimeOffset? CreatedToUtc = null,
-    DateTimeOffset? UpdatedFromUtc = null, DateTimeOffset? UpdatedToUtc = null)
+    DateTimeOffset? UpdatedFromUtc = null, DateTimeOffset? UpdatedToUtc = null,
+    DateOnly? DueFrom = null, DateOnly? DueTo = null)
 {
     /// <summary>The <see cref="AssignedTo"/> value that selects cases without an owner.</summary>
     public const string UnassignedFilter = "(unassigned)";
@@ -84,4 +91,18 @@ public interface ICaseNotificationService
     Task<Result<CaseNotificationFeed>> GetFeedAsync(int max, CancellationToken ct);
     Task<Result<int>> GetUnreadCountAsync(CancellationToken ct);
     Task<Result<CaseNotificationFeed>> MarkAllReadAsync(CancellationToken ct);
+
+    /// <summary>Marks one notification (an activity entry in the user's feed) as read; unknown IDs are NotFound.</summary>
+    Task<Result<CaseNotificationFeed>> MarkReadAsync(long notificationId, CancellationToken ct);
+}
+
+/// <summary>How case list search text selects a case by ID (shared by the service and its test fakes).</summary>
+public static class CaseSearch
+{
+    /// <summary>The case ID the search text names ("42" or "#42"), or null when it is not a positive whole number.</summary>
+    public static long? IdOf(string? search)
+    {
+        var text = search?.Trim().TrimStart('#');
+        return long.TryParse(text, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var id) && id > 0 ? id : null;
+    }
 }

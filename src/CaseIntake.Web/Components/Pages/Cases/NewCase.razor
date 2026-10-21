@@ -17,41 +17,54 @@
 @inject TimeProvider Time
 @inject ILogger<NewCase> Logger
 
-@* Case intake (E5-S4). Validation uses the shared CaseRequestValidator, so the messages are exactly the server's. The
-   optional veteran lookup is a separate form (Enter in the SSN box looks up instead of creating the case). The SSN is
-   cleared after every completed lookup; only the last four digits of a found veteran are kept, and only if the user
-   chooses "Use this veteran". A new or failed lookup clears any previously selected veteran. *@
-<PageShell Title="New case" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])"
-           Subtitle="Fields marked * are required." ShowBackButton="true" />
+@* Case intake (E5-S4, redesign). Validation uses the shared CaseRequestValidator, so the messages are exactly the
+   server's. Submit validates first, then asks "Are you sure you want to submit?"; Cancel there keeps every value, and
+   only Submit sends the request, once (the button is disabled and shows progress while it runs). Success navigates to
+   the new case; a failure keeps the values and shows the error. The optional veteran lookup is a separate form (Enter
+   in the SSN box looks up instead of creating the case). The SSN is cleared after every completed lookup; only the
+   last four digits of a found veteran are kept, and only if the user chooses "Use this veteran". A new or failed
+   lookup clears any previously selected veteran. *@
+<PageShell Title="Open a new case" DocumentTitle="New case" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])"
+           Subtitle="Only the title is required. You can add the rest later." ShowBackButton="true" />
 
 <ErrorAlert @ref="_submitAlert" Title="@(_submitError is null ? null : "The case was not created")" Message="@_submitError" TestId="intake-error" />
 
 <div class="grid grid--main-side">
     <div class="card">
-        <EditForm EditContext="_editContext" OnSubmit="SubmitAsync" id="intake-form" novalidate class="form" data-testid="intake-form">
+        <EditForm EditContext="_editContext" OnSubmit="RequestSubmitAsync" id="intake-form" novalidate class="form" data-testid="intake-form">
             <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" />
-            <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title" placeholder="Enter a brief title for the case…"
+            <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title"
                               Hint="@($"A short summary, {CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
                               MaxCharacters="CaseFieldLimits.TitleMaxLength" />
-            <LabeledTextArea Id="intake-description" Label="Description" @bind-Value="_model.Description" Rows="6" placeholder="Enter case details…"
+            <LabeledTextArea Id="intake-description" Label="Description" @bind-Value="_model.Description" Rows="6"
                              Hint="@($"Details of the request, up to {CaseFieldLimits.DescriptionMaxLength:N0} characters.")"
                              MaxCharacters="CaseFieldLimits.DescriptionMaxLength" />
             @* OnChanged re-renders this page, so the due-date hint follows the chosen priority. *@
             <TriageFields IdPrefix="intake" Model="_model" Assignees="_assignees" CanAssign="_canAssign" DueHint="@DueHint" OnChanged="OnTriageChanged" />
         </EditForm>
-        <div class="form-actions">
-            <button type="submit" form="intake-form" class="btn btn--primary" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="create-case">
-                @if (_submitting)
+        <div class="form-footer">
+            <span class="form-actions__note" data-testid="default-due">
+                @if (_model.DueOn is null)
                 {
-                    <span class="spinner" aria-hidden="true"></span>
-                    <span>Creating case…</span>
+                    <text>Default due date: <strong>@UiText.DueDate(CaseTriageRules.DefaultDueOn(_model.Priority, Time.GetUtcNow()))</strong></text>
                 }
                 else
                 {
-                    <Icon Name="add" Small="true" /><span>Create case</span>
+                    <text>Due date: <strong>@UiText.DueDate(_model.DueOn)</strong></text>
+                }
+            </span>
+            <a class="btn btn--cancel" href="cases" data-testid="intake-cancel"><Icon Name="close" Small="true" /> Cancel</a>
+            <button type="submit" form="intake-form" class="btn btn--primary" @ref="_submitButton" disabled="@_submitting" aria-busy="@(_submitting ? "true" : "false")" data-testid="create-case">
+                @if (_submitting)
+                {
+                    <span class="spinner" aria-hidden="true"></span>
+                    <span>Submitting…</span>
+                }
+                else
+                {
+                    <span>Submit</span><Icon Name="chevrons-right" Small="true" />
                 }
             </button>
-            <a class="btn" href="cases">Cancel</a>
         </div>
     </div>
 
@@ -60,14 +73,14 @@
             <section class="card" aria-labelledby="lookup-heading" data-testid="lookup-section">
                 <div class="card__header lookup-header">
                     <span class="lookup-header__icon" aria-hidden="true"><Icon Name="person" /></span>
-                    <h2 id="lookup-heading">Veteran lookup (optional)</h2>
+                    <h2 id="lookup-heading">Veteran lookup<span class="card__subtitle">Optional</span></h2>
                 </div>
-                <p class="page-header__subtitle">Look up a veteran to attach their name and address to the case. You can create the case without a lookup.</p>
+                <p class="page-header__subtitle">Attach the veteran's name and address to this case. You can also create the case without a lookup.</p>
                 <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
                     <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
-                                      Hint="Nine digits, with or without dashes (NNN-NN-NNNN). It is used for this lookup only and is not saved."
-                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" placeholder="XXX-XX-XXXX" />
-                    <button type="submit" class="btn btn--outline" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
+                                      Hint="Nine digits, with or without dashes (NNN-NN-NNNN)."
+                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" />
+                    <button type="submit" class="btn btn--outline btn--block" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
                         @if (_lookingUp)
                         {
                             <span class="spinner" aria-hidden="true"></span>
@@ -79,6 +92,7 @@
                         Look up veteran
                     </button>
                 </EditForm>
+                <p class="side-note"><Icon Name="lock" Small="true" /> <span>The SSN is used for this lookup only and is never saved.</span></p>
 
                 @* Found and Not found are announced politely; problems use the alert region below. *@
                 <div role="status" aria-live="polite" class="mt-4" data-testid="lookup-status">
@@ -108,7 +122,7 @@
                         <div class="message__body">
                             <p class="message__title">Veteran attached to this case</p>
                             <p>@selected.Name, SSN ending @selected.SsnLast4</p>
-                            <button type="button" class="btn" @onclick="RemoveVeteran" @ref="_removeButton">Remove veteran</button>
+                            <button type="button" class="btn btn--danger" @onclick="RemoveVeteran" @ref="_removeButton"><Icon Name="trash" Small="true" /> Remove veteran</button>
                         </div>
                     </div>
                 }
@@ -117,6 +131,8 @@
     </AuthorizeView>
 </div>
 
+<ConfirmSubmitDialog @ref="_confirm" Id="confirm-intake" TestId="confirm-intake" OnConfirm="SubmitAsync"
+                     Description="The case will be created with the details you entered." />
 
 @code {
     private sealed class IntakeModel : ITriageForm
@@ -166,6 +182,8 @@
     private ErrorAlert? _submitAlert;
     private LabeledInputText? _ssnInput;
     private ElementReference _removeButton;
+    private ElementReference _submitButton;
+    private ConfirmSubmitDialog? _confirm;
     private bool _showSummary;
     private bool _focusSummary;
     private bool _focusSubmitAlert;
@@ -203,6 +221,25 @@
         }
     }
 
+    /// <summary>Submit: validate with the server's rules first, then ask "Are you sure you want to submit?".</summary>
+    private async Task RequestSubmitAsync()
+    {
+        if (_submitting || (_confirm?.IsOpen ?? false))
+        {
+            return;
+        }
+        _submitError = null;
+        var request = new CreateCaseRequest(_model.Title ?? string.Empty, _model.Description, _selected, _model.ToTriage());
+        if (CaseRequestValidator.Validate(request) is { } invalid)
+        {
+            ShowValidation(invalid);
+            return;
+        }
+        ClearValidation();
+        await _confirm!.OpenAsync(() => _submitButton.FocusSafeAsync());
+    }
+
+    /// <summary>Confirmed: send exactly once (re-validated, since the values cannot change while the dialog is open).</summary>
     private async Task SubmitAsync()
     {
         if (_submitting)

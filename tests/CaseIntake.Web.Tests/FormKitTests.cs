@@ -7,8 +7,8 @@ using Microsoft.Extensions.DependencyInjection;
 namespace CaseIntake.Web.Tests;
 
 /// <summary>E5-S2: the accessible form and feedback kit.</summary>
-[Trait("Category", "Story:E5-S2")]
-[Trait("Category", "Req:R-4.2-12")]
+[Category("Story:E5-S2")]
+[Category("Req:R-4.2-12")]
 public class FormKitTests : WebTestContext
 {
     private sealed class Model
@@ -44,7 +44,7 @@ public class FormKitTests : WebTestContext
         builder.CloseComponent();
     };
 
-    [Fact]
+    [Test]
     public void Input_has_a_programmatic_label_required_text_and_describedby_for_hint_and_counter()
     {
         var cut = RenderInContext(Input());
@@ -60,7 +60,7 @@ public class FormKitTests : WebTestContext
         Assert.Null(input.GetAttribute("aria-invalid"));
     }
 
-    [Fact]
+    [Test]
     public void Invalid_field_gets_aria_invalid_an_inline_message_and_describedby_to_it()
     {
         var cut = RenderInContext(Input());
@@ -77,7 +77,7 @@ public class FormKitTests : WebTestContext
         Assert.Equal("Title is required.", cut.Find("#title-error").TextContent.Trim());
     }
 
-    [Fact]
+    [Test]
     public void Counter_counts_unicode_scalar_values_and_announces_politely_after_typing_pauses()
     {
         var cut = RenderInContext(Input(max: 5));
@@ -90,7 +90,7 @@ public class FormKitTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal("2 characters too many", cut.Find(".field [role=status]").TextContent), TimeSpan.FromSeconds(5));
     }
 
-    [Fact]
+    [Test]
     public void Text_area_labels_optional_fields_in_text()
     {
         var cut = RenderInContext(builder =>
@@ -108,7 +108,7 @@ public class FormKitTests : WebTestContext
         Assert.Equal("0 of 4,000 characters", cut.Find("#notes-counter").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Error_summary_lists_linked_messages_and_takes_focus()
     {
         _messages.Add(new FieldIdentifier(_model, nameof(Model.Title)), "Title is required.");
@@ -137,7 +137,7 @@ public class FormKitTests : WebTestContext
         Assert.Equal("#title", InteropModule.VerifyInvoke("focusSelector").Arguments[0]);
     }
 
-    [Fact]
+    [Test]
     public void Error_alert_uses_role_alert_and_renders_nothing_visible_without_a_message()
     {
         var empty = Render<ErrorAlert>();
@@ -150,7 +150,7 @@ public class FormKitTests : WebTestContext
         Assert.Contains("message--error", alert.ClassList);
     }
 
-    [Fact]
+    [Test]
     public void Status_announcer_speaks_through_a_polite_status_region()
     {
         var cut = Render<StatusAnnouncerOutlet>();
@@ -163,14 +163,14 @@ public class FormKitTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Equal("Case 123 created", cut.Find("[data-testid=status-announcer]").TextContent), TimeSpan.FromSeconds(3));
     }
 
-    [Fact]
+    [Test]
     public void Status_pill_shows_the_status_as_text()
     {
         var cut = Render<StatusPill>(p => p.Add(s => s.Status, Domain.Cases.CaseStatus.InProgress));
         Assert.Equal("In Progress", cut.Find(".status-pill").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Page_shell_sets_a_unique_document_title_and_a_focusable_h1()
     {
         var cut = Render<PageShell>(p => p.Add(s => s.Title, "Cases").Add(s => s.Breadcrumbs, [new Crumb("Dashboard", "")]));

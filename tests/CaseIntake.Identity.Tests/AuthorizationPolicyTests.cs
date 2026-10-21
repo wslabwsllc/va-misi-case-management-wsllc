@@ -37,8 +37,7 @@ public class AuthorizationPolicyTests
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(RoleTimesPermission))]
+    [TestCaseSource(nameof(RoleTimesPermission))]
     public async Task Every_permission_has_a_policy_that_follows_the_matrix(string role, string permission)
     {
         await using var provider = Services();
@@ -49,7 +48,7 @@ public class AuthorizationPolicyTests
         Assert.Equal(RolePermissionMap.Grants([role], permission), result.Succeeded);
     }
 
-    [Fact]
+    [Test]
     public async Task Permission_policies_reject_anonymous_users()
     {
         await using var provider = Services();
@@ -61,7 +60,7 @@ public class AuthorizationPolicyTests
         }
     }
 
-    [Fact]
+    [Test]
     public async Task The_fallback_policy_requires_an_authenticated_user()
     {
         await using var provider = Services();
@@ -73,7 +72,7 @@ public class AuthorizationPolicyTests
         Assert.True((await authorization.AuthorizeAsync(Principals.User("u", "u", "NoSuchRole"), null, options.FallbackPolicy)).Succeeded);
     }
 
-    [Fact]
+    [Test]
     public async Task A_forbidden_request_logs_AuthorizationDenied_with_user_permission_and_resource()
     {
         var services = new ServiceCollection();
@@ -104,7 +103,7 @@ public class AuthorizationPolicyTests
         Assert.Equal("/cases/7/attachments/abc/content", record.GetStructuredStateValue("ResourceId"));
     }
 
-    [Fact]
+    [Test]
     public async Task Successful_and_challenged_requests_are_not_logged_as_denials()
     {
         var logger = new FakeLogger<DenialLoggingAuthorizationResultHandler>();

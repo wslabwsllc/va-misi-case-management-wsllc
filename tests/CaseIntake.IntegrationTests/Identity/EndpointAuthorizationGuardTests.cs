@@ -13,11 +13,14 @@ namespace CaseIntake.IntegrationTests.Identity;
 /// E3-S5 guard over the composed web host's real endpoint table, so endpoints added later (E4's attachment download)
 /// are held to the authorization rules of ADR 0007 automatically.
 /// </summary>
-public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class EndpointAuthorizationGuardTests : ClassFixture<EndpointAuthorizationGuardTests, IdentityWebFixture>
 {
-    // E5 adds the error and Not Found pages (an anonymous visitor can hit either). Static asset endpoints (MapStaticAssets:
+    private static IdentityWebFixture fixture => Shared;
+
+    // E5 adds the error and Not Found pages (an anonymous visitor can hit either); the redesign adds the password help page,
+    // which only explains that an administrator resets passwords. Static asset endpoints (MapStaticAssets:
     // CSS, framework and app scripts, icons) are anonymous by design and are checked separately below.
-    private static readonly string[] AnonymousByDesign = ["/welcome", "/account/login", "/account/access-denied", "/account/logout", "/health", "/health/live", "/health/ready", "/error", "/not-found"];
+    private static readonly string[] AnonymousByDesign = ["/welcome", "/account/login", "/account/access-denied", "/account/forgot-password", "/account/logout", "/health", "/health/live", "/health/ready", "/error", "/not-found"];
 
     private static bool IsStaticAsset(Endpoint e) => e.Metadata.GetMetadata<Microsoft.AspNetCore.StaticAssets.StaticAssetDescriptor>() is not null;
 
@@ -26,7 +29,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
 
     private IReadOnlyList<RouteEndpoint> Endpoints() => [.. AllEndpoints().Where(e => !IsStaticAsset(e))];
 
-    [Fact]
+    [Test]
     public void Static_asset_endpoints_serve_only_files_and_never_pages_or_handlers()
     {
         var assets = AllEndpoints().Where(IsStaticAsset).ToList();
@@ -42,7 +45,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
 
     private static string Route(RouteEndpoint e) => "/" + (e.RoutePattern.RawText ?? "").TrimStart('/');
 
-    [Fact]
+    [Test]
     public void Only_the_account_and_health_endpoints_allow_anonymous_access()
     {
         var anonymous = Endpoints()
@@ -54,7 +57,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
         Assert.Equal(AnonymousByDesign.Order(), anonymous);
     }
 
-    [Fact]
+    [Test]
     public void Minimal_API_endpoints_requiring_authorization_answer_401_or_403_instead_of_redirecting()
     {
         var offenders = Endpoints()
@@ -66,7 +69,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
         Assert.Empty(offenders);
     }
 
-    [Fact]
+    [Test]
     public void Every_routable_page_requires_sign_in_or_is_an_explicit_account_page()
     {
         var pages = Endpoints().Where(e => e.Metadata.GetMetadata<ComponentTypeMetadata>() is not null).ToList();
@@ -83,7 +86,7 @@ public class EndpointAuthorizationGuardTests(IdentityWebFixture fixture) : IClas
         });
     }
 
-    [Fact]
+    [Test]
     public void The_attachment_download_route_is_mapped_and_requires_attachments_download()
     {
         var sample = AttachmentRoutes.Content(1, Guid.Empty).Split('/', StringSplitOptions.RemoveEmptyEntries);

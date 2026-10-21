@@ -16,7 +16,7 @@ public class AuditLogPageTests : WebTestContext
             changes: [new AuditChangeDto("Status", "New", "Triaged")], at: new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero)));
     }
 
-    [Fact]
+    [Test]
     public void Lists_entries_newest_first_with_readable_actions_subjects_and_outcomes()
     {
         var cut = Render<AuditLog>();
@@ -32,7 +32,7 @@ public class AuditLogPageTests : WebTestContext
         Assert.Equal("When", cut.Find("[data-testid=audit-table] th").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Query_string_filters_select_entries_and_reach_the_export_link()
     {
         Navigation.NavigateTo("admin/audit?category=Authentication&outcome=Failure&from=2026-10-01&to=2026-10-21");
@@ -48,7 +48,7 @@ public class AuditLogPageTests : WebTestContext
         Assert.Equal(AuditCategories.Authentication, cut.Find("#audit-category").GetAttribute("value"));
     }
 
-    [Fact]
+    [Test]
     public void Applying_filters_navigates_to_the_filtered_url_and_every_filter_has_a_label()
     {
         var cut = Render<AuditLog>();
@@ -64,7 +64,7 @@ public class AuditLogPageTests : WebTestContext
         }
     }
 
-    [Fact]
+    [Test]
     public void A_subject_filter_from_a_history_link_is_shown_as_a_removable_chip()
     {
         Navigation.NavigateTo("admin/audit?entityType=User&entityId=7");
@@ -75,7 +75,7 @@ public class AuditLogPageTests : WebTestContext
         Assert.Equal("Remove filter: subject", cut.Find("[data-testid=audit-subject-filter] button").GetAttribute("aria-label"));
     }
 
-    [Fact]
+    [Test]
     public void An_entry_shows_its_fields_and_changes_with_a_link_to_its_operation()
     {
         var cut = Render<AuditEntry>(p => p.Add(x => x.Key, "C-9"));
@@ -89,7 +89,7 @@ public class AuditLogPageTests : WebTestContext
         Assert.Equal("Succeeded", cut.Find("[data-testid=audit-entry-outcome]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void An_unknown_entry_shows_not_found()
     {
         var cut = Render<AuditEntry>(p => p.Add(x => x.Key, "A-404"));
@@ -97,7 +97,7 @@ public class AuditLogPageTests : WebTestContext
         Assert.Contains("Audit entry not found", cut.Find("[data-testid=audit-entry-not-found]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void The_user_page_shows_that_users_history_with_a_link_to_all_of_it()
     {
         UserAdmin.Users.Add(FakeUserAdministrationService.Detail("7", "worker@example.test", [AppRoles.CaseWorker]));
@@ -110,7 +110,7 @@ public class AuditLogPageTests : WebTestContext
         Assert.Equal(AuditEntityTypes.User, AuditLog.Queries[^1].EntityType);
     }
 
-    [Fact]
+    [Test]
     public void History_is_hidden_without_audit_view()
     {
         SignInAs(AppRoles.IntakeClerk);

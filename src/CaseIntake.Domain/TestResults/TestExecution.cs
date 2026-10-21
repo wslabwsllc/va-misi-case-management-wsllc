@@ -24,6 +24,18 @@ public sealed class TestExecution
     public string? ConsoleLog { get; set; }
     public string? NetworkLog { get; set; }
 
+    // Execution evidence for manual and accessibility checks (QA 508 enhancement).
+    /// <summary>Who executed the test (manual results), or the runner for automated ones.</summary>
+    public string? Tester { get; set; }
+
+    /// <summary>Assistive technology and version, for example <c>NVDA 2024.4</c>.</summary>
+    public string? AssistiveTechnology { get; set; }
+
+    /// <summary>Defect tracker reference for a failure.</summary>
+    public string? DefectReference { get; set; }
+
+    public string? RemediationNotes { get; set; }
+
     public ICollection<TestStepResult> Steps { get; } = new List<TestStepResult>();
     public ICollection<TestArtifact> Artifacts { get; } = new List<TestArtifact>();
 }

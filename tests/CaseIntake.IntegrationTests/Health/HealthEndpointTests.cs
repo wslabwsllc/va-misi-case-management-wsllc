@@ -8,8 +8,10 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 
 namespace CaseIntake.IntegrationTests.Health;
 
-public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixture<PostgresDatabaseFixture>
+public class HealthEndpointTests : ClassFixture<HealthEndpointTests, PostgresDatabaseFixture>
 {
+    private static PostgresDatabaseFixture database => Shared;
+
     private static async Task<(WebApplication App, string Url)> StartStubLookupAsync(bool healthy, string healthPath = "/health")
     {
         var builder = WebApplication.CreateBuilder();
@@ -21,7 +23,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         return (app, app.Services.GetRequiredService<IServer>().Features.Get<IServerAddressesFeature>()!.Addresses.First());
     }
 
-    [Fact]
+    [Test]
     public async Task Live_returns_200_even_when_dependencies_are_down()
     {
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, veteranLookupBaseUrl: "http://127.0.0.1:1");
@@ -32,7 +34,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_returns_200_only_when_database_and_veteran_lookup_are_reachable()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: true);
@@ -46,7 +48,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.True(ready.HasOperationId);
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_probes_health_under_the_base_url_path_prefix()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: true, healthPath: "/lookup/health");
@@ -59,7 +61,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.True(ready.Status == HttpStatusCode.OK, ready.Raw);
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_returns_503_when_veteran_lookup_is_unreachable()
     {
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, "http://127.0.0.1:1");
@@ -68,7 +70,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/health/ready")).StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_returns_503_when_veteran_lookup_reports_unhealthy()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: false);
@@ -79,7 +81,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.Equal(HttpStatusCode.ServiceUnavailable, (await client.GetAsync("/health/ready")).StatusCode);
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_returns_503_when_database_is_unreachable()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: true);
@@ -133,7 +135,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_reports_each_component_as_json_when_all_are_healthy()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: true);
@@ -151,7 +153,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.All(body.GetProperty("components").EnumerateObject(), p => Assert.Equal("Healthy", p.Value.GetProperty("status").GetString()));
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_names_the_down_database_while_other_components_stay_healthy()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: true);
@@ -171,7 +173,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.DoesNotContain("secret-value", ready.Raw);
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_names_the_down_veteran_lookup_service()
     {
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, "http://127.0.0.1:1");
@@ -185,7 +187,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.Equal("Healthy", ComponentStatus(body, "database"));
     }
 
-    [Fact]
+    [Test]
     public async Task Ready_returns_503_when_attachment_storage_is_not_writable()
     {
         var (stub, url) = await StartStubLookupAsync(healthy: true);
@@ -211,7 +213,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         }
     }
 
-    [Fact]
+    [Test]
     public async Task Health_runs_every_check_and_live_runs_none()
     {
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, "http://127.0.0.1:1");
@@ -229,7 +231,7 @@ public class HealthEndpointTests(PostgresDatabaseFixture database) : IClassFixtu
         Assert.Empty(liveBody.GetProperty("components").EnumerateObject());
     }
 
-    [Fact]
+    [Test]
     public async Task Home_page_renders_from_the_real_host()
     {
         await using var factory = new CaseIntakeWebFactory(database.ConnectionString, "http://127.0.0.1:1");

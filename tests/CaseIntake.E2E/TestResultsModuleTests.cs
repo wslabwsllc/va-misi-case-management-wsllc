@@ -12,11 +12,11 @@ namespace CaseIntake.E2E;
 /// folder, imported by the QualityAnalyst, and inspected: metrics, the failure with expected/actual, the screenshot
 /// preview with zoom, authorized download, CSV export, and the phone layout.
 /// </summary>
-public sealed class TestResultsModuleTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed class TestResultsModuleTests : E2ETestBase
 {
     private const string FailingTest = "CaseIntake.Fixture.SyntheticTests.Shows_a_failure_with_evidence";
 
-    [FixturesFact]
+    [Test, FixturesRequired]
     public async Task QualityAnalyst_imports_a_run_and_inspects_failure_evidence()
     {
         await using var s = await StartAsync(Meta("Test results: import and inspect evidence", "Test management", ["R-4.2-13"],
@@ -40,14 +40,14 @@ public sealed class TestResultsModuleTests(PlaywrightFixture fixture) : E2ETestB
         }, expected: "'n run(s) imported' announced");
         await s.ScreenshotAsync("Test results dashboard (desktop)");
         await s.AxeAsync("Test results dashboard");
-        await s.StepAsync("Find the run and check its metrics: failed, skipped and not executed are distinct", async () =>
+        await s.StepAsync("Find the run and check its metrics: failed, skipped and not run are distinct", async () =>
         {
             await GotoAsync(page, "/test-results/runs");
             await page.Locator("#run-search").FillAsync(runKey);
             await page.Locator("#run-search").PressAsync("Enter");
             await PressAsync(page.GetByRole(AriaRole.Link, new() { Name = runKey }));
             await ExpectPageAsync(page, $"Run {runKey}");
-            await Expect(page.GetByTestId("record-header")).ToContainTextAsync("4 total, 1 passed, 1 failed, 1 skipped, 0 blocked, 1 not executed");
+            await Expect(page.GetByTestId("record-header")).ToContainTextAsync("4 total, 1 passed, 1 failed, 1 skipped, 0 blocked, 1 not run");
             await Expect(page.GetByTestId("suites-table")).ToContainTextAsync("Failed to start");
         });
         await s.AxeAsync("Test run detail");
@@ -94,7 +94,7 @@ public sealed class TestResultsModuleTests(PlaywrightFixture fixture) : E2ETestB
         s.Complete();
     }
 
-    [FixturesFact]
+    [Test, FixturesRequired]
     public async Task Test_results_dashboard_works_on_a_phone()
     {
         await using var s = await StartAsync(Meta("Test results on a phone", "Test management", ["R-4.2-12"],
@@ -169,7 +169,7 @@ public sealed class TestResultsModuleTests(PlaywrightFixture fixture) : E2ETestB
                 new { name = "CaseIntake.FixtureNotStarted", type = "Integration", status = "FailedToStart", exitCode = 1, message = "The test host could not start." },
             },
         }));
-        // The not-started suite has one known test from an earlier (synthetic) run, so it appears as Not executed.
+        // The not-started suite has one known test from an earlier (synthetic) run, so it appears as Not Run.
         var seed = Path.Combine(E2ESettings.FixturesRoot!, "runs", "e2e-fixture-0000-seed");
         if (!Directory.Exists(seed))
         {

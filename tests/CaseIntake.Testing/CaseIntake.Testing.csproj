@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Shared NUnit support for every test project: the assertion helper (xUnit-style call shapes evaluated with NUnit
+       constraints), theory data, fixture lifetimes and per-class shared fixtures. Test-only; not a test project. -->
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>false</IsTestProject>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="NUnit" />
+  </ItemGroup>
+</Project>

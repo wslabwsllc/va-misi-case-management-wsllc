@@ -44,7 +44,7 @@ public class VeteranLookupClientTests
             Content = json is null ? null : new StringContent(json, Encoding.UTF8, "application/json"),
         });
 
-    [Fact]
+    [Test]
     public async Task A_200_with_name_and_address_is_Found_and_the_request_matches_the_contract()
     {
         var (client, handler, _, provider) = Build((_, _, _) => Respond(HttpStatusCode.OK, FoundBody));
@@ -61,7 +61,7 @@ public class VeteranLookupClientTests
         Assert.Equal("""{"ssn":"900-12-3456"}""", request.Body);                                 // nine digits normalized
     }
 
-    [Fact]
+    [Test]
     public async Task A_404_is_NotFound()
     {
         var (client, handler, _, provider) = Build((_, _, _) => Respond(HttpStatusCode.NotFound));
@@ -71,17 +71,16 @@ public class VeteranLookupClientTests
         Assert.Equal(1, handler.Calls);
     }
 
-    [Theory]
-    [InlineData("")]
-    [InlineData("12345678")]
-    [InlineData("1234567890")]
-    [InlineData("123-456-789")]
-    [InlineData("123 45 6789")]
-    [InlineData("12345678a")]
-    [InlineData(" 900-12-3456")]
-    [InlineData("９００１２３４５６")]          // full-width digits are not ASCII
-    [InlineData("900123456\n")]           // "$" would accept a trailing newline
-    [InlineData("900-12-3456\n")]
+    [TestCase("")]
+    [TestCase("12345678")]
+    [TestCase("1234567890")]
+    [TestCase("123-456-789")]
+    [TestCase("123 45 6789")]
+    [TestCase("12345678a")]
+    [TestCase(" 900-12-3456")]
+    [TestCase("９００１２３４５６")]          // full-width digits are not ASCII
+    [TestCase("900123456\n")]           // "$" would accept a trailing newline
+    [TestCase("900-12-3456\n")]
     public async Task A_malformed_SSN_is_InvalidInput_and_no_request_is_sent(string ssn)
     {
         var (client, handler, _, provider) = Build((_, _, _) => Respond(HttpStatusCode.OK, FoundBody));
@@ -91,7 +90,7 @@ public class VeteranLookupClientTests
         Assert.Equal(0, handler.Calls);
     }
 
-    [Fact]
+    [Test]
     public async Task A_user_without_the_lookup_permission_is_Forbidden_without_a_request_and_the_denial_is_logged()
     {
         var (client, handler, logs, provider) = Build((_, _, _) => Respond(HttpStatusCode.OK, FoundBody), new TestCurrentUser(Permissions.CasesView));
@@ -103,12 +102,11 @@ public class VeteranLookupClientTests
         Assert.Equal(Permissions.VeteranLookup, denial.GetStructuredStateValue("Permission"));
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.InternalServerError)]
-    [InlineData(HttpStatusCode.BadGateway)]
-    [InlineData(HttpStatusCode.ServiceUnavailable)]
-    [InlineData(HttpStatusCode.RequestTimeout)]
-    [InlineData(HttpStatusCode.TooManyRequests)]
+    [TestCase(HttpStatusCode.InternalServerError)]
+    [TestCase(HttpStatusCode.BadGateway)]
+    [TestCase(HttpStatusCode.ServiceUnavailable)]
+    [TestCase(HttpStatusCode.RequestTimeout)]
+    [TestCase(HttpStatusCode.TooManyRequests)]
     public async Task Retryable_statuses_are_retried_exactly_once_then_Unavailable(HttpStatusCode status)
     {
         var (client, handler, _, provider) = Build((_, _, _) => Respond(status));
@@ -118,7 +116,7 @@ public class VeteranLookupClientTests
         Assert.Equal(2, handler.Calls);
     }
 
-    [Fact]
+    [Test]
     public async Task A_transient_failure_followed_by_success_is_Found()
     {
         var (client, handler, _, provider) = Build((_, attempt, _) =>
@@ -129,12 +127,11 @@ public class VeteranLookupClientTests
         Assert.Equal(2, handler.Calls);
     }
 
-    [Theory]
-    [InlineData(HttpStatusCode.BadRequest)]
-    [InlineData(HttpStatusCode.Unauthorized)]
-    [InlineData(HttpStatusCode.Forbidden)]
-    [InlineData(HttpStatusCode.Found)]
-    [InlineData(HttpStatusCode.NoContent)]
+    [TestCase(HttpStatusCode.BadRequest)]
+    [TestCase(HttpStatusCode.Unauthorized)]
+    [TestCase(HttpStatusCode.Forbidden)]
+    [TestCase(HttpStatusCode.Found)]
+    [TestCase(HttpStatusCode.NoContent)]
     public async Task Unexpected_non_retryable_statuses_are_Unavailable_without_a_retry(HttpStatusCode status)
     {
         var (client, handler, _, provider) = Build((_, _, _) => Respond(status));
@@ -146,16 +143,15 @@ public class VeteranLookupClientTests
 
     // Specification 4.6 does not mark name or address as required. A 200 without both cannot fill the case's veteran
     // snapshot (E2 CaseTextRules), so intake continues as Unavailable (assumption D14).
-    [Theory]
-    [InlineData("not json")]
-    [InlineData("{")]
-    [InlineData("[]")]
-    [InlineData("{}")]
-    [InlineData("""{"name":"Avery Ashgrove"}""")]
-    [InlineData("""{"name":"","address":"100 Sample Street"}""")]
-    [InlineData("""{"name":"Avery Ashgrove","address":null}""")]
-    [InlineData("""{"name":123,"address":"100 Sample Street"}""")]
-    [InlineData("null")]
+    [TestCase("not json")]
+    [TestCase("{")]
+    [TestCase("[]")]
+    [TestCase("{}")]
+    [TestCase("""{"name":"Avery Ashgrove"}""")]
+    [TestCase("""{"name":"","address":"100 Sample Street"}""")]
+    [TestCase("""{"name":"Avery Ashgrove","address":null}""")]
+    [TestCase("""{"name":123,"address":"100 Sample Street"}""")]
+    [TestCase("null")]
     public async Task An_unusable_200_body_is_Unavailable(string body)
     {
         var (client, _, _, provider) = Build((_, _, _) => Respond(HttpStatusCode.OK, body));
@@ -164,7 +160,7 @@ public class VeteranLookupClientTests
         Assert.Equal(VeteranLookupOutcome.Unavailable, (await client.LookupAsync("900-12-3456", CancellationToken.None)).Outcome);
     }
 
-    [Fact]
+    [Test]
     public async Task A_connection_dropped_while_the_body_is_read_is_Unavailable()
     {
         var (client, _, _, provider) = Build((_, _, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
@@ -176,7 +172,7 @@ public class VeteranLookupClientTests
         Assert.Equal(VeteranLookupOutcome.Unavailable, (await client.LookupAsync("900-12-3456", CancellationToken.None)).Outcome);
     }
 
-    [Fact]
+    [Test]
     public async Task A_body_that_stalls_after_the_headers_is_Unavailable_within_the_total_budget()
     {
         var (client, _, _, provider) = Build((_, _, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
@@ -190,7 +186,7 @@ public class VeteranLookupClientTests
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(3), $"took {stopwatch.Elapsed}");
     }
 
-    [Fact]
+    [Test]
     public async Task An_undecodable_charset_is_Unavailable()
     {
         var (client, _, _, provider) = Build((_, _, _) =>
@@ -204,20 +200,18 @@ public class VeteranLookupClientTests
         Assert.Equal(VeteranLookupOutcome.Unavailable, (await client.LookupAsync("900-12-3456", CancellationToken.None)).Outcome);
     }
 
-    [Theory]
-    [InlineData("veteran-lookup:8081")]
-    [InlineData("localhost:8081")]
-    [InlineData("/lookup")]
-    [InlineData("ftp://lookup.test")]
-    [InlineData("")]
+    [TestCase("veteran-lookup:8081")]
+    [TestCase("localhost:8081")]
+    [TestCase("/lookup")]
+    [TestCase("ftp://lookup.test")]
+    [TestCase("")]
     public void A_base_URL_that_is_not_absolute_http_fails_at_startup(string baseUrl) =>
         AssertInvalidAtStartup(new() { ["VeteranLookup:BaseUrl"] = baseUrl });
 
-    [Theory]
-    [InlineData("VeteranLookup:AttemptTimeout", "00:00:00.005")]
-    [InlineData("VeteranLookup:AttemptTimeout", "00:00:00")]
-    [InlineData("VeteranLookup:TotalTimeout", "00:00:01")]          // shorter than the 2 s attempt default
-    [InlineData("VeteranLookup:RetryDelay", "-00:00:01")]
+    [TestCase("VeteranLookup:AttemptTimeout", "00:00:00.005")]
+    [TestCase("VeteranLookup:AttemptTimeout", "00:00:00")]
+    [TestCase("VeteranLookup:TotalTimeout", "00:00:01")]          // shorter than the 2 s attempt default
+    [TestCase("VeteranLookup:RetryDelay", "-00:00:01")]
     public void Timeouts_outside_what_the_pipeline_accepts_fail_at_startup(string key, string value) =>
         AssertInvalidAtStartup(new() { ["VeteranLookup:BaseUrl"] = "http://lookup.test", [key] = value });
 
@@ -258,7 +252,7 @@ public class VeteranLookupClientTests
             Position >= Length ? throw new HttpIOException(HttpRequestError.ResponseEnded) : base.ReadAsync(buffer, cancellationToken);
     }
 
-    [Fact]
+    [Test]
     public async Task A_name_longer_than_the_snapshot_limit_is_Unavailable()
     {
         var body = $$"""{"name":"{{new string('n', 201)}}","address":"100 Sample Street"}""";
@@ -268,7 +262,7 @@ public class VeteranLookupClientTests
         Assert.Equal(VeteranLookupOutcome.Unavailable, (await client.LookupAsync("900-12-3456", CancellationToken.None)).Outcome);
     }
 
-    [Fact]
+    [Test]
     public async Task A_connection_failure_is_retried_once_then_Unavailable()
     {
         var (client, handler, _, provider) = Build((_, _, _) => throw new HttpRequestException("connection refused"));
@@ -278,7 +272,7 @@ public class VeteranLookupClientTests
         Assert.Equal(2, handler.Calls);
     }
 
-    [Fact]
+    [Test]
     public async Task A_hanging_service_is_Unavailable_within_the_total_budget_after_one_retry()
     {
         // Two attempts (2 x 500 ms + 10 ms delay) fit in the 2 s total with about 1 s to spare. With 100 ms attempts and a
@@ -298,7 +292,7 @@ public class VeteranLookupClientTests
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5), $"took {stopwatch.Elapsed}");   // capped by the 2 s total
     }
 
-    [Fact]
+    [Test]
     public async Task The_total_timeout_caps_the_whole_call_even_when_attempts_could_run_longer()
     {
         var (client, handler, _, provider) = Build(async (_, _, ct) =>
@@ -312,7 +306,7 @@ public class VeteranLookupClientTests
         Assert.Equal(1, handler.Calls);
     }
 
-    [Fact]
+    [Test]
     public async Task Caller_cancellation_propagates_instead_of_reporting_an_outage()
     {
         var (client, _, logs, provider) = Build(async (_, _, ct) =>
@@ -327,7 +321,7 @@ public class VeteranLookupClientTests
         Assert.Empty(logs.WithEventId(4002));
     }
 
-    [Fact]
+    [Test]
     public async Task Logs_record_outcome_and_duration_but_never_the_SSN_or_veteran_details()
     {
         var (client, _, logs, provider) = Build((_, attempt, _) => attempt switch
@@ -353,11 +347,10 @@ public class VeteranLookupClientTests
         LogAssertions.ContainsNoSensitiveValues(logs, "Avery", "Ashgrove", "Sample Street", "12-3456", "12-3457", "12-3458");
     }
 
-    [Theory]
-    [InlineData("900123456", "900-12-3456")]
-    [InlineData("900-12-3456", "900-12-3456")]
-    [InlineData("900-123456", null)]
-    [InlineData(null, null)]
+    [TestCase("900123456", "900-12-3456")]
+    [TestCase("900-12-3456", "900-12-3456")]
+    [TestCase("900-123456", null)]
+    [TestCase(null, null)]
     public void Normalization_accepts_exactly_two_forms(string? input, string? expected)
     {
         Assert.Equal(expected, VeteranLookupClient.Normalize(input));

@@ -6,14 +6,13 @@ namespace CaseIntake.Cases.Tests;
 
 public class CaseListQueryTests
 {
-    [Theory]
-    [InlineData(1, 1, true)]
-    [InlineData(1, 100, true)]
-    [InlineData(0, 25, false)]
-    [InlineData(-1, 25, false)]
-    [InlineData(1, 0, false)]
-    [InlineData(1, 101, false)]
-    [InlineData(int.MaxValue, 100, false)]   // offset would overflow
+    [TestCase(1, 1, true)]
+    [TestCase(1, 100, true)]
+    [TestCase(0, 25, false)]
+    [TestCase(-1, 25, false)]
+    [TestCase(1, 0, false)]
+    [TestCase(1, 101, false)]
+    [TestCase(int.MaxValue, 100, false)]   // offset would overflow
     public void Paging_bounds(int page, int pageSize, bool valid)
     {
         var error = CaseListQueryValidator.Validate(new CaseListQuery(page, pageSize));
@@ -25,7 +24,7 @@ public class CaseListQueryTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Undefined_enum_values_are_rejected()
     {
         Assert.NotNull(CaseListQueryValidator.Validate(new CaseListQuery(Statuses: [(CaseStatus)9])));
@@ -33,7 +32,7 @@ public class CaseListQueryTests
         Assert.NotNull(CaseListQueryValidator.Validate(new CaseListQuery(Direction: (SortDirection)9)));
     }
 
-    [Fact]
+    [Test]
     public void Search_text_is_bounded_and_must_be_well_formed()
     {
         Assert.Null(CaseListQueryValidator.Validate(new CaseListQuery(Search: new string('s', 200))));
@@ -41,11 +40,10 @@ public class CaseListQueryTests
         Assert.NotNull(CaseListQueryValidator.Validate(new CaseListQuery(Search: "wa\0ter")));
     }
 
-    [Theory]
-    [InlineData("water", "water")]
-    [InlineData("100%", "100\\%")]
-    [InlineData("file_name", "file\\_name")]
-    [InlineData("back\\slash", "back\\\\slash")]
+    [TestCase("water", "water")]
+    [TestCase("100%", "100\\%")]
+    [TestCase("file_name", "file\\_name")]
+    [TestCase("back\\slash", "back\\\\slash")]
     public void Like_wildcards_are_escaped(string input, string expected) =>
         Assert.Equal(expected, CaseListQueryBuilder.EscapeLike(input));
 }

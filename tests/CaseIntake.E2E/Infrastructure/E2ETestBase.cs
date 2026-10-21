@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Runtime.CompilerServices;
 using static Microsoft.Playwright.Assertions;
 
@@ -9,10 +10,9 @@ namespace CaseIntake.E2E.Infrastructure;
 /// (SetInputFiles), which bypasses the native picker; the native picker and download dialogs are checked manually
 /// (docs/accessibility-review.md).
 /// </summary>
-[Collection(E2ECollection.Name)]
-public abstract class E2ETestBase(PlaywrightFixture fixture)
+public abstract class E2ETestBase
 {
-    protected PlaywrightFixture Fixture { get; } = fixture;
+    protected static PlaywrightFixture Fixture => CaseIntake.E2E.E2EAssemblySetup.Fixture;
 
     protected TestMeta Meta(string title, string story, string[] requirements, string? description = null, string? preconditions = null,
         string? expected = null, string priority = "High", [CallerMemberName] string method = "") =>
@@ -30,13 +30,24 @@ public abstract class E2ETestBase(PlaywrightFixture fixture)
             await Expect(s.Page).ToHaveTitleAsync("Sign in - Case Intake and Triage");
             await s.Page.Locator("#login-email").FocusAsync();
             await s.Page.Keyboard.TypeAsync(email);
+            // Visual and tab order: email, the "Forgot password?" link on the password label row, then the password.
+            await s.Page.Keyboard.PressAsync("Tab");
+            await E2ESession.ExpectFocusedAsync(s.Page.GetByTestId("forgot-password"));
             await s.Page.Keyboard.PressAsync("Tab");
             await E2ESession.ExpectFocusedAsync(s.Page.Locator("#login-password"));
             await s.Page.Keyboard.TypeAsync(password ?? E2ESettings.DemoPassword);
             await s.Page.Keyboard.PressAsync("Enter");
             if (expectHeading is not null)
             {
-                await Expect(s.Page.Locator("h1")).ToHaveTextAsync(expectHeading);
+                // The dashboard greets by time of day ("Good morning, Supervisor").
+                if (expectHeading == "Dashboard")
+                {
+                    await Expect(s.Page.Locator("h1")).ToHaveTextAsync(DashboardHeading);
+                }
+                else
+                {
+                    await Expect(s.Page.Locator("h1")).ToHaveTextAsync(expectHeading);
+                }
             }
             await WaitForCircuitAsync(s.Page);
         }, expected: $"Signed in as {email}");
@@ -44,7 +55,7 @@ public abstract class E2ETestBase(PlaywrightFixture fixture)
 
     /// <summary>Waits until the Blazor circuit is connected (an interactive-only control exists).</summary>
     protected static async Task WaitForCircuitAsync(IPage page) =>
-        await page.WaitForFunctionAsync("() => window.Blazor !== undefined && (document.querySelector('[data-testid=nav-toggle]') !== null || document.querySelector('[data-testid=bottom-nav-more]') !== null)");
+        await PageWait.UntilAsync(page, "() => window.Blazor !== undefined && (document.querySelector('[data-testid=nav-toggle]') !== null || document.querySelector('[data-testid=bottom-nav-more]') !== null)");
 
     /// <summary>Full page load of an app page, then wait for the circuit, so input is not lost to the interactive re-render.</summary>
     protected static async Task GotoAsync(IPage page, string url)
@@ -71,6 +82,23 @@ public abstract class E2ETestBase(PlaywrightFixture fixture)
     }
 
     protected static ILocator Announcer(IPage page) => page.GetByTestId("status-announcer");
+
+    /// <summary>
+    /// The case forms' confirmation (redesign): after Submit, the dialog "Are you sure you want to submit?" is open with
+    /// focus on Cancel; Submit in the dialog (keyboard) sends the form. <paramref name="testId"/> is the dialog's test ID.
+    /// </summary>
+    protected static async Task ConfirmSubmitAsync(IPage page, string testId)
+    {
+        var dialog = page.GetByTestId(testId);
+        await Expect(dialog).ToBeVisibleAsync();
+        await Expect(dialog.Locator("h2")).ToHaveTextAsync("Are you sure you want to submit?");
+        await E2ESession.ExpectFocusedAsync(page.GetByTestId($"{testId}-cancel"));
+        await PressAsync(page.GetByTestId($"{testId}-submit"));
+        await Expect(dialog).ToBeHiddenAsync();
+    }
+
+    /// <summary>The dashboard's heading is a greeting for the time of day (Eastern).</summary>
+    protected static readonly Regex DashboardHeading = new("^Good (morning|afternoon|evening)");
 
     protected static async Task SignOutAsync(E2ESession s)
     {

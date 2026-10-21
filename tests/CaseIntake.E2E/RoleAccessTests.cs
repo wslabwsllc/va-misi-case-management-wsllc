@@ -9,7 +9,7 @@ namespace CaseIntake.E2E;
 /// per role (the CaseWorker cannot triage, close or reopen), access-denied and Not Found pages with focus on the h1,
 /// and server-side denial of the protected endpoints even when the UI hides them.
 /// </summary>
-public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed class RoleAccessTests : E2ETestBase
 {
     private static async Task<long> FirstCaseInStatusAsync(IPage page, string status)
     {
@@ -19,7 +19,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         return long.Parse(href!.Split('/')[^1], System.Globalization.CultureInfo.InvariantCulture);
     }
 
-    [Fact]
+    [Test]
     public async Task CaseWorker_cannot_triage_close_or_reopen_and_sees_create()
     {
         await using var s = await StartAsync(Meta("CaseWorker status buttons and navigation", "E5-S6/E5-S8", ["R-4.2-11", "R-4.3-1", "R-4.3-4", "R-4.3-5"],
@@ -68,7 +68,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task Supervisor_can_triage_and_sees_close_and_reopen()
     {
         await using var s = await StartAsync(Meta("Supervisor status buttons", "E5-S6", ["R-4.2-11", "R-4.3-1", "R-4.3-4", "R-4.3-5"],
@@ -89,7 +89,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task QualityAnalyst_sees_test_results_but_not_new_case_and_in_app_denial_focuses_the_heading()
     {
         await using var s = await StartAsync(Meta("QualityAnalyst navigation and access denied", "E5-S8", ["R-4.2-11", "R-4.2-12"],
@@ -123,7 +123,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task Auditor_reads_cases_and_audit_trail_but_changes_nothing()
     {
         await using var s = await StartAsync(Meta("Auditor read-only access", "E3-S2", ["R-4.2-11"],
@@ -155,7 +155,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task IntakeClerk_opens_cases_but_cannot_edit_or_move_them()
     {
         await using var s = await StartAsync(Meta("IntakeClerk intake-only access", "E3-S2", ["R-4.2-11"],
@@ -167,7 +167,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
             await Expect(page.GetByTestId("user-roles")).ToHaveTextAsync("Intake clerk");
             await Expect(page.GetByTestId("side-nav").GetByRole(AriaRole.Link, new() { Name = "New case" })).ToBeVisibleAsync();
             await GotoAsync(page, "/cases/new");
-            await Expect(page.Locator("h1")).ToHaveTextAsync("New case");
+            await Expect(page.Locator("h1")).ToHaveTextAsync("Open a new case");
         });
         await s.StepAsync("A Triaged case offers upload but no edit or status change", async () =>
         {
@@ -180,7 +180,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task Unknown_routes_and_missing_cases_show_an_accessible_not_found_page()
     {
         await using var s = await StartAsync(Meta("Not Found page", "E5-S1/E5-S5", ["R-4.2-12"],
@@ -207,7 +207,7 @@ public sealed class RoleAccessTests(PlaywrightFixture fixture) : E2ETestBase(fix
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task Anonymous_requests_to_protected_pages_and_endpoints_are_denied()
     {
         await using var s = await StartAsync(Meta("Anonymous access is denied", "E5-S8", ["R-4.2-11"],

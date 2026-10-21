@@ -41,7 +41,7 @@ public partial class SyntheticSsnGuardTests
         RegexOptions.CultureInvariant)]
     private static partial Regex SsnLiteral();
 
-    [Fact]
+    [Test]
     public void Every_SSN_shaped_literal_in_the_repository_uses_a_never_issued_area_number()
     {
         var files = RepositoryTextFiles().ToList();
@@ -72,8 +72,7 @@ public partial class SyntheticSsnGuardTests
         { "\"\uFF19\uFF10\uFF10\uFF14\uFF15\uFF16\uFF17\uFF18\uFF19\"", null },   // full-width digits are not an SSN literal
     };
 
-    [Theory]
-    [MemberData(nameof(Samples))]
+    [TestCaseSource(nameof(Samples))]
     public void Guard_flags_issuable_areas_only(string text, string? expectedArea)
     {
         var violations = Violations(text).ToList();
@@ -88,7 +87,7 @@ public partial class SyntheticSsnGuardTests
         }
     }
 
-    [Fact]
+    [Test]
     public void The_Government_contract_exemption_matches_the_committed_file_and_is_still_needed()
     {
         var content = File.ReadAllBytes(RepositoryRoot.File(GovernmentContractPath));
@@ -98,7 +97,7 @@ public partial class SyntheticSsnGuardTests
         Assert.NotEmpty(Violations(System.Text.Encoding.UTF8.GetString(content)));   // otherwise the exemption is obsolete: remove it
     }
 
-    [Fact]
+    [Test]
     public void The_Government_contract_is_exempt_only_with_its_exact_bytes_at_its_own_path()
     {
         var content = File.ReadAllBytes(RepositoryRoot.File(GovernmentContractPath));

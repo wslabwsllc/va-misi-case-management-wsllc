@@ -12,7 +12,7 @@ public class VersionConsistencyTests
 {
     private static string VersionsDoc => File.ReadAllText(RepositoryRoot.File("docs", "versions.md"));
 
-    [Fact]
+    [Test]
     public void Every_runtime_package_pin_is_listed_in_versions_md_with_the_same_version()
     {
         var props = XDocument.Load(RepositoryRoot.File("Directory.Packages.props"));
@@ -28,7 +28,7 @@ public class VersionConsistencyTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Sdk_version_matches_global_json_and_is_pinned_exactly()
     {
         using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(RepositoryRoot.File("global.json")));
@@ -40,7 +40,7 @@ public class VersionConsistencyTests
         Assert.Contains($"| .NET SDK | {version} |", VersionsDoc);
     }
 
-    [Fact]
+    [Test]
     public void Dockerfile_uses_the_pinned_sdk_version_and_a_pinned_dotnet_ef_tool_matches_EF_Core()
     {
         using var json = System.Text.Json.JsonDocument.Parse(File.ReadAllText(RepositoryRoot.File("global.json")));
@@ -53,7 +53,7 @@ public class VersionConsistencyTests
         Assert.Contains($"\"version\": \"{ef}\"", tools);
     }
 
-    [Fact]
+    [Test]
     public void Every_container_image_is_pinned_by_tag_and_digest_and_listed_in_versions_md()
     {
         var images = Dockerfiles.SelectMany(BaseImages)
@@ -70,7 +70,7 @@ public class VersionConsistencyTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Testcontainers_uses_the_same_postgres_image_as_compose()
     {
         Assert.Equal([PostgresDatabaseFixture.PostgresImage], BaseImages(DatabaseDockerfile));
@@ -79,7 +79,7 @@ public class VersionConsistencyTests
         Assert.Contains($"POSTGRES_INITDB_ARGS: \"{PostgresDatabaseFixture.InitDbArgs}\"", compose);
     }
 
-    [Fact]
+    [Test]
     public void Every_project_commits_a_lock_file_and_docker_restores_in_locked_mode()
     {
         Assert.Contains("<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>", File.ReadAllText(RepositoryRoot.File("Directory.Build.props")));
@@ -98,7 +98,7 @@ public class VersionConsistencyTests
     /// build). By default apt uses the live mirror with retries; passing APT_SNAPSHOT pins every OS package install, and
     /// the timestamp documented for that is the same in the Dockerfile and versions.md.
     /// </summary>
-    [Fact]
+    [Test]
     public void Apt_snapshot_is_opt_in_and_applied_to_every_OS_package_install_when_set()
     {
         var dockerfile = File.ReadAllText(RepositoryRoot.File("Dockerfile"));
@@ -156,7 +156,7 @@ public class VersionConsistencyTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Banned_api_analyzer_is_wired_into_every_project()
     {
         var props = File.ReadAllText(RepositoryRoot.File("Directory.Build.props"));
@@ -170,7 +170,7 @@ public class VersionConsistencyTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Every_project_targets_net10_through_Directory_Build_props_only()
     {
         Assert.Contains("<TargetFramework>net10.0</TargetFramework>", File.ReadAllText(RepositoryRoot.File("Directory.Build.props")));
@@ -180,7 +180,7 @@ public class VersionConsistencyTests
         }
     }
 
-    [Fact]
+    [Test]
     public void Runtime_image_tag_matches_the_runtime_versions_in_versions_md()
     {
         const string runtimeImage = "mcr.microsoft.com/dotnet/aspnet:";

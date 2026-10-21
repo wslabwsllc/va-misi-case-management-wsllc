@@ -1,3 +1,6 @@
+using NUnit.Framework.Interfaces;
+using NUnit.Framework.Internal;
+
 namespace CaseIntake.E2E.Infrastructure;
 
 /// <summary>One headless Chromium for the whole suite (tests run one at a time, each in its own browser context).</summary>
@@ -23,20 +26,20 @@ public sealed class PlaywrightFixture : IAsyncLifetime
     }
 }
 
-[CollectionDefinition(Name)]
-public sealed class E2ECollection : ICollectionFixture<PlaywrightFixture>
+/// <summary>
+/// Marks a test as ignored (with the reason shown in the results) when the synthetic-run staging folder is absent.
+/// Use with <c>[Test]</c>.
+/// </summary>
+[AttributeUsage(AttributeTargets.Method)]
+public sealed class FixturesRequiredAttribute : NUnitAttribute, IApplyToTest
 {
-    public const string Name = "E2E browser";
-}
-
-/// <summary>A fact that is skipped (with the reason shown in the results) when the synthetic-run staging folder is absent.</summary>
-public sealed class FixturesFactAttribute : FactAttribute
-{
-    public FixturesFactAttribute()
+    public void ApplyToTest(NUnit.Framework.Internal.Test test)
     {
-        if (E2ESettings.FixturesRoot is null)
+        if (E2ESettings.FixturesRoot is null && test.RunState == RunState.Runnable)
         {
-            Skip = "E2E_FIXTURES_ROOT is not set: the test results module tests need the web-e2e results folder (set by docker compose).";
+            test.RunState = RunState.Ignored;
+            test.Properties.Set(PropertyNames.SkipReason,
+                "E2E_FIXTURES_ROOT is not set: the test results module tests need the web-e2e results folder (set by docker compose).");
         }
     }
 }

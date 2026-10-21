@@ -30,7 +30,7 @@ the requirement change) and D13 (VA TRM approval of test-only tooling) remain Go
 | E1-1 | Structured JSON logs on stdout are the required telemetry; traces, metrics and a dashboard are optional and left out (OQ-13). | Spec 4.2 says "operational telemetry, such as logs". | More telemetry would need exporters and a collector. | Logs carry EventIds and operation IDs; [ADR 0003](adr/0003-telemetry-and-logging.md). | E1 |
 | E1-2 | Technical decisions are documented as ADRs in `docs/adr`, this file and the README (OQ-15). | The spec does not prescribe a format. | A required format means restructuring the documents. | ADR template and index; README links every document. | E1 |
 | E1-3 | Every automated suite, including browser end-to-end tests, runs in the `tests` Compose service (OQ-16). | Spec 4.5 requires one command to run the complete suite. | A runtime limit or a separate browser run would need the suite split. | `scripts/run-tests.sh` rejects missing or zero-test projects; [ADR 0004](adr/0004-test-strategy.md). | E1, E5 |
-| E1-4 | Times are stored in UTC and shown in US Eastern time (America/New_York). Amended 2026-10-21 (Change 1, part 4): every displayed timestamp is en-US `MM/dd/yyyy hh:mm AM/PM` followed by `EDT` or `EST` for that instant, dates are `MM/dd/yyyy`, and "(ET)" stays only on date-only fields and filters. Calendar days (today, overdue, default due dates, month buckets, date filters) follow the Eastern calendar (OQ-19). CSV exports and test report files stay in UTC. | Requested for the users' office time zone; storage stays UTC (spec 4.5). | Users in other time zones read Eastern times. | `EasternTime` unit tests (DST and day bounds); UTC value converters and model test; `UiText.Time` everywhere. | E1, E5 |
+| E1-4 | Times are stored in UTC and shown in US Eastern time (America/New_York). Amended 2026-10-21 (Change 1, part 4): every displayed timestamp is en-US `MM/dd/yyyy hh:mm AM/PM` followed by `EDT` or `EST` for that instant, dates are `MM/dd/yyyy`, and  "(ET)" stays only on date-only fields and filters. Amended again 2026-10-21 (redesign): times are 24-hour `MM-DD-YYYY HH:mm` and the suffix is always `ET`, never `EST` or `EDT`; dates are `MM-DD-YYYY`. Trade-off: during the repeated hour when clocks fall back (01:00-01:59 on the first Sunday of November) two different instants show the same text; the audit CSV export keeps exact UTC. Calendar days (today, overdue, default due dates, month buckets, date filters) follow the Eastern calendar (OQ-19). CSV exports and test report files stay in UTC. | Requested for the users' office time zone; storage stays UTC (spec 4.5). | Users in other time zones read Eastern times. | `EasternTime` unit tests (DST and day bounds); UTC value converters and model test; `UiText.Time` everywhere. | E1, E5 |
 | E1-5 | Services are pinned to `platform: linux/amd64`; ARM hosts run them under emulation (OQ-20). | Spec 4.5 requires Linux x86-64 containers. | Slower start-up and tests on Apple Silicon; no functional change. | Documented in the README. | E1 |
 | E2-1 | The case list filters by status (multi-select) and text search on Title or Description, sorts by Id, Title, Status, Created or Updated, defaults to 25 per page sorted by Updated descending, and accepts page sizes 1–100 (OQ-4). | The spec asks for paging, filtering and sorting without fields or sizes. | Different fields or sizes change the query and UI controls. | Allowlisted sort switch and escaped search; `CaseListTests` over every sort and filter. | E2 |
 | E2-2 | Title and Description are editable by both roles in every status except Closed; ID and status never change through edit; stale versions return Conflict (OQ-9). | Edit rules are not specified. | Different edit rules change the domain method and UI. | Domain `Edit` plus optimistic concurrency tests. | E2 |
@@ -114,6 +114,18 @@ the requirement change) and D13 (VA TRM approval of test-only tooling) remain Go
   taken and all data is synthetic.
 
 ## Known gaps (tracked, not hidden)
+
+- **SSN-shaped values in Git history (review F05, R24/R35).** Earlier commits contain SSN-shaped test values in the
+  issuable number range (areas 123, 13 occurrences, and 555; the full values are deliberately not repeated here), introduced 2026-10-16 to 2026-10-20 in
+  commits `d4ab5ac`, `790c43e`, `6acbbb1`, `55c3397` and `ae13e5f` (find them with
+  `git log --all -G "123-45-67|555-44-33" --oneline`). They are synthetic placeholders, not any person's data, and
+  the current tree no longer uses them: `SyntheticSsnGuardTests` fails the build for any SSN-shaped literal outside the
+  never-issued areas (000, 666, 900-999). The one remaining area-123 value is the example inside the Government's lookup
+  contract (`docs/contracts/veteran-lookup.spec.openapi.yaml`), which is kept verbatim as delivered. **Decision
+  (2026-10-21):** history is not rewritten, because a rewrite and force-push would invalidate every clone and open pull
+  request; this entry records the occurrences instead. If a clean history is required before the demo baseline, the
+  team must agree a freeze, run `git filter-repo --replace-text` with these values, force-push, and have everyone
+  re-clone.
 
 - Manual accessibility review (native file picker, download prompt, screen reader, zoom/reflow, real iOS/Android
   devices, reconnect) is not yet performed: [accessibility-review.md](accessibility-review.md).

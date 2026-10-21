@@ -4,10 +4,12 @@
 @inject ShellState Shell
 @inject NavigationManager Navigation
 
-@* App shell (E5-S1): skip link, one banner (desktop bar and phone app bar), the labelled site map, main, the phone
-   bottom bar, and the persistent polite live region. Desktop >= 1024 px shows the sidebar; 768-1023 px the same
-   sidebar is collapsible to an icon rail; below 768 px the sidebar is replaced by the bottom bar and the "More" sheet. *@
-<div class="app-shell">
+@* App shell (E5-S1, redesign): skip link, one banner (white desktop header with breadcrumb, notifications and the
+   signed-in user; the phone app bar), the deep navy sidebar with the labelled site map, main, the phone bottom bar and
+   the persistent polite live region. DOM order is banner, navigation, main; CSS grid puts the sidebar on the left.
+   Desktop >= 1024 px shows the full sidebar, the toggle collapses it to an icon rail (tooltips on hover and focus);
+   below 768 px the sidebar is replaced by the bottom bar and the "More" sheet. *@
+<div class="app-shell @(_navCollapsed ? "app-shell--collapsed" : null)">
     <a class="skip-link" href="#main" @onclick="SkipToMainAsync" @onclick:preventDefault="RendererInfo.IsInteractive">Skip to main content</a>
 
     <header class="app-header-wrap">
@@ -15,17 +17,11 @@
             @if (RendererInfo.IsInteractive)
             {
                 <button type="button" class="btn btn--subtle btn--icon app-header__toggle" aria-controls="app-nav"
-                        aria-expanded="@(_navCollapsed ? "false" : "true")" @onclick="ToggleNav" data-testid="nav-toggle">
+                        aria-expanded="@(_navCollapsed ? "false" : "true")" @onclick="ToggleNav" data-tooltip="@(_navCollapsed ? "Expand navigation" : "Collapse navigation")" data-tooltip-align="start" data-testid="nav-toggle">
                     <Icon Name="menu" />
                     <span class="visually-hidden">@(_navCollapsed ? "Expand navigation" : "Collapse navigation")</span>
                 </button>
             }
-            <a class="brand" href="" aria-label="Case Management, Case Intake and Triage, dashboard">
-                <img class="brand__mark" src="@Assets["icons/icon.svg"]" alt="" />
-                <span class="brand__name">Case Management</span>
-            </a>
-            <span class="brand__divider" aria-hidden="true"></span>
-            <span class="app-title desktop-only">Case Intake and Triage</span>
             <nav class="breadcrumb desktop-only" aria-label="Breadcrumb">
                 <ol>
                     @foreach (var crumb in Shell.Breadcrumbs)
@@ -43,12 +39,22 @@
                     }
                 </ol>
             </nav>
+            <AuthorizeView Policy="@Permissions.CasesView">
+                <form class="header-search" method="get" action="cases" role="search" aria-label="Search cases" data-testid="header-search">
+                    <label class="visually-hidden" for="header-search-input">Search cases by ID, title or description</label>
+                    <span class="input-icon">
+                        <Icon Name="search" Small="true" />
+                        <input id="header-search-input" type="search" name="q" maxlength="200" autocomplete="off" enterkeyhint="search" placeholder="Search cases…" />
+                    </span>
+                </form>
+            </AuthorizeView>
             <div class="user-menu">
                 <AuthorizeView Policy="@Permissions.CasesView">
-                    <a class="btn btn--subtle btn--icon header-bell" href="notifications" title="Notifications" data-testid="header-notifications">
+                    <a class="btn btn--icon header-bell" href="notifications" data-tooltip="Notifications" data-testid="header-notifications">
                         <Icon Name="bell" /><span class="visually-hidden">Notifications</span>
                         <NotificationBadge TestId="header-unread" />
                     </a>
+                    <span class="header-divider" aria-hidden="true"></span>
                 </AuthorizeView>
                 <UserStatus />
             </div>
@@ -57,18 +63,16 @@
         <MobileAppBar OnOpenProfile="OpenProfileAsync" @ref="_mobileBar" />
     </header>
 
-    <div class="app-body">
-        <SideNav Collapsed="_navCollapsed" />
-        <main id="main" class="app-main" tabindex="-1" @ref="_main">
-            <TopProgressBar />
-            <div class="page">
-                @Body
-            </div>
-        </main>
-    </div>
+    <SideNav Collapsed="_navCollapsed" />
+    <main id="main" class="app-main" tabindex="-1" @ref="_main">
+        <TopProgressBar />
+        <div class="page">
+            @Body
+        </div>
+        <FloatingNewCase />
+    </main>
 
     <BottomNav OnOpenMore="OpenMoreAsync" @ref="_bottomNav" />
-    <FloatingNewCase />
     <StatusAnnouncerOutlet />
 
     <MoreSheet @ref="_moreSheet" />

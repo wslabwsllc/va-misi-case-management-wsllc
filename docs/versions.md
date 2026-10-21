@@ -63,8 +63,9 @@ uncached build. The Chromium build itself is fixed by
 |---|---|
 | `Microsoft.CodeAnalysis.BannedApiAnalyzers` | 5.6.0 |
 | `Microsoft.NET.Test.Sdk` | 18.11.0 |
-| `xunit` | 2.9.3 |
-| `xunit.runner.visualstudio` | 3.1.5 |
+| `NUnit` | 4.4.0 |
+| `NUnit3TestAdapter` | 5.2.0 |
+| `NUnit.Analyzers` | 4.10.0 |
 | `Microsoft.AspNetCore.Mvc.Testing` | 10.0.13 |
 | `Microsoft.Extensions.TimeProvider.Testing` | 10.11.0 |
 | `Microsoft.Extensions.Diagnostics.Testing` | 10.11.0 |
@@ -72,7 +73,7 @@ uncached build. The Chromium build itself is fixed by
 | `Respawn` | 7.0.0 |
 | `NetArchTest.Rules` | 1.3.2 |
 | `bunit` | 2.11.3 |
-| `Microsoft.Playwright` | 1.63.0 |
+| `Microsoft.Playwright` | 1.52.0 |
 | `Deque.AxeCore.Playwright` | 4.13.0 |
 | `Microsoft.OpenApi.YamlReader` | 2.12.2 |
 

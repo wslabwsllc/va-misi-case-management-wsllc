@@ -149,7 +149,96 @@ internal sealed class TestResultsService(
             return Result<PagedList<TestExecutionRowDto>>.Failure(invalid);
         }
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        var executions = db.TestExecutions.AsNoTracking().AsQueryable();
+        var executions = FilterExecutions(db.TestExecutions.AsNoTracking(), query);
+        var total = await executions.CountAsync(ct);
+        var rows = await SortExecutions(executions)
+            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
+            .Select(RowProjection)
+            .ToListAsync(ct);
+        return Result<PagedList<TestExecutionRowDto>>.Success(new([.. rows.Select(TrimMessage)], query.Page, query.PageSize, total));
+    }
+
+    public async Task<Result<TestOutcomeCounts>> SummarizeExecutionsAsync(TestExecutionQuery query, CancellationToken ct)
+    {
+        if (await DeniedAsync<TestOutcomeCounts>(Permissions.TestResultsView, "execution summary", ct) is { } denied)
+        {
+            return denied;
+        }
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        var counts = await FilterExecutions(db.TestExecutions.AsNoTracking(), query)
+            .GroupBy(e => e.Outcome).Select(g => new { Outcome = g.Key, Count = g.Count() }).ToListAsync(ct);
+        return Result<TestOutcomeCounts>.Success(Counts(counts.Select(c => ((TestOutcome?)c.Outcome, c.Count))));
+    }
+
+    public async Task<Result<TestOutcomeCounts>> SummarizeTestCasesAsync(TestCaseQuery query, CancellationToken ct)
+    {
+        if (await DeniedAsync<TestOutcomeCounts>(Permissions.TestResultsView, "test case summary", ct) is { } denied)
+        {
+            return denied;
+        }
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        var counts = await FilterTestCases(db.TestCases.AsNoTracking(), query)
+            .GroupBy(c => c.LastOutcome).Select(g => new { Outcome = g.Key, Count = g.Count() }).ToListAsync(ct);
+        return Result<TestOutcomeCounts>.Success(Counts(counts.Select(c => (c.Outcome, c.Count))));
+    }
+
+    public async Task<Result<TestReportFile>> ExportExecutionsAsync(TestExecutionQuery query, CancellationToken ct)
+    {
+        if (await DeniedAsync<TestReportFile>(Permissions.TestResultsView, "execution export", ct) is { } denied)
+        {
+            return denied;
+        }
+        var actor = await currentUser.GetAsync(ct);
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        var rows = await SortExecutions(FilterExecutions(db.TestExecutions.AsNoTracking(), query)).Take(MaxExportRows).Select(RowProjection).ToListAsync(ct);
+        var now = time.GetUtcNow();
+        var filter = Describe(query);
+        await AuditExportAsync(db, actor, query.RunId, $"Filtered results ({rows.Count}): {filter}", ct);
+        return Result<TestReportFile>.Success(TestReportWriter.FilteredExecutionsCsv(rows, filter, now));
+    }
+
+    public async Task<Result<TestReportFile>> ExportTestCasesAsync(TestCaseQuery query, CancellationToken ct)
+    {
+        if (await DeniedAsync<TestReportFile>(Permissions.TestResultsView, "test case export", ct) is { } denied)
+        {
+            return denied;
+        }
+        var actor = await currentUser.GetAsync(ct);
+        await using var db = await contextFactory.CreateDbContextAsync(ct);
+        var items = await SortTestCases(FilterTestCases(db.TestCases.AsNoTracking(), query)).Take(MaxExportRows).ToListAsync(ct);
+        var now = time.GetUtcNow();
+        var filter = Describe(query);
+        await AuditExportAsync(db, actor, null, $"Filtered test cases ({items.Count}): {filter}", ct);
+        return Result<TestReportFile>.Success(TestReportWriter.FilteredTestCasesCsv([.. items.Select(Case)], filter, now));
+    }
+
+    private const int MaxExportRows = 20_000;
+
+    private async Task AuditExportAsync(AppDbContext db, OperationActor actor, long? runId, string details, CancellationToken ct)
+    {
+        db.TestResultAuditEntries.Add(new TestResultAuditEntry
+        {
+            OccurredAtUtc = time.GetUtcNow(), ActorId = actor.UserId, Actor = actor.DisplayName ?? actor.UserId!, Action = "ReportExported",
+            CorrelationId = Contracts.Common.OperationContext.CurrentId,
+            RunId = runId, Details = details.Length > TestResultFieldLimits.MessageMaxLength ? details[..TestResultFieldLimits.MessageMaxLength] : details,
+        });
+        await db.SaveChangesAsync(ct);
+        TestResultsLog.ReportExported(logger, runId ?? 0, "csv", actor.UserId);
+    }
+
+    private static TestOutcomeCounts Counts(IEnumerable<(TestOutcome? Outcome, int Count)> groups)
+    {
+        var list = groups.ToList();
+        int Of(TestOutcome o) => list.Where(g => g.Outcome == o).Sum(g => g.Count);
+        // A test case that never ran has no outcome: it counts as Not Run.
+        var notRun = Of(TestOutcome.NotExecuted) + list.Where(g => g.Outcome is null).Sum(g => g.Count);
+        return new TestOutcomeCounts(list.Sum(g => g.Count), Of(TestOutcome.Passed), Of(TestOutcome.Failed), Of(TestOutcome.Skipped),
+            Of(TestOutcome.Blocked), notRun, Of(TestOutcome.NotApplicable));
+    }
+
+    /// <summary>The results-list filter, shared by the list, its counts, its summary and its export.</summary>
+    internal static IQueryable<TestExecution> FilterExecutions(IQueryable<TestExecution> executions, TestExecutionQuery query)
+    {
         if (query.RunId is { } runId)
         {
             executions = executions.Where(e => e.RunId == runId);
@@ -167,20 +256,90 @@ internal sealed class TestResultsService(
         {
             executions = executions.Where(e => e.TestCase.Type == type);
         }
+        executions = query.Section508 switch
+        {
+            Section508Filter.Section508Only => executions.Where(e => e.TestCase.Accessibility == AccessibilityClassification.Section508),
+            Section508Filter.ExcludeSection508 => executions.Where(e => e.TestCase.Accessibility == null || e.TestCase.Accessibility != AccessibilityClassification.Section508),
+            _ => executions,
+        };
         if (Pattern(query.Search) is { } pattern)
         {
             executions = executions.Where(e => EF.Functions.ILike(e.TestCase.Title, pattern, LikeEscape) || EF.Functions.ILike(e.TestCase.FullName, pattern, LikeEscape));
         }
-        var total = await executions.CountAsync(ct);
-        var rows = await executions
-            .OrderBy(e => e.Outcome == TestOutcome.Failed ? 0 : e.Outcome == TestOutcome.NotExecuted ? 1 : e.Outcome == TestOutcome.Blocked ? 2 : 3)
-            .ThenBy(e => e.TestCase.Module).ThenBy(e => e.TestCase.Title).ThenBy(e => e.Id)
-            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize)
-            .Select(e => new TestExecutionRowDto(e.Id, e.RunId, e.TestCaseId, e.TestCase.Title, e.TestCase.FullName, e.TestCase.Module,
-                e.TestCase.Type, e.Outcome, TimeSpan.FromMilliseconds(e.DurationMs), e.Browser, e.Viewport, e.ErrorMessage, e.Artifacts.Count))
-            .ToListAsync(ct);
-        return Result<PagedList<TestExecutionRowDto>>.Success(new([.. rows.Select(TrimMessage)], query.Page, query.PageSize, total));
+        return executions;
     }
+
+    private static IQueryable<TestExecution> SortExecutions(IQueryable<TestExecution> executions) => executions
+        .OrderBy(e => e.Outcome == TestOutcome.Failed ? 0 : e.Outcome == TestOutcome.NotExecuted ? 1 : e.Outcome == TestOutcome.Blocked ? 2 : 3)
+        .ThenBy(e => e.TestCase.Module).ThenBy(e => e.TestCase.Title).ThenBy(e => e.Id);
+
+    /// <summary>The test-case-list filter, shared by the list, its summary and its export.</summary>
+    internal static IQueryable<TestCase> FilterTestCases(IQueryable<TestCase> cases, TestCaseQuery query)
+    {
+        if (!string.IsNullOrWhiteSpace(query.Module))
+        {
+            cases = cases.Where(c => c.Module == query.Module);
+        }
+        if (query.Type is { } type)
+        {
+            cases = cases.Where(c => c.Type == type);
+        }
+        if (query.LastOutcome is { } outcome)
+        {
+            cases = outcome == TestOutcome.NotExecuted
+                ? cases.Where(c => c.LastOutcome == outcome || c.LastOutcome == null)
+                : cases.Where(c => c.LastOutcome == outcome);
+        }
+        cases = query.Section508 switch
+        {
+            Section508Filter.Section508Only => cases.Where(c => c.Accessibility == AccessibilityClassification.Section508),
+            Section508Filter.ExcludeSection508 => cases.Where(c => c.Accessibility == null || c.Accessibility != AccessibilityClassification.Section508),
+            _ => cases,
+        };
+        if (Pattern(query.Search) is { } pattern)
+        {
+            cases = cases.Where(c => EF.Functions.ILike(c.Title, pattern, LikeEscape) || EF.Functions.ILike(c.FullName, pattern, LikeEscape)
+                || (c.Story != null && EF.Functions.ILike(c.Story, pattern, LikeEscape))
+                || (c.Requirements != null && EF.Functions.ILike(c.Requirements, pattern, LikeEscape)));
+        }
+        return cases;
+    }
+
+    private static IQueryable<TestCase> SortTestCases(IQueryable<TestCase> cases) =>
+        cases.OrderBy(c => c.LastOutcome == TestOutcome.Failed ? 0 : 1).ThenBy(c => c.Module).ThenBy(c => c.Title).ThenBy(c => c.Id);
+
+    private static string Describe(TestExecutionQuery q) => string.Join("; ", new[]
+    {
+        q.RunId is { } r ? $"run {r}" : "all runs",
+        q.Outcomes is { Count: > 0 } o ? "results " + string.Join("/", o.Select(x => TestReportWriter.OutcomeText(x))) : null,
+        q.Module is { Length: > 0 } m ? $"module {m}" : null,
+        q.Type is { } t ? $"type {t}" : null,
+        Describe(q.Section508),
+        q.Search is { Length: > 0 } s ? $"search \"{s}\"" : null,
+    }.OfType<string>());
+
+    private static string Describe(TestCaseQuery q) => string.Join("; ", new[]
+    {
+        q.Module is { Length: > 0 } m ? $"module {m}" : "all modules",
+        q.Type is { } t ? $"type {t}" : null,
+        q.LastOutcome is { } o ? $"last result {TestReportWriter.OutcomeText(o)}" : null,
+        Describe(q.Section508),
+        q.Search is { Length: > 0 } s ? $"search \"{s}\"" : null,
+    }.OfType<string>());
+
+    private static string Describe(Section508Filter filter) => filter switch
+    {
+        Section508Filter.Section508Only => "Section 508 tests only",
+        Section508Filter.ExcludeSection508 => "excluding Section 508 tests",
+        _ => "all tests",
+    };
+
+    /// <summary>The one projection of an execution row (lists, exports, comparisons).</summary>
+    private static readonly System.Linq.Expressions.Expression<Func<TestExecution, TestExecutionRowDto>> RowProjection =
+        e => new TestExecutionRowDto(e.Id, e.RunId, e.TestCaseId, e.TestCase.Title, e.TestCase.FullName, e.TestCase.Module,
+            e.TestCase.Type, e.Outcome, TimeSpan.FromMilliseconds(e.DurationMs), e.Browser, e.Viewport, e.ErrorMessage, e.Artifacts.Count,
+            e.TestCase.Accessibility, e.TestCase.Section508Provision, e.TestCase.WcagVersion, e.TestCase.WcagCriterion, e.TestCase.WcagLevel,
+            e.TestCase.Method, e.StartedAtUtc, e.Tester, e.AssistiveTechnology, e.DefectReference, e.TestCase.Workflow);
 
     public async Task<Result<TestExecutionDetailDto>> GetExecutionAsync(long executionId, CancellationToken ct)
     {
@@ -203,7 +362,8 @@ internal sealed class TestResultsService(
             e.ErrorMessage, e.StackTrace, e.StandardOutput, e.ConsoleLog, e.NetworkLog,
             [.. e.Steps.OrderBy(s => s.Order).Select(s => new TestStepDto(s.Order, s.Name, s.Outcome, TimeSpan.FromMilliseconds(s.DurationMs), s.Expected, s.Actual, s.Message))],
             [.. e.Artifacts.OrderBy(a => a.Kind).ThenBy(a => a.CreatedAtUtc).ThenBy(a => a.FileName).Select(Artifact)],
-            [.. (e.TestCase.Requirements ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]));
+            [.. (e.TestCase.Requirements ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)],
+            e.Tester, e.AssistiveTechnology, e.DefectReference, e.RemediationNotes));
     }
 
     public async Task<Result<PagedList<TestCaseDto>>> ListTestCasesAsync(TestCaseQuery query, CancellationToken ct)
@@ -217,28 +377,9 @@ internal sealed class TestResultsService(
             return Result<PagedList<TestCaseDto>>.Failure(invalid);
         }
         await using var db = await contextFactory.CreateDbContextAsync(ct);
-        var cases = db.TestCases.AsNoTracking().AsQueryable();
-        if (!string.IsNullOrWhiteSpace(query.Module))
-        {
-            cases = cases.Where(c => c.Module == query.Module);
-        }
-        if (query.Type is { } type)
-        {
-            cases = cases.Where(c => c.Type == type);
-        }
-        if (query.LastOutcome is { } outcome)
-        {
-            cases = cases.Where(c => c.LastOutcome == outcome);
-        }
-        if (Pattern(query.Search) is { } pattern)
-        {
-            cases = cases.Where(c => EF.Functions.ILike(c.Title, pattern, LikeEscape) || EF.Functions.ILike(c.FullName, pattern, LikeEscape)
-                || (c.Story != null && EF.Functions.ILike(c.Story, pattern, LikeEscape))
-                || (c.Requirements != null && EF.Functions.ILike(c.Requirements, pattern, LikeEscape)));
-        }
+        var cases = FilterTestCases(db.TestCases.AsNoTracking(), query);
         var total = await cases.CountAsync(ct);
-        var items = await cases.OrderBy(c => c.LastOutcome == TestOutcome.Failed ? 0 : 1).ThenBy(c => c.Module).ThenBy(c => c.Title).ThenBy(c => c.Id)
-            .Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
+        var items = await SortTestCases(cases).Skip((query.Page - 1) * query.PageSize).Take(query.PageSize).ToListAsync(ct);
         return Result<PagedList<TestCaseDto>>.Success(new([.. items.Select(Case)], query.Page, query.PageSize, total));
     }
 
@@ -405,8 +546,7 @@ internal sealed class TestResultsService(
         }
         var rows = await db.TestExecutions.AsNoTracking().Where(e => e.RunId == runId)
             .OrderBy(e => e.TestCase.Module).ThenBy(e => e.TestCase.Title)
-            .Select(e => new TestExecutionRowDto(e.Id, e.RunId, e.TestCaseId, e.TestCase.Title, e.TestCase.FullName, e.TestCase.Module,
-                e.TestCase.Type, e.Outcome, TimeSpan.FromMilliseconds(e.DurationMs), e.Browser, e.Viewport, e.ErrorMessage, e.Artifacts.Count))
+            .Select(RowProjection)
             .ToListAsync(ct);
         var summary = Summary(run);
         var comparison = await CompareAsync(db, run, ct);
@@ -492,8 +632,7 @@ internal sealed class TestResultsService(
 
     private static async Task<List<TestExecutionRowDto>> Rows(AppDbContext db, long runId, CancellationToken ct) =>
         [.. (await db.TestExecutions.AsNoTracking().Where(e => e.RunId == runId)
-            .Select(e => new TestExecutionRowDto(e.Id, e.RunId, e.TestCaseId, e.TestCase.Title, e.TestCase.FullName, e.TestCase.Module,
-                e.TestCase.Type, e.Outcome, TimeSpan.FromMilliseconds(e.DurationMs), e.Browser, e.Viewport, e.ErrorMessage, e.Artifacts.Count))
+            .Select(RowProjection)
             .ToListAsync(ct)).Select(TrimMessage)];
 
     private static TestExecutionRowDto TrimMessage(TestExecutionRowDto row) =>
@@ -501,10 +640,11 @@ internal sealed class TestResultsService(
 
     internal static TestRunSummaryDto Summary(TestRun r) => new(r.Id, r.RunKey, r.Status, r.StartedAtUtc, r.FinishedAtUtc,
         TimeSpan.FromMilliseconds(r.DurationMs), r.Environment?.Name ?? "unknown", r.GitBranch, r.GitCommit, r.BuildId, r.ImageVersion,
-        r.Runner, new TestOutcomeCounts(r.Total, r.Passed, r.Failed, r.Skipped, r.Blocked, r.NotExecuted), r.ImportedAtUtc, r.Notes);
+        r.Runner, new TestOutcomeCounts(r.Total, r.Passed, r.Failed, r.Skipped, r.Blocked, r.NotExecuted, r.NotApplicable), r.ImportedAtUtc, r.Notes);
 
     private static TestCaseDto Case(TestCase c) => new(c.Id, c.FullName, c.Title, c.Module, c.Type, c.Description, c.Story,
-        c.Requirements, c.AcceptanceCriteria, c.Priority, c.Preconditions, c.ExpectedResult, c.LastOutcome, c.LastRunId, c.FirstSeenAtUtc);
+        c.Requirements, c.AcceptanceCriteria, c.Priority, c.Preconditions, c.ExpectedResult, c.LastOutcome, c.LastRunId, c.FirstSeenAtUtc,
+        c.Accessibility, c.Section508Provision, c.WcagVersion, c.WcagCriterion, c.WcagLevel, c.Method, c.Workflow);
 
     private static TestArtifactDto Artifact(TestArtifact a) => new(a.Id, a.Kind, a.FileName, a.ContentType, a.SizeBytes, a.CreatedAtUtc, a.Purged, a.Caption);
 
@@ -514,6 +654,7 @@ internal sealed class TestResultsService(
         TestType.Component => "Component (bUnit)",
         TestType.Integration => "Integration",
         TestType.EndToEnd => "End-to-end (Playwright)",
+        TestType.Manual => "Manual",
         _ => type.ToString(),
     };
 

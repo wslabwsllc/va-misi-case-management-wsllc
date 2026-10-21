@@ -10,6 +10,12 @@ public enum ChartKind
 
     /// <summary>Lines with point markers (trends with several series).</summary>
     Line,
+
+    /// <summary>A ring of slices with the total in the centre and a legend with values and shares (one series).</summary>
+    Donut,
+
+    /// <summary>A full pie with a legend with values and shares (one series).</summary>
+    Pie,
 }
 
 /// <summary>One data series. <see cref="ColorVar"/> is a CSS custom property name from app.css (for example --series-1).</summary>
@@ -25,6 +31,9 @@ public static class ChartFormat
     public static string Seconds(double value) => value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + " s";
 
     public static string Percent(double value) => value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    /// <summary>A share of a total as "17.8%" ("0%" when the total is zero).</summary>
+    public static string Share(double value, double total) => total <= 0 ? "0%" : Percent(Math.Round(value * 100 / total, 1));
 
     /// <summary>A round axis maximum (1, 2, 2.5, 5 x 10^n) at or above <paramref name="max"/>.</summary>
     public static double NiceMax(double max)

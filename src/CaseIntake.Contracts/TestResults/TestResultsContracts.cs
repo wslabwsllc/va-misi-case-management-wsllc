@@ -8,8 +8,14 @@ public sealed record PagedList<T>(IReadOnlyList<T> Items, int Page, int PageSize
 /// <summary>A label and a count (chart and breakdown rows).</summary>
 public sealed record LabelCount(string Label, int Count);
 
-public sealed record TestOutcomeCounts(int Total, int Passed, int Failed, int Skipped, int Blocked, int NotExecuted)
+public sealed record TestOutcomeCounts(int Total, int Passed, int Failed, int Skipped, int Blocked, int NotExecuted, int NotApplicable = 0)
 {
+    /// <summary>
+    /// Passed / (Passed + Failed), 0 to 1, or null when neither occurred (shown as "N/A"). Used by the accessibility
+    /// summary; it is a share of executed verdicts, never a conformance score.
+    /// </summary>
+    public double? VerdictPassRate => Passed + Failed == 0 ? null : Passed / (double)(Passed + Failed);
+
     /// <summary>Tests that ran to a verdict: passed, failed or blocked (skipped and not executed are excluded).</summary>
     public int Executed => Passed + Failed + Blocked;
 
@@ -30,7 +36,10 @@ public sealed record TestRunDetailDto(TestRunSummaryDto Run, string OperatingSys
     IReadOnlyList<TestSuiteDto> Suites, IReadOnlyList<TestArtifactDto> Artifacts);
 
 public sealed record TestExecutionRowDto(long Id, long RunId, long TestCaseId, string TestTitle, string FullName, string Module,
-    TestType Type, TestOutcome Outcome, TimeSpan Duration, string? Browser, string? Viewport, string? FailureMessage, int ArtifactCount);
+    TestType Type, TestOutcome Outcome, TimeSpan Duration, string? Browser, string? Viewport, string? FailureMessage, int ArtifactCount,
+    AccessibilityClassification? Accessibility = null, string? Section508Provision = null, string? WcagVersion = null,
+    string? WcagCriterion = null, string? WcagLevel = null, TestMethod? Method = null, DateTimeOffset? ExecutedAtUtc = null,
+    string? Tester = null, string? AssistiveTechnology = null, string? DefectReference = null, string? Workflow = null);
 
 /// <summary>A run against the run before it (by start time). Previous is null for the first imported run.</summary>
 public sealed record TestRunComparisonDto(TestRunSummaryDto Current, TestRunSummaryDto? Previous,
@@ -44,14 +53,17 @@ public sealed record TestDashboardDto(TestRunSummaryDto? Latest, TestRunComparis
 
 public sealed record TestCaseDto(long Id, string FullName, string Title, string Module, TestType Type, string? Description,
     string? Story, string? Requirements, string? AcceptanceCriteria, string? Priority, string? Preconditions,
-    string? ExpectedResult, TestOutcome? LastOutcome, long? LastRunId, DateTimeOffset FirstSeenAtUtc);
+    string? ExpectedResult, TestOutcome? LastOutcome, long? LastRunId, DateTimeOffset FirstSeenAtUtc,
+    AccessibilityClassification? Accessibility = null, string? Section508Provision = null, string? WcagVersion = null,
+    string? WcagCriterion = null, string? WcagLevel = null, TestMethod? Method = null, string? Workflow = null);
 
 public sealed record TestStepDto(int Order, string Name, TestOutcome Outcome, TimeSpan Duration, string? Expected, string? Actual, string? Message);
 
 public sealed record TestExecutionDetailDto(long Id, TestCaseDto TestCase, TestRunSummaryDto Run, TestOutcome Outcome,
     DateTimeOffset? StartedAtUtc, DateTimeOffset? FinishedAtUtc, TimeSpan Duration, string? Browser, string? Viewport,
     string? ActualResult, string? ErrorMessage, string? StackTrace, string? StandardOutput, string? ConsoleLog, string? NetworkLog,
-    IReadOnlyList<TestStepDto> Steps, IReadOnlyList<TestArtifactDto> Artifacts, IReadOnlyList<string> Requirements);
+    IReadOnlyList<TestStepDto> Steps, IReadOnlyList<TestArtifactDto> Artifacts, IReadOnlyList<string> Requirements,
+    string? Tester = null, string? AssistiveTechnology = null, string? DefectReference = null, string? RemediationNotes = null);
 
 public sealed record TestHistoryPointDto(long RunId, string RunKey, DateTimeOffset RunStartedAtUtc, TestOutcome Outcome,
     TimeSpan Duration, string? GitCommit, long ExecutionId);
@@ -77,10 +89,10 @@ public sealed record TestRunQuery(int Page = 1, int PageSize = 25, TestRunStatus
     string? Search = null, DateOnly? FromDate = null, DateOnly? ToDate = null);
 
 public sealed record TestExecutionQuery(long? RunId = null, IReadOnlyList<TestOutcome>? Outcomes = null, string? Module = null,
-    TestType? Type = null, string? Search = null, int Page = 1, int PageSize = 50);
+    TestType? Type = null, string? Search = null, int Page = 1, int PageSize = 50, Section508Filter Section508 = Section508Filter.All);
 
 public sealed record TestCaseQuery(string? Module = null, TestType? Type = null, TestOutcome? LastOutcome = null,
-    string? Search = null, int Page = 1, int PageSize = 50);
+    string? Search = null, int Page = 1, int PageSize = 50, Section508Filter Section508 = Section508Filter.All);
 
 public sealed record TestArtifactQuery(long? RunId = null, TestArtifactKind? Kind = null, string? Search = null,
     int Page = 1, int PageSize = 48);
@@ -108,6 +120,18 @@ public interface ITestResultsService
     /// <param name="format"><c>csv</c> or <c>html</c>.</param>
     Task<Result<TestReportFile>> ExportRunAsync(long runId, string format, CancellationToken ct);
     Task<Result<ImportSummaryDto>> ImportAsync(CancellationToken ct);
+
+    /// <summary>Outcome counts over every execution matching <paramref name="query"/> (paging ignored).</summary>
+    Task<Result<TestOutcomeCounts>> SummarizeExecutionsAsync(TestExecutionQuery query, CancellationToken ct);
+
+    /// <summary>Last-outcome counts over every test case matching <paramref name="query"/> (paging ignored; never run = Not Run).</summary>
+    Task<Result<TestOutcomeCounts>> SummarizeTestCasesAsync(TestCaseQuery query, CancellationToken ct);
+
+    /// <summary>CSV of every execution matching <paramref name="query"/>, with the accessibility fields (audited).</summary>
+    Task<Result<TestReportFile>> ExportExecutionsAsync(TestExecutionQuery query, CancellationToken ct);
+
+    /// <summary>CSV of every test case matching <paramref name="query"/>, with the accessibility fields (audited).</summary>
+    Task<Result<TestReportFile>> ExportTestCasesAsync(TestCaseQuery query, CancellationToken ct);
 }
 
 /// <summary>URLs of the evidence and export endpoints (implemented in the web composition root).</summary>
@@ -118,4 +142,10 @@ public static class TestResultRoutes
     public static string ArtifactDownload(Guid id) => $"/test-results/artifacts/{id}?download=true";
 
     public static string Export(long runId, string format) => $"/test-results/runs/{runId}/export/{format}";
+
+    /// <summary>Filtered execution export (same query string as the results list).</summary>
+    public const string ExecutionsExport = "/test-results/executions/export.csv";
+
+    /// <summary>Filtered test case export (same query string as the test case list).</summary>
+    public const string TestCasesExport = "/test-results/cases/export.csv";
 }

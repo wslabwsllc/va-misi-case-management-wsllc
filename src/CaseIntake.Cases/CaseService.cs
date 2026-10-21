@@ -263,7 +263,8 @@ public sealed class CaseService(
             .Skip((query.Page - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(c => new CaseSummaryDto(c.Id, c.Title, c.Status, c.CreatedAtUtc, c.UpdatedAtUtc,
-                c.Priority, c.Category, c.AssignedTo, c.DueOn))
+                c.Priority, c.Category, c.AssignedTo, c.DueOn,
+                c.Description == null ? null : c.Description.Length > CaseSummaryDto.PreviewLength ? c.Description.Substring(0, CaseSummaryDto.PreviewLength) : c.Description))
             .ToListAsync(ct);
 
         return Result<PagedResult<CaseSummaryDto>>.Success(new PagedResult<CaseSummaryDto>(items, query.Page, query.PageSize, total));

@@ -4,12 +4,12 @@ using static Microsoft.Playwright.Assertions;
 namespace CaseIntake.E2E;
 
 /// <summary>A supervisor adds a user in the browser; the new user signs in, changes the initial password and signs in with the new one.</summary>
-public sealed class UserAdministrationTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed class UserAdministrationTests : E2ETestBase
 {
     private const string InitialPassword = "Initial-Passw0rd!";
     private const string NewPassword = "Changed-Passw0rd!";
 
-    [Fact]
+    [Test]
     public async Task Supervisor_adds_a_user_who_signs_in_and_changes_their_password()
     {
         await using var s = await StartAsync(Meta("Supervisor adds a user; the user changes their password", "User administration", ["R-4.2-11"],

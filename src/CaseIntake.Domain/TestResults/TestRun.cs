@@ -29,6 +29,9 @@ public sealed class TestRun
     public int Blocked { get; set; }
     public int NotExecuted { get; set; }
 
+    /// <summary>Recorded Not Applicable results (manual accessibility checks).</summary>
+    public int NotApplicable { get; set; }
+
     public string SuitesJson { get; set; } = "[]";
     public string? Notes { get; set; }
 

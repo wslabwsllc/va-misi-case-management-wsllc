@@ -9,13 +9,13 @@ namespace CaseIntake.E2E;
 /// all of them) and of the public pages. Evidence for the Section 508 report (docs/section-508). Per page: axe (WCAG 2.0,
 /// 2.1 and 2.2 A/AA rules), one h1, a page-specific title, lang="en-US", a main landmark; on desktop the first Tab
 /// reaches the skip link and focus stays visible and on the page for 30 Tab presses; at 320 CSS px (WCAG 1.4.10, 400%
-/// zoom of 1280 px) nothing scrolls sideways. Times carry EDT or EST.
+/// zoom of 1280 px) nothing scrolls sideways. Times carry "ET" (never EST or EDT).
 /// </summary>
-public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed partial class AccessibilitySweepTests : E2ETestBase
 {
     private const string TitleSuffix = " - Case Intake and Triage";
 
-    [GeneratedRegex(@"\b\d{2}/\d{2}/\d{4} \d{2}:\d{2} (AM|PM) (EDT|EST)\b")]
+    [GeneratedRegex(@"\b\d{2}-\d{2}-\d{4} \d{2}:\d{2} ET\b")]
     private static partial Regex EasternTimestamp();
 
     /// <summary>Every authenticated page; record pages use the first case and audit entry and stable seeded IDs.</summary>
@@ -49,7 +49,12 @@ public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) :
         Assert.True(await page.Locator("main, [role=main]").CountAsync() >= 1, $"{name}: no main landmark");
     }
 
-    [Fact]
+    [Test]
+    [Category("A11y:Section508")]
+    [Category("Section508:E205.4")]
+    [Category("Wcag:2.0:Multiple:AA")]
+    [Category("Method:Automated")]
+    [Category("Workflow:Every signed-in page")]
     public async Task Every_page_passes_axe_and_has_one_h1_a_title_a_language_and_a_main_landmark()
     {
         await using var s = await StartAsync(Meta("Accessibility sweep: every page (axe and structure)", "Accessibility and Section 508", ["CR-1", "R-4.2-8"],
@@ -69,7 +74,12 @@ public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) :
         s.Complete();
     }
 
-    [Fact]
+    [Test]
+    [Category("A11y:Section508")]
+    [Category("Section508:E205.4")]
+    [Category("Wcag:2.0:Multiple:AA")]
+    [Category("Method:Automated")]
+    [Category("Workflow:Public pages")]
     public async Task Public_pages_pass_axe_and_have_the_same_structure()
     {
         await using var s = await StartAsync(Meta("Accessibility sweep: public pages", "Accessibility and Section 508", ["CR-1"],
@@ -88,7 +98,12 @@ public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) :
         s.Complete();
     }
 
-    [Fact]
+    [Test]
+    [Category("A11y:Section508")]
+    [Category("Section508:E205.4")]
+    [Category("Wcag:2.0:2.4.7:AA")]
+    [Category("Method:Automated")]
+    [Category("Workflow:Keyboard navigation")]
     public async Task On_every_page_the_skip_link_comes_first_and_keyboard_focus_stays_visible()
     {
         await using var s = await StartAsync(Meta("Accessibility sweep: keyboard focus on every page", "Accessibility and Section 508", ["CR-1", "R-4.2-8"],
@@ -144,7 +159,11 @@ public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) :
         s.Complete();
     }
 
-    [Fact]
+    [Test]
+    [Category("A11y:Wcag22")]
+    [Category("Wcag:2.1:1.4.10:AA")]
+    [Category("Method:Automated")]
+    [Category("Workflow:Every signed-in page")]
     public async Task Every_page_reflows_at_320_css_pixels_without_sideways_scrolling()
     {
         await using var s = await StartAsync(Meta("Accessibility sweep: reflow at 320 CSS px", "Accessibility and Section 508", ["CR-1", "R-4.2-12"],
@@ -165,11 +184,11 @@ public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) :
         s.Complete();
     }
 
-    [Fact]
-    public async Task Times_are_shown_in_eastern_time_with_the_zone_in_en_US_format()
+    [Test]
+    public async Task Times_are_shown_in_eastern_time_as_MM_DD_YYYY_HH_mm_with_the_zone()
     {
-        await using var s = await StartAsync(Meta("Times are US Eastern with EDT or EST", "Date and time format", ["CR-1"],
-            expected: "Case detail, audit log and user detail show MM/dd/yyyy hh:mm AM/PM EDT|EST"));
+        await using var s = await StartAsync(Meta("Times are US Eastern with ET", "Date and time format", ["CR-1"],
+            expected: "Audit log and user detail show MM-DD-YYYY HH:mm ET"));
         var page = s.Page;
         await SignInAsync(s, DemoAccounts.Administrator);
 
@@ -181,6 +200,7 @@ public sealed partial class AccessibilitySweepTests(PlaywrightFixture fixture) :
                 var text = await page.GetByTestId(testId).InnerTextAsync();
                 Assert.Matches(EasternTimestamp(), text);
                 Assert.DoesNotMatch(new Regex(@"\b\d{4}-\d{2}-\d{2} \d{2}:\d{2}\b"), text);
+                Assert.DoesNotMatch(new Regex(@"\bE[SD]T\b"), text);   // the zone is always "ET"
             });
         }
         s.Complete();

@@ -19,17 +19,17 @@ namespace CaseIntake.Web.Tests;
 /// chosen file before upload, the audit trail pager, intake triage fields, notifications with unread state and the
 /// navigation badge, and the page progress bar.
 /// </summary>
-[Trait("Category", "Story:Issue-21")]
-[Trait("Category", "Story:Issue-22")]
-[Trait("Category", "Req:R-4.2-6")]
-[Trait("Category", "Req:R-4.2-12")]
+[Category("Story:Issue-21")]
+[Category("Story:Issue-22")]
+[Category("Req:R-4.2-6")]
+[Category("Req:R-4.2-12")]
 public class CaseTriageAndNotificationUiTests : WebTestContext
 {
     private IRenderedComponent<CaseDetail> RenderCase(long id) => Render<CaseDetail>(p => p.Add(c => c.Id, id));
 
     // ---------- Case detail (#22) ----------
 
-    [Fact]
+    [Test]
     public async Task Summary_strip_shows_the_triage_fields_and_the_due_state()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -42,13 +42,13 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("Contact details", cut.Find("[data-testid=summary-category]").TextContent.Trim());
         Assert.Equal("caseworker@example.test", cut.Find("[data-testid=summary-owner]").TextContent.Trim());
         var due = cut.Find("[data-testid=summary-due]");
-        Assert.Contains("10/16/2026", due.TextContent);
+        Assert.Contains("10-16-2026", due.TextContent);
         Assert.Contains("Overdue by 3 days", due.TextContent);   // today is 2026-10-19 (UTC)
         Assert.Contains("cell-overdue", due.ClassName);
         Assert.Equal("Case summary", cut.Find("[data-testid=record-header]").GetAttribute("aria-label"));
     }
 
-    [Fact]
+    [Test]
     public async Task Workflow_stepper_marks_completed_stages_and_the_current_step()
     {
         SignInAs(AppRoles.Supervisor);
@@ -61,16 +61,18 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Contains("stepper__step--complete", steps[0].ClassName);
         Assert.Contains("stepper__step--complete", steps[1].ClassName);
         Assert.Equal("step", steps[2].GetAttribute("aria-current"));
-        Assert.Contains("Current stage", steps[2].TextContent);
-        Assert.Contains("10/19/2026", steps[2].TextContent);   // when it was entered, from the audit trail
+        Assert.Contains("Current", steps[2].TextContent);
+        Assert.Equal("3", steps[2].QuerySelector(".stepper__marker")!.TextContent.Trim());   // numbered; completed stages show a check
+        Assert.Contains("since 10-19-2026", steps[2].TextContent);   // when it was entered, from the audit trail
         Assert.Contains("Not started", steps[3].TextContent);
         Assert.Single(cut.FindAll("[data-testid=workflow-stepper] [aria-current=step]"));
         // The status controls sit with the stepper and keep their heading and buttons.
         Assert.Equal("Status: In Progress", cut.Find("[data-testid=status-heading]").TextContent);
-        Assert.NotEmpty(cut.FindAll("[data-testid=workflow-section] [data-testid=transition-Resolved]"));
+        Assert.NotEmpty(cut.FindAll("[data-testid=status-section] [data-testid=transition-Resolved]"));
+        Assert.Contains("Next step: move to resolved", cut.Find("[data-testid=next-step]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Tabs_follow_the_tabs_pattern_with_arrow_keys_home_and_end()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -78,7 +80,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         var cut = RenderCase(created.Id);
 
         var tabs = cut.WaitForElement("[role=tablist]").QuerySelectorAll("[role=tab]");
-        Assert.Equal(["Overview", "Workflow", "Attachments", "History"], tabs.Select(t => t.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0]));
+        Assert.Equal(["Overview", "Attachments", "History"], tabs.Select(t => t.TextContent.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)[0]));
         Assert.Equal("Case sections", cut.Find("[role=tablist]").GetAttribute("aria-label"));
         Assert.Equal("true", cut.Find("[data-testid=tab-overview]").GetAttribute("aria-selected"));
         Assert.Equal("0", cut.Find("[data-testid=tab-overview]").GetAttribute("tabindex"));
@@ -88,11 +90,11 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("tab-overview", cut.Find("#panel-overview").GetAttribute("aria-labelledby"));
 
         cut.Find("[data-testid=tab-overview]").KeyDown("ArrowRight");
-        Assert.Equal("true", cut.Find("[data-testid=tab-workflow]").GetAttribute("aria-selected"));
-        Assert.False(cut.Find("#panel-workflow").HasAttribute("hidden"));
+        Assert.Equal("true", cut.Find("[data-testid=tab-attachments]").GetAttribute("aria-selected"));
+        Assert.False(cut.Find("#panel-attachments").HasAttribute("hidden"));
         Assert.True(cut.Find("#panel-overview").HasAttribute("hidden"));
 
-        cut.Find("[data-testid=tab-workflow]").KeyDown("End");
+        cut.Find("[data-testid=tab-attachments]").KeyDown("End");
         Assert.Equal("true", cut.Find("[data-testid=tab-history]").GetAttribute("aria-selected"));
         cut.Find("[data-testid=tab-history]").KeyDown("ArrowRight");   // wraps around
         Assert.Equal("true", cut.Find("[data-testid=tab-overview]").GetAttribute("aria-selected"));
@@ -104,7 +106,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("0", cut.Find("[data-testid=attachments-count]").TextContent.Trim()[..1]);
     }
 
-    [Fact]
+    [Test]
     public async Task Edit_saves_priority_category_and_due_date_and_shows_the_owner_read_only()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -115,12 +117,12 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         var owner = cut.Find("#edit-owner");
         Assert.True(owner.HasAttribute("readonly"));   // the owner changes only through Assign / Take case / Hand back
         Assert.Contains("Change the owner with Assign, Take case or Hand back.", cut.Find("#edit-owner-hint").TextContent);
-        Assert.Equal("2026-10-29", cut.Find("#edit-due").GetAttribute("value"));   // the default Medium target at intake
+        Assert.Equal("10-29-2026", cut.Find("#edit-due").GetAttribute("value"));   // the default Medium target at intake, MM-DD-YYYY
 
-        cut.Find("#edit-priority").Change("Urgent");
+        cut.Find("[data-testid=edit-priority-Urgent]").Change(true);
         cut.Find("#edit-category").Change("Records");
-        cut.Find("#edit-due").Change("2026-11-02");
-        cut.Find("[data-testid=edit-form]").Submit();
+        cut.Find("#edit-due").Change("11-02-2026");
+        SubmitEdit(cut);
 
         cut.WaitForAssertion(() => Assert.Equal("Changes saved", Announcer.Message));
         var request = CaseService.Updates.Last();
@@ -129,7 +131,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Contains("Due in 14 days", cut.Find("[data-testid=summary-due]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task A_server_error_on_a_triage_field_is_shown_on_the_field_and_in_the_summary()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -139,7 +141,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         CaseService.NextUpdateError = new Error(ErrorKind.Validation, "Validation", "Some fields need attention.",
             new Dictionary<string, string[]> { [CaseFieldNames.DueOn] = ["Due date must be between 2000-01-01 and 2100-12-31."] });
 
-        cut.Find("[data-testid=edit-form]").Submit();
+        SubmitEdit(cut);
 
         cut.WaitForAssertion(() => Assert.Equal("true", cut.Find("#edit-due").GetAttribute("aria-invalid")));
         Assert.Contains("edit-due-error", cut.Find("#edit-due").GetAttribute("aria-describedby"));
@@ -149,7 +151,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
 
     // ---------- Assignment (supervisors assign; case workers take or hand back) ----------
 
-    [Fact]
+    [Test]
     public async Task Supervisor_assigns_from_a_dialog_and_the_change_is_announced()
     {
         SignInAs(AppRoles.Supervisor);
@@ -171,7 +173,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Contains("Assigned", cut.Find("[data-testid=audit-list]").TextContent);
     }
 
-    [Fact]
+    [Test]
     public async Task Case_worker_takes_an_unassigned_case_then_can_hand_it_back()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -188,11 +190,10 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("The case is now unassigned", Announcer.Message);
     }
 
-    [Theory]
-    [InlineData(AppRoles.CaseWorker, "supervisor@example.test")]   // someone else's case
-    [InlineData(AppRoles.IntakeClerk, null)]
-    [InlineData(AppRoles.Auditor, null)]
-    [InlineData(AppRoles.QualityAnalyst, null)]
+    [TestCase(AppRoles.CaseWorker, "supervisor@example.test")]   // someone else's case
+    [TestCase(AppRoles.IntakeClerk, null)]
+    [TestCase(AppRoles.Auditor, null)]
+    [TestCase(AppRoles.QualityAnalyst, null)]
     public async Task No_assignment_control_without_the_right(string role, string? owner)
     {
         SignInAs(role);
@@ -203,7 +204,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=assign-case], [data-testid=take-case], [data-testid=hand-back]"));
     }
 
-    [Fact]
+    [Test]
     public async Task Closed_cases_offer_no_assignment()
     {
         SignInAs(AppRoles.Supervisor);
@@ -214,7 +215,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=assign-case]"));
     }
 
-    [Fact]
+    [Test]
     public async Task Audit_trail_is_paged_newest_first()
     {
         var busy = await SeedCaseAsync("Edited many times");   // 1 entry (Created)
@@ -238,7 +239,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
 
     // ---------- Attachments: remove the chosen file (#21) ----------
 
-    [Fact]
+    [Test]
     public async Task A_chosen_file_can_be_removed_before_upload()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -262,28 +263,29 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
 
     // ---------- Intake triage fields (#22) ----------
 
-    [Fact]
+    [Test]
     public void Intake_offers_priority_category_owner_and_explains_the_default_due_date()
     {
         SignInAs(AppRoles.Supervisor);   // choosing the owner at intake is a supervisor's assignment
         var cut = Render<NewCase>();
 
-        Assert.Contains("Leave empty to use the target for Medium priority: 10 days (10/29/2026).", cut.Find("#intake-due-hint").TextContent);
-        cut.Find("#intake-priority").Change("Urgent");
-        Assert.Contains("Urgent priority: 2 days (10/21/2026)", cut.Find("#intake-due-hint").TextContent);
+        Assert.Contains("Leave empty to use the target for Medium priority: 10 days (10-29-2026).", cut.Find("#intake-due-hint").TextContent);
+        cut.Find("[data-testid=intake-priority-Urgent]").Change(true);
+        Assert.Contains("Urgent priority: 2 days (10-21-2026)", cut.Find("#intake-due-hint").TextContent);
+        Assert.Equal("radio", cut.Find("#intake-priority").GetAttribute("type"));   // the first option, the error summary target
         Assert.Equal(3, cut.FindAll("#intake-owner option").Count);   // Unassigned and the two people who work cases
 
         cut.Find("#intake-title").Input("Triage at intake");
         cut.Find("#intake-category").Change("Travel");
         cut.Find("#intake-owner").Change("caseworker@example.test");
         cut.Find("[data-testid=intake-form]").Submit();
+        cut.Find("[data-testid=confirm-intake-submit]").Click();
 
         cut.WaitForAssertion(() => Assert.EndsWith("/cases/1", Navigation.Uri, StringComparison.Ordinal));
     }
 
-    [Theory]
-    [InlineData(AppRoles.IntakeClerk)]
-    [InlineData(AppRoles.CaseWorker)]
+    [TestCase(AppRoles.IntakeClerk)]
+    [TestCase(AppRoles.CaseWorker)]
     public void Intake_shows_the_owner_read_only_to_roles_that_do_not_assign(string role)
     {
         SignInAs(role);
@@ -302,7 +304,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         NotificationFeed.Items.Add(new CaseNotificationDto(id, id, $"Case title {id}", action, CaseStatus.New, CaseStatus.Triaged,
             "supervisor@example.test", Time.GetUtcNow().AddMinutes(-minutesAgo), null, unread, AssignedToMe: id == 1));
 
-    [Fact]
+    [Test]
     public void An_assignment_to_you_reads_as_such_and_is_labelled()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -316,7 +318,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("Assigned to you", item.QuerySelector("[data-testid=assigned-to-you]")!.TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Notifications_page_marks_unread_entries_and_mark_all_as_read_clears_them()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -343,7 +345,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.True(cut.Find("[data-testid=mark-all-read]").HasAttribute("disabled"));
     }
 
-    [Fact]
+    [Test]
     public void Navigation_badge_shows_the_unread_count_and_updates_on_case_activity()
     {
         SignInAs(AppRoles.CaseWorker);
@@ -366,7 +368,7 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
 
     // ---------- Progress bar (#21) ----------
 
-    [Fact]
+    [Test]
     public void Top_progress_bar_shows_while_any_page_work_runs()
     {
         SignInAs(AppRoles.CaseWorker);

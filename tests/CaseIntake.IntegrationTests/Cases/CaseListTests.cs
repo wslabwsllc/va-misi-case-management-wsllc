@@ -63,14 +63,16 @@ public sealed class CaseListFixture : IAsyncLifetime
 }
 
 /// <summary>E2-S5: paging, filtering and allowlisted sorting run in the database.</summary>
-public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixture>
+public class CaseListTests : ClassFixture<CaseListTests, CaseListFixture>
 {
+    private static CaseListFixture fixture => Shared;
+
     private readonly CaseTestHarness _harness = new(fixture.Database) { Actor = TestActors.CaseWorker };
 
     private async Task<PagedResult<CaseSummaryDto>> ListAsync(CaseListQuery query) =>
         CaseTestHarness.Ok(await _harness.Service.ListAsync(query, CancellationToken.None));
 
-    [Fact]
+    [Test]
     public async Task Pages_slice_the_ordered_results_and_report_the_total()
     {
         var expected = Expected(fixture.Cases, CaseSortField.UpdatedAt, SortDirection.Descending);
@@ -88,7 +90,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(60, page4.TotalCount);
     }
 
-    [Fact]
+    [Test]
     public async Task Default_query_is_25_per_page_by_UpdatedAt_descending()
     {
         var result = await ListAsync(new CaseListQuery());
@@ -110,8 +112,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         return data;
     }
 
-    [Theory]
-    [MemberData(nameof(SortCombinations))]
+    [TestCaseSource(nameof(SortCombinations))]
     public async Task Every_sort_field_and_direction_orders_with_an_Id_tiebreaker(CaseSortField field, SortDirection direction)
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, SortBy: field, Direction: direction));
@@ -119,7 +120,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(Expected(fixture.Cases, field, direction), result.Items.Select(i => i.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Status_filter_returns_only_matching_statuses()
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, Statuses: [CaseStatus.Triaged, CaseStatus.InProgress]));
@@ -128,7 +129,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.All(result.Items, i => Assert.Contains(i.Status, new[] { CaseStatus.Triaged, CaseStatus.InProgress }));
     }
 
-    [Fact]
+    [Test]
     public async Task Search_matches_title_or_description_case_insensitively()
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, Search: "water"));
@@ -140,10 +141,9 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Contains(result.Items, i => !i.Title.Contains("Water", StringComparison.Ordinal));   // description-only match
     }
 
-    [Theory]
-    [InlineData("%", "Discount 100% applied")]
-    [InlineData("_", "Upload file_name problem")]
-    [InlineData("\\", "Path back\\slash issue")]
+    [TestCase("%", "Discount 100% applied")]
+    [TestCase("_", "Upload file_name problem")]
+    [TestCase("\\", "Path back\\slash issue")]
     public async Task Wildcards_in_search_text_match_literally(string search, string onlyTitle)
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, Search: search));
@@ -151,7 +151,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(onlyTitle, Assert.Single(result.Items).Title);
     }
 
-    [Fact]
+    [Test]
     public async Task Filters_and_sort_combine_before_paging()
     {
         var query = new CaseListQuery(Page: 2, PageSize: 3, Statuses: [CaseStatus.New, CaseStatus.Closed], Search: "review",
@@ -166,7 +166,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(Expected(matching, CaseSortField.Title, SortDirection.Ascending).Skip(3).Take(3), result.Items.Select(i => i.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Blank_search_and_empty_status_list_do_not_filter()
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, Statuses: [], Search: "   "));
@@ -174,10 +174,9 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(60, result.TotalCount);
     }
 
-    [Theory]
-    [InlineData(0, 25)]
-    [InlineData(1, 0)]
-    [InlineData(1, 101)]
+    [TestCase(0, 25)]
+    [TestCase(1, 0)]
+    [TestCase(1, 101)]
     public async Task Invalid_paging_is_a_validation_error(int page, int pageSize)
     {
         var error = CaseTestHarness.Fail(await _harness.Service.ListAsync(new CaseListQuery(page, pageSize), CancellationToken.None), ErrorKind.Validation);
@@ -185,7 +184,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal("InvalidQuery", error.Code);
     }
 
-    [Fact]
+    [Test]
     public async Task Listing_requires_view_permission()
     {
         _harness.Actor = TestActors.NoPermissions;
@@ -218,7 +217,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
 
     // ---------- Triage filters (issues #21 and #22) ----------
 
-    [Fact]
+    [Test]
     public async Task Priority_category_and_owner_filters_combine()
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, Priorities: [CasePriority.Urgent, CasePriority.High],
@@ -231,7 +230,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.All(result.Items, i => Assert.Equal("caseworker@example.test", i.AssignedTo));
     }
 
-    [Fact]
+    [Test]
     public async Task Unassigned_filter_selects_cases_without_an_owner()
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, AssignedTo: CaseListQuery.UnassignedFilter));
@@ -240,7 +239,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.All(result.Items, i => Assert.Null(i.AssignedTo));
     }
 
-    [Fact]
+    [Test]
     public async Task Overdue_filter_keeps_open_cases_due_before_today_utc()
     {
         // The harness clock is 2026-10-16; fixture due dates run from 2026-04-01 to 2026-12-27.
@@ -253,7 +252,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(expected, result.Items.Select(i => i.Id).Order());
     }
 
-    [Fact]
+    [Test]
     public async Task Created_and_updated_ranges_are_inclusive()
     {
         var from = new DateTimeOffset(2026, 3, 1, 10, 0, 0, TimeSpan.Zero);
@@ -266,7 +265,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(fixture.Cases.Where(c => c.UpdatedAtUtc >= from && c.UpdatedAtUtc <= to).Select(c => c.Id).Order(), updated.Items.Select(i => i.Id).Order());
     }
 
-    [Fact]
+    [Test]
     public async Task Summaries_carry_the_triage_fields()
     {
         var result = await ListAsync(new CaseListQuery(PageSize: 100, SortBy: CaseSortField.Id, Direction: SortDirection.Ascending));
@@ -277,7 +276,7 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         }
     }
 
-    [Fact]
+    [Test]
     public async Task An_inverted_date_range_or_unknown_priority_is_rejected()
     {
         var inverted = await _harness.Service.ListAsync(new CaseListQuery(CreatedFromUtc: DateTimeOffset.UnixEpoch.AddDays(2), CreatedToUtc: DateTimeOffset.UnixEpoch), CancellationToken.None);
@@ -286,5 +285,48 @@ public class CaseListTests(CaseListFixture fixture) : IClassFixture<CaseListFixt
         Assert.Equal(ErrorKind.Validation, inverted.Error!.Kind);
         Assert.Contains("DateRange", inverted.Error.FieldErrors!.Keys);
         Assert.Contains(nameof(CaseListQuery.Priorities), unknown.Error!.FieldErrors!.Keys);
+    }
+
+    [Test]
+    public async Task Search_by_case_number_finds_that_case_with_or_without_a_hash()
+    {
+        var target = fixture.Cases.Where(c => c.Title == "Birch review" && c.Id > 20).OrderBy(c => c.Id).First();
+
+        var plain = await ListAsync(new CaseListQuery(PageSize: 100, Search: target.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+        var hashed = await ListAsync(new CaseListQuery(PageSize: 100, Search: $"#{target.Id}"));
+
+        Assert.Contains(plain.Items, c => c.Id == target.Id);
+        Assert.Contains(hashed.Items, c => c.Id == target.Id);
+        Assert.Equal(0, (await ListAsync(new CaseListQuery(PageSize: 100, Search: "#999999"))).TotalCount);
+    }
+
+    [Test]
+    public async Task Due_date_range_keeps_cases_due_inside_it_and_drops_cases_without_a_due_date()
+    {
+        var from = new DateOnly(2026, 6, 1);
+        var to = new DateOnly(2026, 8, 31);
+        var expected = fixture.Cases.Where(c => c.DueOn >= from && c.DueOn <= to).Select(c => c.Id).Order().ToList();
+        Assert.NotEmpty(expected);
+
+        var page = await ListAsync(new CaseListQuery(PageSize: 100, DueFrom: from, DueTo: to, SortBy: CaseSortField.Id, Direction: SortDirection.Ascending));
+
+        Assert.Equal(expected, page.Items.Select(c => c.Id));
+        Assert.Equal(expected.Count, page.TotalCount);
+        var onlyFrom = await ListAsync(new CaseListQuery(PageSize: 100, DueFrom: from));
+        Assert.All(onlyFrom.Items, c => Assert.True(c.DueOn >= from));
+        var inverted = await _harness.Service.ListAsync(new CaseListQuery(DueFrom: to, DueTo: from), CancellationToken.None);
+        Assert.Contains("DateRange", inverted.Error!.FieldErrors!.Keys);
+    }
+
+    [Test]
+    public async Task Rows_carry_a_description_preview_capped_for_the_list()
+    {
+        var page = await ListAsync(new CaseListQuery(PageSize: 100));
+
+        foreach (var summary in page.Items)
+        {
+            var entity = fixture.Cases.Single(c => c.Id == summary.Id);
+            Assert.Equal(entity.Description is { Length: > CaseSummaryDto.PreviewLength } d ? d[..CaseSummaryDto.PreviewLength] : entity.Description, summary.DescriptionPreview);
+        }
     }
 }

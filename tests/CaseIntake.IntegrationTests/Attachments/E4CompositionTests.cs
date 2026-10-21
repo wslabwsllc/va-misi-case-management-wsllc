@@ -6,9 +6,11 @@ using CaseIntake.VeteranLookup.Client;
 namespace CaseIntake.IntegrationTests.Attachments;
 
 /// <summary>DoD #3: the composed web app uses the real E4 modules, never the TestKit fakes.</summary>
-public class E4CompositionTests(AttachmentWebFixture fixture) : IClassFixture<AttachmentWebFixture>
+public class E4CompositionTests : ClassFixture<E4CompositionTests, AttachmentWebFixture>
 {
-    [Fact]
+    private static AttachmentWebFixture fixture => Shared;
+
+    [Test]
     public async Task The_web_app_registers_the_real_lookup_client_and_attachment_service()
     {
         await using var scope = fixture.Factory.Services.CreateAsyncScope();

@@ -377,3 +377,41 @@ reference); a focused control could scroll under the sticky header (scroll paddi
 
 - `docker compose up --build` and `docker compose run --rm tests`: blocked on this host (Docker permissions).
 - Manual accessibility procedures M1 to M9 ([section-508/manual-test-procedures.md](section-508/manual-test-procedures.md)): not performed.
+
+# Verification record (Redesign and Section 508 results, issue #43)
+
+Branch `feat/redesign-and-508-results` (PR #44). Host: Windows Server 2025 x64, Docker Engine 29.8.2.
+
+## Offline (no egress) runtime check: review finding F07, gate G3
+
+Command: `docker compose --profile tests build` (connected, build only), then `scripts/run-offline-check.sh all`.
+The stack runs on an internal Compose network (`docker-compose.offline.yml`); the check runs inside the tests container.
+Run key `20261021T144111Z-offline`, exit code 0.
+
+| Egress probe (must fail) | Result |
+|---|---|
+| DNS for `api.nuget.org` | does not resolve |
+| Outbound TCP to `1.1.1.1:443` | blocked |
+| `web-e2e:8080` inside the stack | reachable |
+
+| Suite (no egress) | Total | Failed |
+|---|---|---|
+| Attachments.Tests | 86 | 0 |
+| Cases.Tests | 153 | 0 |
+| Identity.Tests | 152 | 0 |
+| VeteranLookup.Tests | 111 | 0 |
+| Web.Tests (bUnit) | 248 | 0 |
+| IntegrationTests | 434 | 0 |
+| E2E (Playwright + axe) | 30 | 0 |
+
+The first offline run (`20261021T142928Z-offline`) failed 1 of 30 E2E tests:
+`Administrator_manages_a_role_a_user_and_their_permissions_with_the_keyboard_only`, where the user search showed
+0 rows. The cause was a defect in this branch, not the network. The redesign had changed four search boxes (Users,
+All cases, test run detail, test cases) from `@bind` with `@bind:event="oninput"` to `value=` with `@oninput`. When a
+round trip is slow, that pattern lets a re-render overwrite characters that are still being typed. The four boxes use
+`@bind` with `@bind:after` again, and the rerun above passed.
+
+## Not verified / open
+- Clean-clone cold start by a non-author on Linux, Windows and Apple Silicon (F03).
+- Manual screen-reader, zoom and contrast review (F06): Not Run.
+- Ten repeated runs of the stale-save test (F12) and the container image scan of this branch (F10, Trivy).

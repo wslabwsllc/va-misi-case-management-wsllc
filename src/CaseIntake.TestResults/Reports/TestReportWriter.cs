@@ -25,6 +25,62 @@ internal static class TestReportWriter
             $"test-run-{run.RunKey}.csv", "text/csv; charset=utf-8");
     }
 
+    /// <summary>"Not Run" for tests that never executed; the other outcomes by name (Not Applicable spelled out).</summary>
+    internal static string OutcomeText(TestOutcome? outcome) => outcome switch
+    {
+        null or TestOutcome.NotExecuted => "Not Run",
+        TestOutcome.NotApplicable => "Not Applicable",
+        { } o => o.ToString(),
+    };
+
+    internal static string ClassificationText(AccessibilityClassification? classification) => classification switch
+    {
+        AccessibilityClassification.Section508 => "Section 508",
+        AccessibilityClassification.Wcag22Project => "WCAG 2.2 AA project check",
+        _ => "",
+    };
+
+    private static string Iso(DateTimeOffset? value) =>
+        value?.UtcDateTime.ToString("yyyy-MM-ddTHH:mm:ssZ", CultureInfo.InvariantCulture) ?? string.Empty;
+
+    /// <summary>The executions matching a results-list filter, with their accessibility fields (QA 508 enhancement).</summary>
+    public static TestReportFile FilteredExecutionsCsv(IReadOnlyList<TestExecutionRowDto> rows, string filter, DateTimeOffset generatedAtUtc)
+    {
+        var csv = new StringBuilder();
+        csv.Append("# Filter: ").AppendLine(Cell(filter));
+        csv.AppendLine("RunId,ExecutionId,TestId,Test,Module,Workflow,Type,Classification,Section508Provision,WcagVersion,WcagCriterion,WcagLevel,Method,Result,ExecutedAtUtc,Tester,Browser,AssistiveTechnology,DefectReference,EvidenceFiles,Message");
+        foreach (var r in rows)
+        {
+            csv.AppendJoin(',', [
+                r.RunId.ToString(CultureInfo.InvariantCulture), r.Id.ToString(CultureInfo.InvariantCulture),
+                r.TestCaseId.ToString(CultureInfo.InvariantCulture), Cell(r.TestTitle), Cell(r.Module), Cell(r.Workflow ?? ""),
+                r.Type.ToString(), Cell(ClassificationText(r.Accessibility)), Cell(r.Section508Provision ?? ""), Cell(r.WcagVersion ?? ""),
+                Cell(r.WcagCriterion ?? ""), Cell(r.WcagLevel ?? ""), r.Method?.ToString() ?? "", OutcomeText(r.Outcome), Iso(r.ExecutedAtUtc),
+                Cell(r.Tester ?? ""), Cell(r.Browser ?? ""), Cell(r.AssistiveTechnology ?? ""), Cell(r.DefectReference ?? ""),
+                r.ArtifactCount.ToString(CultureInfo.InvariantCulture), Cell(r.FailureMessage ?? "")]).AppendLine();
+        }
+        return new TestReportFile(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray(),
+            $"test-results-filtered-{generatedAtUtc.UtcDateTime.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)}.csv", "text/csv; charset=utf-8");
+    }
+
+    /// <summary>The test cases matching a test-case-list filter, with their accessibility fields and last result.</summary>
+    public static TestReportFile FilteredTestCasesCsv(IReadOnlyList<TestCaseDto> cases, string filter, DateTimeOffset generatedAtUtc)
+    {
+        var csv = new StringBuilder();
+        csv.Append("# Filter: ").AppendLine(Cell(filter));
+        csv.AppendLine("TestId,Test,Module,Workflow,Type,Classification,Section508Provision,WcagVersion,WcagCriterion,WcagLevel,Method,LastResult,LastRunId,ExpectedResult");
+        foreach (var c in cases)
+        {
+            csv.AppendJoin(',', [
+                c.Id.ToString(CultureInfo.InvariantCulture), Cell(c.Title), Cell(c.Module), Cell(c.Workflow ?? ""), c.Type.ToString(),
+                Cell(ClassificationText(c.Accessibility)), Cell(c.Section508Provision ?? ""), Cell(c.WcagVersion ?? ""), Cell(c.WcagCriterion ?? ""),
+                Cell(c.WcagLevel ?? ""), c.Method?.ToString() ?? "", OutcomeText(c.LastOutcome),
+                c.LastRunId?.ToString(CultureInfo.InvariantCulture) ?? "", Cell(c.ExpectedResult ?? "")]).AppendLine();
+        }
+        return new TestReportFile(Encoding.UTF8.GetPreamble().Concat(Encoding.UTF8.GetBytes(csv.ToString())).ToArray(),
+            $"test-cases-filtered-{generatedAtUtc.UtcDateTime.ToString("yyyyMMddTHHmmssZ", CultureInfo.InvariantCulture)}.csv", "text/csv; charset=utf-8");
+    }
+
     public static TestReportFile Html(TestRunSummaryDto run, TestEnvironment environment, IReadOnlyList<TestSuiteDto> suites,
         TestRunComparisonDto comparison, IReadOnlyList<TestExecutionRowDto> rows, DateTimeOffset generatedAtUtc)
     {

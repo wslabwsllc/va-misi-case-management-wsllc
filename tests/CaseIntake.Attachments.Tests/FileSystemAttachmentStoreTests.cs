@@ -28,7 +28,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
 
     private string[] AllFiles() => Directory.Exists(_root) ? Directory.GetFiles(_root, "*", SearchOption.AllDirectories) : [];
 
-    [Fact]
+    [Test]
     public async Task Staging_counts_bytes_and_computes_the_SHA256()
     {
         var bytes = Encoding.UTF8.GetBytes("abc");
@@ -42,7 +42,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.EndsWith(".part", staged.TempPath, StringComparison.Ordinal);
     }
 
-    [Fact]
+    [Test]
     public async Task Staging_captures_the_leading_bytes_for_the_signature_check()
     {
         var staged = await _store.StageAsync(new MemoryStream("%PDF-1.7 rest of file"u8.ToArray()), 100, CancellationToken.None);
@@ -52,7 +52,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Equal(new byte[] { 0xFF, 0xD8 }, tiny.Header);
     }
 
-    [Fact]
+    [Test]
     public async Task Promoting_moves_the_file_to_a_sharded_key_path_and_it_reads_back_identically()
     {
         var bytes = RandomNumberGenerator.GetBytes(200_000);
@@ -70,7 +70,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Equal(Convert.ToHexStringLower(SHA256.HashData(bytes)), staged.Sha256);
     }
 
-    [Fact]
+    [Test]
     public async Task Reading_stops_once_the_limit_is_exceeded_and_nothing_is_left_behind()
     {
         var stream = new CountingStream(new MemoryStream(new byte[1_000_000]));
@@ -82,7 +82,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Empty(AllFiles());
     }
 
-    [Fact]
+    [Test]
     public async Task An_interrupted_stream_leaves_no_temporary_file()
     {
         var failure = await Assert.ThrowsAsync<UploadSourceException>(() => _store.StageAsync(new FailingStream(after: 10_000), 1_000_000, CancellationToken.None));
@@ -92,7 +92,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Empty(AllFiles());
     }
 
-    [Fact]
+    [Test]
     public async Task Cancellation_while_staging_leaves_no_temporary_file()
     {
         using var cts = new CancellationTokenSource();
@@ -103,7 +103,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Empty(AllFiles());
     }
 
-    [Fact]
+    [Test]
     public void Missing_content_reads_as_null_and_deleting_it_is_harmless()
     {
         var key = Key();
@@ -112,18 +112,17 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         _store.Delete(key);
     }
 
-    [Theory]
-    [InlineData("../../../etc/passwd")]
-    [InlineData("ABCDEF0123456789ABCDEF0123456789")]
-    [InlineData("0123456789abcdef")]
-    [InlineData("")]
+    [TestCase("../../../etc/passwd")]
+    [TestCase("ABCDEF0123456789ABCDEF0123456789")]
+    [TestCase("0123456789abcdef")]
+    [TestCase("")]
     public void Keys_that_are_not_server_generated_are_refused_before_building_a_path(string key)
     {
         Assert.Throws<ArgumentException>(() => _store.OpenRead(key));
         Assert.Throws<ArgumentException>(() => _store.Delete(key));
     }
 
-    [Fact]
+    [Test]
     public async Task Enumeration_reports_temporary_files_and_content_with_their_keys()
     {
         var key = Key();
@@ -134,7 +133,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Equal([key], _store.EnumerateContent().Select(f => f.Key));
     }
 
-    [Fact]
+    [Test]
     public async Task Files_outside_the_root_are_never_deleted_through_the_store()
     {
         var outside = Path.Combine(Path.GetTempPath(), "outside-" + Guid.NewGuid().ToString("N"));
@@ -151,7 +150,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         }
     }
 
-    [Fact]
+    [Test]
     public async Task A_root_configured_with_a_trailing_separator_still_deletes_its_own_files()
     {
         var store = new FileSystemAttachmentStore(Options.Create(new AttachmentOptions { RootPath = _root + Path.DirectorySeparatorChar }));
@@ -163,7 +162,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.Empty(AllFiles());
     }
 
-    [Fact]
+    [Test]
     public void Version7_keys_spread_over_shards_instead_of_sharing_their_timestamp_prefix()
     {
         var now = TimeProvider.System.GetUtcNow();
@@ -175,7 +174,7 @@ public sealed class FileSystemAttachmentStoreTests : IDisposable
         Assert.True(shards > 200, $"only {shards} shards used");
     }
 
-    [Fact]
+    [Test]
     public void An_absent_root_enumerates_nothing()
     {
         Assert.Empty(_store.EnumerateTemporaryFiles());

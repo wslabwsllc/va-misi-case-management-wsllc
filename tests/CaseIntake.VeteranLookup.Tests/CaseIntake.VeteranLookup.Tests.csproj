@@ -8,13 +8,15 @@
        against the in-process mock always and also against the Compose veteran-lookup service when
        VeteranLookup__BaseUrl is set (the tests service sets it). No TestKit: that would pull in the web app. -->
   <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Testing\CaseIntake.Testing.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Mock\CaseIntake.VeteranLookup.Mock.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Client\CaseIntake.VeteranLookup.Client.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="NUnit.Analyzers" PrivateAssets="all" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Microsoft.OpenApi.YamlReader" />
@@ -23,6 +25,8 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
   <ItemGroup>
-    <Using Include="Xunit" />
+    <Using Include="NUnit.Framework" />
+    <Using Include="CaseIntake.Testing.Assert" Alias="Assert" />
+    <Using Include="CaseIntake.Testing" />
   </ItemGroup>
 </Project>

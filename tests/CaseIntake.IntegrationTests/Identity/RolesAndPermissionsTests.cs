@@ -43,8 +43,10 @@ internal static class AdministrationTestSupport
 /// ADR 0013 end to end: database-backed role permissions, per-user overrides and deactivation take effect in the running
 /// app, and administration stays within the actor's own access.
 /// </summary>
-public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixture<IdentityWebFixture>
+public class RolesAndPermissionsTests : ClassFixture<RolesAndPermissionsTests, IdentityWebFixture>
 {
+    private static IdentityWebFixture fixture => Shared;
+
     private const string Password = "Initial-Passw0rd!";
 
     private IServiceProvider Services => fixture.Factory.Services;
@@ -60,7 +62,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         return (await UsersAs(AdministrationTestSupport.Administrator).GetAsync(created.Value!.Id, CancellationToken.None)).Value!;
     }
 
-    [Fact]
+    [Test]
     public async Task The_seed_writes_the_catalog_and_each_built_in_roles_defaults_and_administrator_gets_everything()
     {
         await using var db = fixture.CreateContext();
@@ -76,7 +78,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.NotNull(await db.Users.SingleOrDefaultAsync(u => u.UserName == DemoUsers.Administrator.UserName));
     }
 
-    [Fact]
+    [Test]
     public async Task Reseeding_keeps_an_administrators_change_to_a_built_in_role()
     {
         var auditor = (await RolesAs(AdministrationTestSupport.Administrator).ListAsync(CancellationToken.None)).Value!.Single(r => r.Name == AppRoles.Auditor);
@@ -95,7 +97,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
             new SaveRoleRequest(after.Name, after.Description, [.. RolePermissionMap.PermissionsFor([AppRoles.Auditor])], after.ConcurrencyStamp), CancellationToken.None);
     }
 
-    [Fact]
+    [Test]
     public async Task A_custom_roles_permissions_apply_to_its_members_at_the_next_request()
     {
         var created = await RolesAs(AdministrationTestSupport.Administrator).CreateAsync(
@@ -118,7 +120,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.Contains(fixture.Logs.GetSnapshot(), r => r.Id.Id == 3021 && Equals(r.GetStructuredStateValue("RoleId"), role.Id));
     }
 
-    [Fact]
+    [Test]
     public async Task Allow_and_deny_overrides_change_what_one_user_may_do()
     {
         var email = NewEmail("override");
@@ -145,7 +147,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.Equal(DemoUsers.Administrator.Id, (await db.UserPermissionOverrides.FirstAsync(o => o.UserId == user.Id)).ChangedById);
     }
 
-    [Fact]
+    [Test]
     public async Task A_deactivated_user_loses_access_at_once_is_signed_out_and_cannot_sign_in_until_reactivated()
     {
         var email = NewEmail("leaver");
@@ -185,7 +187,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.NotNull((await db.Users.SingleAsync(u => u.Id == user.Id)).LastSignInUtc);
     }
 
-    [Fact]
+    [Test]
     public async Task Email_and_roles_are_changed_together_and_a_stale_stamp_is_a_conflict()
     {
         var user = await CreateAsync(NewEmail("edit"), AppRoles.Auditor);
@@ -203,7 +205,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.Equal([AppRoles.CaseWorker, AppRoles.QualityAnalyst], (await UsersAs(AdministrationTestSupport.Administrator).GetAsync(user.Id, CancellationToken.None)).Value!.Roles);
     }
 
-    [Fact]
+    [Test]
     public async Task Nobody_grants_more_than_they_hold_manages_someone_with_more_or_changes_their_own_account()
     {
         var supervisor = UsersAs(AdministrationTestSupport.Supervisor);
@@ -230,7 +232,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.True(options.Single(o => o.Name == AppRoles.CaseWorker).Assignable);
     }
 
-    [Fact]
+    [Test]
     public async Task Role_rules_protect_built_in_roles_members_and_the_ability_to_manage_roles()
     {
         var roles = RolesAs(AdministrationTestSupport.Administrator);
@@ -268,7 +270,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.Equal(keeper.Name, (await roles.DeleteAsync(keeper.Id, current.ConcurrencyStamp, CancellationToken.None)).Value);
     }
 
-    [Fact]
+    [Test]
     public async Task Renaming_a_custom_role_keeps_its_members_and_signs_them_in_again()
     {
         var roles = RolesAs(AdministrationTestSupport.Administrator);
@@ -287,7 +289,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.NotEqual(member.ConcurrencyStamp, (await users.FindByIdAsync(member.Id))!.ConcurrencyStamp);
     }
 
-    [Fact]
+    [Test]
     public async Task The_user_list_filters_by_email_role_and_status_and_pages()
     {
         var tag = Guid.NewGuid().ToString("N")[..8];
@@ -311,7 +313,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.False(Assert.Single(inactiveOnly.Items).IsActive);
     }
 
-    [Fact]
+    [Test]
     public async Task A_locked_out_user_is_unlocked()
     {
         var user = await CreateAsync(NewEmail("locked"), AppRoles.Auditor);
@@ -330,7 +332,7 @@ public class RolesAndPermissionsTests(IdentityWebFixture fixture) : IClassFixtur
         Assert.False(unlocked.Value!.IsLockedOut(Services.GetRequiredService<TimeProvider>().GetUtcNow()));
     }
 
-    [Fact]
+    [Test]
     public async Task Case_owners_follow_stored_permissions_including_overrides_and_status()
     {
         var auditor = await CreateAsync(NewEmail("owner"), AppRoles.Auditor);

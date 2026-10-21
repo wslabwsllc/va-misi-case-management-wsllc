@@ -6,22 +6,22 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// <summary>E4-S1: the embedded dataset is deterministic, synthetic and usable as a case veteran snapshot.</summary>
 public class VeteranDatasetTests
 {
-    [Fact]
-    [Trait("Category", Snapshots.Category)]
+    [Test]
+    [Category(Snapshots.Category)]
     public void The_committed_dataset_is_exactly_the_generator_output()
     {
         Snapshots.Verify(VeteranDatasetGenerator.ToJson(VeteranDatasetGenerator.Generate()),
             "src", "CaseIntake.VeteranLookup.Mock", "Data", "veterans.json");
     }
 
-    [Fact]
+    [Test]
     public void The_generator_is_deterministic()
     {
         Assert.Equal(VeteranDatasetGenerator.ToJson(VeteranDatasetGenerator.Generate()),
             VeteranDatasetGenerator.ToJson(VeteranDatasetGenerator.Generate()));
     }
 
-    [Fact]
+    [Test]
     public void The_embedded_dataset_has_fifty_unique_synthetic_records()
     {
         var dataset = VeteranDataset.LoadEmbedded();
@@ -36,7 +36,7 @@ public class VeteranDatasetTests
         });
     }
 
-    [Fact]
+    [Test]
     public void The_documented_demo_SSNs_are_present_and_absent()
     {
         var dataset = VeteranDataset.LoadEmbedded();

@@ -129,7 +129,8 @@ else
                     <Icon Name="error" /><span class="message__body">@_overridesError</span>
                 </p>
             }
-            <div class="table-wrap">
+            @* Focusable so keyboard users can scroll it when it is wider than a phone screen (axe scrollable-region-focusable). *@
+            <div class="table-wrap" tabindex="0" role="region" aria-label="Permissions table">
                 <table class="data-grid permission-grid" data-testid="permissions-table">
                     <caption class="visually-hidden">Permissions of @u.UserName: where each comes from, the override and the result</caption>
                     <thead>

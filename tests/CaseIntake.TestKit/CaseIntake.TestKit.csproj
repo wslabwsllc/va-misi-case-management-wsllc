@@ -4,15 +4,20 @@
   </PropertyGroup>
   <!-- Shared fixtures, builders and in-memory fakes of every contract. Test-only; never referenced by src/. -->
   <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Testing\CaseIntake.Testing.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.Web\CaseIntake.Web.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.Persistence\CaseIntake.Persistence.csproj" />
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="xunit" />
+    <PackageReference Include="NUnit" />
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Microsoft.Extensions.TimeProvider.Testing" />
     <PackageReference Include="Microsoft.Extensions.Diagnostics.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <PackageReference Include="Respawn" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="CaseIntake.Testing" />
+    <Using Include="NUnit.Framework" />
   </ItemGroup>
 </Project>

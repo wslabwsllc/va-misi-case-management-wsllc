@@ -18,11 +18,15 @@ public sealed class MigrationTests : IAsyncLifetime
 {
     private readonly EmptyPostgresDatabaseFixture _database = new();
 
+    [SetUp]
+
     public Task InitializeAsync() => _database.InitializeAsync();
+
+    [TearDown]
 
     public Task DisposeAsync() => _database.DisposeAsync();
 
-    [Fact]
+    [Test]
     public async Task Migrating_an_empty_database_applies_everything_and_leaves_no_pending_model_changes()
     {
         await using var db = _database.CreateContext();
@@ -34,7 +38,7 @@ public sealed class MigrationTests : IAsyncLifetime
         Assert.False(db.Database.HasPendingModelChanges(), "The model changed without a new migration.");
     }
 
-    [Fact]
+    [Test]
     public async Task Migrating_twice_is_idempotent()
     {
         await using var db = _database.CreateContext();
@@ -47,7 +51,7 @@ public sealed class MigrationTests : IAsyncLifetime
         Assert.Equal(applied, (await db.Database.GetAppliedMigrationsAsync()).ToList());
     }
 
-    [Fact]
+    [Test]
     public async Task Initializer_migrates_through_the_production_registration()
     {
         await using var provider = BuildProductionServices(_database.ConnectionString, new FakeLogger<DatabaseInitializer>());
@@ -59,7 +63,7 @@ public sealed class MigrationTests : IAsyncLifetime
     }
 
     /// <summary>Uses the production registration (EF retrying execution strategy enabled), not a bare context.</summary>
-    [Fact]
+    [Test]
     public async Task Initializer_retries_with_backoff_then_gives_up_with_a_clear_error()
     {
         var unreachable = new NpgsqlConnectionStringBuilder
@@ -83,7 +87,7 @@ public sealed class MigrationTests : IAsyncLifetime
     /// <c>MigrateAsync</c> runs inside EF's retrying execution strategy, which wraps the last connection failure in
     /// <see cref="RetryLimitExceededException"/>. The outer 60 s backoff must still see that as "database not ready".
     /// </summary>
-    [Fact]
+    [Test]
     public void Connection_failures_wrapped_by_the_provider_retry_strategy_are_transient()
     {
         var connectionFailure = new NpgsqlException("connect failed", new System.Net.Sockets.SocketException());

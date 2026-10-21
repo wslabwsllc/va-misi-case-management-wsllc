@@ -26,6 +26,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options)
     /// <summary>Stored Error and Critical log events (ADR 0015).</summary>
     public DbSet<ErrorLogEntry> ErrorLogEntries => Set<ErrorLogEntry>();
     public DbSet<CaseNotificationCursor> CaseNotificationCursors => Set<CaseNotificationCursor>();
+    public DbSet<CaseNotificationRead> CaseNotificationReads => Set<CaseNotificationRead>();
     public DbSet<Attachment> Attachments => Set<Attachment>();
 
     // Database-backed permissions (ADR 0013).

@@ -35,6 +35,22 @@ public sealed record MonthCount(DateOnly Month, int Count)
     public DateTimeOffset EndUtc => EasternTime.StartOfDay(Month.AddMonths(1)).AddTicks(-1);
 }
 
+
+/// <summary>
+/// Dashboard filters (redesign). Date basis: <see cref="From"/> and <see cref="To"/> are inclusive Eastern calendar days
+/// matched against each case's <b>created</b> date, for every figure; the resolution trend then places the matching
+/// Resolved or Closed cases by the month of their last update. Status and priority narrow every figure the same way.
+/// </summary>
+public sealed record DashboardFilter(DateOnly? From = null, DateOnly? To = null, CaseStatus? Status = null, CasePriority? Priority = null)
+{
+    public static DashboardFilter None { get; } = new();
+
+    public bool IsEmpty => From is null && To is null && Status is null && Priority is null;
+
+    public bool Matches(CaseSummaryDto c) =>
+        (Status is null || c.Status == Status) && (Priority is null || c.Priority == Priority)
+        && (From is null || EasternTime.Date(c.CreatedAtUtc) >= From) && (To is null || EasternTime.Date(c.CreatedAtUtc) <= To);
+}
 /// <summary>Everything the dashboard shows, computed from one snapshot so the numbers agree with each other.</summary>
 public sealed record CaseDashboard(
     int Total,
@@ -92,7 +108,12 @@ public sealed class CaseDashboardService(
     public static string? UserNameOf(OperationActor actor) =>
         !actor.IsAuthenticated ? null : string.IsNullOrWhiteSpace(actor.DisplayName) ? actor.UserId : actor.DisplayName;
 
-    public async Task<Result<CaseDashboard>> LoadAsync(CancellationToken ct)
+    public Task<Result<CaseDashboard>> LoadAsync(CancellationToken ct) => LoadAsync(DashboardFilter.None, ct);
+
+    /// <summary>The signed-in user's case name (owner, created by), or null when anonymous.</summary>
+    public async Task<string?> CurrentUserNameAsync(CancellationToken ct) => UserNameOf(await currentUser.GetAsync(ct));
+
+    public async Task<Result<CaseDashboard>> LoadAsync(DashboardFilter filter, CancellationToken ct)
     {
         var actor = await currentUser.GetAsync(ct);
         var actionable = Actionable(actor);
@@ -102,7 +123,8 @@ public sealed class CaseDashboardService(
             return Result<CaseDashboard>.Failure(error);
         }
 
-        var all = snapshot.Items;
+        ArgumentNullException.ThrowIfNull(filter);
+        var all = filter.IsEmpty ? snapshot.Items : [.. snapshot.Items.Where(filter.Matches)];
         var now = time.GetUtcNow();
         var today = EasternTime.Date(now);
         var me = UserNameOf(actor);
@@ -112,10 +134,10 @@ public sealed class CaseDashboardService(
         var overdue = open.Where(c => CaseTriageRules.IsOverdue(c.Status, c.DueOn, today))
             .OrderBy(c => c.DueOn).ThenByDescending(c => c.Priority).ThenBy(c => c.Id).ToList();
         var mine = all.Where(c => actionable.Contains(c.Status)).OrderBy(c => c.UpdatedAtUtc).ThenBy(c => c.Id).ToList();
-        var months = Months(now, Settings.TrendMonths);
+        var months = Months(now, Settings.TrendMonths, filter);
 
         return Result<CaseDashboard>.Success(new CaseDashboard(
-            Total: snapshot.TotalCount,
+            Total: filter.IsEmpty ? snapshot.TotalCount : all.Count,
             Open: open.Count,
             PendingReview: byStatus[CaseStatus.Resolved],
             Overdue: overdue.Count,
@@ -180,11 +202,19 @@ public sealed class CaseDashboardService(
         return new Snapshot(items.Count > Settings.MaxCasesScanned ? items[..Settings.MaxCasesScanned] : items, total, null);
     }
 
-    private static List<DateOnly> Months(DateTimeOffset now, int count)
+    /// <summary>The trend months: the filter's range when it has one (at most 24 months, ending at its end), else the last <paramref name="count"/>.</summary>
+    private static List<DateOnly> Months(DateTimeOffset now, int count, DashboardFilter filter)
     {
         var today = EasternTime.Date(now);
-        var current = new DateOnly(today.Year, today.Month, 1);
-        return [.. Enumerable.Range(0, Math.Max(count, 1)).Select(i => current.AddMonths(i - count + 1))];
+        var end = filter.To ?? today;
+        var last = new DateOnly(end.Year, end.Month, 1);
+        if (filter.From is { } from)
+        {
+            var first = new DateOnly(from.Year, from.Month, 1);
+            var span = ((last.Year - first.Year) * 12) + last.Month - first.Month + 1;
+            count = Math.Clamp(span, 1, 24);
+        }
+        return [.. Enumerable.Range(0, Math.Max(count, 1)).Select(i => last.AddMonths(i - count + 1))];
     }
 
     private static List<MonthCount> CountByMonth(List<DateOnly> months, IEnumerable<DateTimeOffset> times)

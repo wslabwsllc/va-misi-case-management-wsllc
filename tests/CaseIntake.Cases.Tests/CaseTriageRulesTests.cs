@@ -5,16 +5,15 @@ using CaseIntake.Domain.Cases;
 namespace CaseIntake.Cases.Tests;
 
 /// <summary>Issue #22: triage defaults, the overdue rule, validation and change detection on the entity.</summary>
-[Trait("Category", "Story:Issue-22")]
+[Category("Story:Issue-22")]
 public class CaseTriageRulesTests
 {
     private static readonly DateTimeOffset Created = new(2026, 10, 16, 23, 30, 0, TimeSpan.Zero);
 
-    [Theory]
-    [InlineData(CasePriority.Urgent, 2)]
-    [InlineData(CasePriority.High, 5)]
-    [InlineData(CasePriority.Medium, 10)]
-    [InlineData(CasePriority.Low, 30)]
+    [TestCase(CasePriority.Urgent, 2)]
+    [TestCase(CasePriority.High, 5)]
+    [TestCase(CasePriority.Medium, 10)]
+    [TestCase(CasePriority.Low, 30)]
     public void Default_due_date_counts_target_days_from_the_utc_creation_date(CasePriority priority, int days)
     {
         Assert.Equal(new DateOnly(2026, 10, 16).AddDays(days), CaseTriageRules.DefaultDueOn(priority, Created));
@@ -22,21 +21,20 @@ public class CaseTriageRulesTests
         Assert.Equal(new DateOnly(2026, 10, 16).AddDays(days), CaseTriageRules.DefaultDueOn(priority, Created.ToOffset(TimeSpan.FromHours(2))));
     }
 
-    [Theory]
-    [InlineData(CaseStatus.New, "2026-10-19", true)]
-    [InlineData(CaseStatus.Triaged, "2026-10-19", true)]
-    [InlineData(CaseStatus.InProgress, "2026-10-19", true)]
-    [InlineData(CaseStatus.InProgress, "2026-10-20", false)]   // due today is not overdue yet
-    [InlineData(CaseStatus.Resolved, "2026-10-01", false)]
-    [InlineData(CaseStatus.Closed, "2026-10-01", false)]
-    [InlineData(CaseStatus.New, null, false)]                  // no due date, never overdue
+    [TestCase(CaseStatus.New, "2026-10-19", true)]
+    [TestCase(CaseStatus.Triaged, "2026-10-19", true)]
+    [TestCase(CaseStatus.InProgress, "2026-10-19", true)]
+    [TestCase(CaseStatus.InProgress, "2026-10-20", false)]   // due today is not overdue yet
+    [TestCase(CaseStatus.Resolved, "2026-10-01", false)]
+    [TestCase(CaseStatus.Closed, "2026-10-01", false)]
+    [TestCase(CaseStatus.New, null, false)]                  // no due date, never overdue
     public void Overdue_means_open_and_due_before_today(CaseStatus status, string? due, bool overdue)
     {
         DateOnly? dueOn = due is null ? null : DateOnly.Parse(due, System.Globalization.CultureInfo.InvariantCulture);
         Assert.Equal(overdue, CaseTriageRules.IsOverdue(status, dueOn, new DateOnly(2026, 10, 20)));
     }
 
-    [Fact]
+    [Test]
     public void Validation_names_each_invalid_field()
     {
         var errors = CaseTriageRules.Validate(new CaseTriage((CasePriority)7, (CaseCategory)(-1), new string('x', 300), new DateOnly(2101, 1, 1)));
@@ -46,7 +44,7 @@ public class CaseTriageRulesTests
         Assert.Empty(CaseTriageRules.Validate(new CaseTriage(CasePriority.Low, CaseCategory.ContactDetails, "owner@example.test", new DateOnly(2100, 12, 31))));
     }
 
-    [Fact]
+    [Test]
     public void The_request_validator_includes_triage_errors_for_intake_and_edit()
     {
         var bad = new CaseTriage(CasePriority.Low, (CaseCategory)50, null, null);
@@ -56,7 +54,7 @@ public class CaseTriageRulesTests
         Assert.Null(CaseRequestValidator.Validate(new UpdateCaseRequest("Valid title", null, 1)));
     }
 
-    [Fact]
+    [Test]
     public void Create_stores_the_triage_with_a_trimmed_owner_and_defaults_without_one()
     {
         var withTriage = Case.Create("Triage on create", null, null, "creator", Created, triage: new CaseTriage(CasePriority.High, CaseCategory.Travel, "  owner@example.test ", new DateOnly(2026, 11, 1)));
@@ -67,7 +65,7 @@ public class CaseTriageRulesTests
         Assert.Throws<CaseRuleException>(() => Case.Create("Bad triage case", null, null, "creator", Created, triage: CaseTriage.Default with { Priority = (CasePriority)9 }));
     }
 
-    [Fact]
+    [Test]
     public void Edit_reports_changed_triage_fields_in_order_and_ignores_triage_when_not_given()
     {
         var entity = Case.Create("Edit triage", null, null, "creator", Created, triage: new CaseTriage(CasePriority.Medium, CaseCategory.General, "a@example.test", new DateOnly(2026, 10, 26)));
@@ -83,7 +81,7 @@ public class CaseTriageRulesTests
         Assert.Equal(later, entity.UpdatedAtUtc);
     }
 
-    [Fact]
+    [Test]
     public void Seeded_triage_is_derived_from_the_index_and_covers_every_priority_and_a_mix_of_owners()
     {
         var fixtures = CaseSeedData.Build();

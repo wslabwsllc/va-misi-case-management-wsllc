@@ -11,7 +11,7 @@ public class OperationActorFactoryTests
     private static OperationActor FromPrincipal(ClaimsPrincipal? principal) =>
         OperationActorFactory.FromPrincipal(principal, InMemoryPermissionStore.DefaultMatrix, null);
 
-    [Fact]
+    [Test]
     public void Null_or_unauthenticated_principals_are_anonymous_with_no_permissions()
     {
         foreach (var principal in new ClaimsPrincipal?[] { null, Principals.Anonymous })
@@ -25,7 +25,7 @@ public class OperationActorFactoryTests
         }
     }
 
-    [Fact]
+    [Test]
     public void An_authenticated_identity_without_a_user_id_is_treated_as_anonymous()
     {
         var principal = new ClaimsPrincipal(new ClaimsIdentity(
@@ -35,7 +35,7 @@ public class OperationActorFactoryTests
         Assert.Null(OperationActorFactory.UserId(principal));
     }
 
-    [Fact]
+    [Test]
     public void UserId_is_the_Identity_user_id_and_DisplayName_the_user_name()
     {
         var actor = FromPrincipal(Principals.User("id-42", "caseworker@example.test", AppRoles.CaseWorker));
@@ -45,7 +45,7 @@ public class OperationActorFactoryTests
         Assert.Equal([AppRoles.CaseWorker], actor.Roles);
     }
 
-    [Fact]
+    [Test]
     public void Permissions_come_from_role_claims_through_the_stored_role_permissions()
     {
         var caseWorker = FromPrincipal(Principals.User("1", "cw", AppRoles.CaseWorker));
@@ -56,7 +56,7 @@ public class OperationActorFactoryTests
         Assert.True(supervisor.HasPermission(Permissions.Transition(CaseStatus.New, CaseStatus.Triaged)));
     }
 
-    [Fact]
+    [Test]
     public void A_changed_role_in_the_store_changes_the_permissions_and_a_custom_role_counts()
     {
         var roles = new Dictionary<string, ImmutableHashSet<string>>(InMemoryPermissionStore.DefaultMatrix)
@@ -70,7 +70,7 @@ public class OperationActorFactoryTests
         Assert.Equal([Permissions.AttachmentsDownload, Permissions.CasesView], actor.Permissions.Order());
     }
 
-    [Fact]
+    [Test]
     public void Stored_overrides_and_the_active_flag_apply()
     {
         var principal = Principals.User("1", "cw", AppRoles.CaseWorker);
@@ -90,7 +90,7 @@ public class OperationActorFactoryTests
         Assert.Empty(inactive.Permissions);
     }
 
-    [Fact]
+    [Test]
     public void Permission_claims_on_the_principal_are_ignored()
     {
         var principal = Principals.User("1", "cw", AppRoles.CaseWorker);
@@ -99,7 +99,7 @@ public class OperationActorFactoryTests
         Assert.False(FromPrincipal(principal).HasPermission(Permissions.Transition(CaseStatus.New, CaseStatus.Triaged)));
     }
 
-    [Fact]
+    [Test]
     public void Several_roles_give_the_union_and_unknown_roles_give_nothing()
     {
         var both = FromPrincipal(Principals.User("1", "x", AppRoles.CaseWorker, AppRoles.Supervisor));
@@ -110,7 +110,7 @@ public class OperationActorFactoryTests
         Assert.Empty(unknown.Permissions);
     }
 
-    [Fact]
+    [Test]
     public void A_custom_role_claim_type_is_honored()
     {
         var identity = new ClaimsIdentity(
@@ -124,7 +124,7 @@ public class OperationActorFactoryTests
         Assert.Equal([AppRoles.Supervisor], OperationActorFactory.Roles(new ClaimsPrincipal(identity)));
     }
 
-    [Fact]
+    [Test]
     public void The_snapshot_is_immutable_and_detached_from_the_principal()
     {
         var principal = Principals.User("1", "cw", AppRoles.CaseWorker);
@@ -149,7 +149,7 @@ public class PermissionResolverTests
         public override DateTimeOffset GetUtcNow() => Now;
     }
 
-    [Fact]
+    [Test]
     public async Task Loads_are_cached_until_the_revalidation_interval_passes()
     {
         var store = new InMemoryPermissionStore();
@@ -166,7 +166,7 @@ public class PermissionResolverTests
         Assert.Equal((2, 2), (store.RoleLoads, store.UserLoads));
     }
 
-    [Fact]
+    [Test]
     public async Task Invalidate_applies_a_stored_change_at_the_next_check()
     {
         var store = new InMemoryPermissionStore();
@@ -181,7 +181,7 @@ public class PermissionResolverTests
         Assert.False((await resolver.ResolveAsync(principal, CancellationToken.None)).HasPermission(Permissions.CasesEdit));
     }
 
-    [Fact]
+    [Test]
     public async Task A_deactivated_user_loses_every_permission_and_anonymous_needs_no_load()
     {
         var store = new InMemoryPermissionStore();

@@ -3,7 +3,6 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Respawn;
 using Testcontainers.PostgreSql;
-using Xunit;
 
 namespace CaseIntake.TestKit;
 

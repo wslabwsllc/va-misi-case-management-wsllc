@@ -6,14 +6,18 @@
   <!-- E4 attachment unit tests: file-name sanitizing, the type allowlist and its validation, the filesystem store
        (temporary directory per test). No database; service and reconciler tests live in IntegrationTests. -->
   <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.Testing\CaseIntake.Testing.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.Attachments\CaseIntake.Attachments.csproj" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
-    <PackageReference Include="xunit" />
-    <PackageReference Include="xunit.runner.visualstudio" />
+    <PackageReference Include="NUnit" />
+    <PackageReference Include="NUnit3TestAdapter" />
+    <PackageReference Include="NUnit.Analyzers" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <Using Include="Xunit" />
+    <Using Include="NUnit.Framework" />
+    <Using Include="CaseIntake.Testing.Assert" Alias="Assert" />
+    <Using Include="CaseIntake.Testing" />
   </ItemGroup>
 </Project>

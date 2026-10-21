@@ -11,7 +11,7 @@ public class UsersPageTests : WebTestContext
         SignInAs(AppRoles.Supervisor);
     }
 
-    [Fact]
+    [Test]
     public void Lists_users_with_roles_status_and_a_link_to_each()
     {
         UserAdmin.Users.Add(FakeUserAdministrationService.Detail("2", "old@example.test", [AppRoles.Auditor], isActive: false));
@@ -22,27 +22,83 @@ public class UsersPageTests : WebTestContext
         Assert.Contains("Inactive", rows[0].TextContent);
         Assert.Equal("admin/users/2", rows[0].QuerySelector("a")!.GetAttribute("href"));
         Assert.Contains("Supervisor", rows[1].TextContent);
-        Assert.Contains("Never", rows[1].TextContent);
-        Assert.Equal("Last sign-in", cut.FindAll("[data-testid=users-table] th")[3].TextContent);
+        Assert.Contains("Last sign-in never", rows[1].TextContent);
+        // Active people can be removed (red, named); inactive ones are reactivated from their page instead.
+        Assert.Empty(rows[0].QuerySelectorAll("[data-testid=remove-user]"));
+        var remove = rows[1].QuerySelector("[data-testid=remove-user]")!;
+        Assert.Contains("btn--danger", remove.ClassList);
+        Assert.Contains("Remove supervisor@example.test", remove.TextContent.Replace("  ", " ").Trim());
     }
 
-    [Fact]
-    public void Filters_are_applied_together_and_announced()
+    [Test]
+    public void Filters_apply_as_they_change_and_the_result_is_announced_politely()
     {
         UserAdmin.Users.Add(FakeUserAdministrationService.Detail("2", "clerk@example.test", [AppRoles.IntakeClerk]));
         var cut = Render<Users>();
 
-        cut.Find("#user-search").Input("clerk");
         cut.Find("#user-role-filter").Change(AppRoles.IntakeClerk);
         cut.Find("#user-status-filter").Change(nameof(UserStatusFilter.Active));
-        cut.Find("[data-testid=user-filters]").Submit();
+        cut.Find("#user-search").Input("clerk");
 
-        Assert.Equal(new UserListQuery("clerk", AppRoles.IntakeClerk, UserStatusFilter.Active, 1, 25), UserAdmin.Queries[^1]);
+        cut.WaitForAssertion(() => Assert.Equal(new UserListQuery("clerk", AppRoles.IntakeClerk, UserStatusFilter.Active, 1, 25), UserAdmin.Queries[^1]), TimeSpan.FromSeconds(3));
         Assert.Single(cut.FindAll("[data-testid=user-row]"));
-        Assert.Contains("Showing 1", Announcer.Message);
+        var live = cut.Find("[data-testid=users-announcement]");
+        Assert.Equal("polite", live.GetAttribute("aria-live"));
+        Assert.Contains("Showing 1", live.TextContent);
+        Assert.Empty(cut.FindAll("[data-testid=apply-user-filters]"));
     }
 
-    [Fact]
+    [Test]
+    public void Remove_asks_first_with_cancel_first_then_deactivates_the_person()
+    {
+        UserAdmin.Users.Add(FakeUserAdministrationService.Detail("2", "clerk@example.test", [AppRoles.IntakeClerk]));
+        var cut = Render<Users>();
+
+        cut.FindAll("[data-testid=user-row]").Single(r => r.TextContent.Contains("clerk@example.test")).QuerySelector("[data-testid=remove-user]")!.Click();
+        var dialog = cut.Find("[data-testid=remove-user-dialog]");
+        Assert.Equal("Remove clerk@example.test?", dialog.QuerySelector("h2")!.TextContent);
+        var buttons = dialog.QuerySelectorAll(".modal__footer button");
+        Assert.Equal("remove-user-cancel", buttons[0].GetAttribute("data-testid"));
+        Assert.True(buttons[0].HasAttribute("autofocus"));
+        Assert.Empty(UserAdmin.Requests);
+
+        cut.Find("[data-testid=remove-user-confirm]").Click();
+
+        cut.WaitForAssertion(() => Assert.False(UserAdmin.Users.Single(u => u.Id == "2").IsActive));
+        Assert.IsType<SetUserStatusRequest>(UserAdmin.Requests.Single());
+        Assert.Contains("clerk@example.test was removed", Announcer.Message);
+    }
+
+    [Test]
+    public void Cancel_on_remove_changes_nothing()
+    {
+        var cut = Render<Users>();
+
+        cut.Find("[data-testid=remove-user]").Click();
+        cut.Find("[data-testid=remove-user-cancel]").Click();
+
+        Assert.Empty(UserAdmin.Requests);
+        Assert.True(UserAdmin.Users.Single().IsActive);
+    }
+
+    [Test]
+    public void Password_rules_are_checked_as_the_person_types()
+    {
+        var cut = Render<Users>();
+
+        cut.Find("#user-password").Input("abc");
+
+        var rules = cut.FindAll("[data-testid=password-rules] li");
+        Assert.Equal(5, rules.Count);
+        Assert.Contains("Lowercase letter: met", rules[2].TextContent);
+        Assert.Contains("6+ characters: not met yet", rules[0].TextContent);
+
+        cut.Find("#user-password").Input("Abcdef1!");
+
+        Assert.All(cut.FindAll("[data-testid=password-rules] li"), li => Assert.Contains("is-met", li.ClassList));
+    }
+
+    [Test]
     public void Roles_are_checkboxes_in_a_labelled_group_and_roles_beyond_the_actor_are_disabled_with_a_reason()
     {
         var cut = Render<Users>();
@@ -56,7 +112,7 @@ public class UsersPageTests : WebTestContext
         Assert.Equal("new-password", cut.Find("#user-password").GetAttribute("autocomplete"));
     }
 
-    [Fact]
+    [Test]
     public void Adding_a_user_with_two_roles_confirms_it_lists_them_and_clears_the_form()
     {
         var cut = Render<Users>();
@@ -76,7 +132,7 @@ public class UsersPageTests : WebTestContext
         Assert.False(cut.Find("#user-role-intakeclerk").HasAttribute("checked"));
     }
 
-    [Fact]
+    [Test]
     public void Service_field_errors_are_shown_on_their_fields_and_in_the_summary()
     {
         UserAdmin.NextError = new(ErrorKind.Validation, "Validation", "Some fields need attention.",
@@ -99,7 +155,7 @@ public class UsersPageTests : WebTestContext
         Assert.Single(UserAdmin.Users);
     }
 
-    [Fact]
+    [Test]
     public void A_form_level_failure_is_shown_in_the_alert_and_cleared_by_the_next_success()
     {
         UserAdmin.NextError = new(ErrorKind.Forbidden, "Forbidden", "You do not have permission to perform this action.");
@@ -128,7 +184,7 @@ public class UserDetailPageTests : WebTestContext
 
     private IRenderedComponent<UserDetail> RenderUser(string id = "7") => Render<UserDetail>(p => p.Add(x => x.Id, id));
 
-    [Fact]
+    [Test]
     public void Shows_account_roles_and_every_permission_with_its_source_and_result()
     {
         var cut = RenderUser();
@@ -143,7 +199,7 @@ public class UserDetailPageTests : WebTestContext
         Assert.Contains("Doesn't have it", cut.Find($"[data-testid='effective-{Permissions.CasesAssign}']").TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Each_permission_override_is_a_labelled_radio_group_and_ones_the_actor_lacks_are_disabled()
     {
         var cut = RenderUser();
@@ -155,7 +211,7 @@ public class UserDetailPageTests : WebTestContext
         Assert.True(cut.Find($"[data-testid='permission-{Permissions.TestResultsView}'] fieldset").HasAttribute("disabled"));
     }
 
-    [Fact]
+    [Test]
     public void Saving_overrides_sends_the_full_set_with_the_stamp_and_shows_the_result()
     {
         var cut = RenderUser();
@@ -173,7 +229,7 @@ public class UserDetailPageTests : WebTestContext
         Assert.Equal("Permissions saved.", Announcer.Message);
     }
 
-    [Fact]
+    [Test]
     public void Saving_roles_sends_the_chosen_roles_and_a_conflict_reloads_and_explains()
     {
         var cut = RenderUser();
@@ -188,7 +244,7 @@ public class UserDetailPageTests : WebTestContext
         Assert.False(cut.Find("#edit-role-supervisor").HasAttribute("checked"));   // the latest version is shown
     }
 
-    [Fact]
+    [Test]
     public void Deactivating_asks_for_confirmation_in_a_dialog_then_shows_the_new_status()
     {
         var cut = RenderUser();
@@ -204,7 +260,7 @@ public class UserDetailPageTests : WebTestContext
         Assert.Equal("worker@example.test was deactivated.", Announcer.Message);
     }
 
-    [Fact]
+    [Test]
     public void A_user_the_actor_may_not_manage_is_read_only_with_the_reason()
     {
         UserAdmin.Users.Add(FakeUserAdministrationService.Detail("9", "admin@example.test", [AppRoles.Administrator],
@@ -217,7 +273,7 @@ public class UserDetailPageTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=permissions-table] input"));
     }
 
-    [Fact]
+    [Test]
     public void An_unknown_user_shows_not_found()
     {
         var cut = RenderUser("missing");
@@ -233,7 +289,7 @@ public class RolesPageTests : WebTestContext
         SignInAs(AppRoles.Administrator);
     }
 
-    [Fact]
+    [Test]
     public void Lists_every_role_with_type_members_and_permissions()
     {
         var cut = Render<Roles>();
@@ -245,7 +301,7 @@ public class RolesPageTests : WebTestContext
         Assert.Contains("3: View cases, Download documents, View audit log", rows[0].TextContent);
     }
 
-    [Fact]
+    [Test]
     public void Creating_a_role_sends_the_checked_permissions_in_catalog_order_and_opens_it()
     {
         var cut = Render<RoleEditor>();
@@ -262,7 +318,7 @@ public class RolesPageTests : WebTestContext
         Assert.Equal("The Records reviewer role was created.", Announcer.Message);
     }
 
-    [Fact]
+    [Test]
     public void A_built_in_role_keeps_its_name_and_permissions_are_grouped_in_labelled_fieldsets()
     {
         var cut = Render<RoleEditor>(p => p.Add(x => x.Id, "role-caseworker"));
@@ -274,7 +330,7 @@ public class RolesPageTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=delete-role]"));
     }
 
-    [Fact]
+    [Test]
     public void The_administrator_role_is_read_only_with_the_reason()
     {
         var cut = Render<RoleEditor>(p => p.Add(x => x.Id, "role-administrator"));
@@ -284,7 +340,7 @@ public class RolesPageTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=save-role]"));
     }
 
-    [Fact]
+    [Test]
     public void Permissions_the_actor_lacks_cannot_be_changed_and_say_why()
     {
         SignInAs(AppRoles.Supervisor);
@@ -295,7 +351,7 @@ public class RolesPageTests : WebTestContext
         Assert.False(cut.Find("#perm-cases-view").HasAttribute("disabled"));
     }
 
-    [Fact]
+    [Test]
     public void A_custom_role_with_members_cannot_be_deleted_and_an_empty_one_is_deleted_after_confirming()
     {
         RoleAdmin.Roles.Add(new RoleDetailDto("busy", "Busy", null, false, false, [Permissions.CasesView], ["a@example.test"], "s", true, null));

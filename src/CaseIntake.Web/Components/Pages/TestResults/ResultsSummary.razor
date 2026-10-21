@@ -1,0 +1,40 @@
+@using CaseIntake.Contracts.TestResults
+@using CaseIntake.Web.Services
+@* Outcome counts over the whole filtered set (not just the visible page), as a list of labelled numbers. The pass rate
+   is Passed ÷ (Passed + Failed), "N/A" when neither occurred; it is a share of executed verdicts, not a conformance
+   score, and automated results alone never establish Section 508 conformance. *@
+<section aria-labelledby="@($"{Id}-heading")" data-testid="@TestId">
+    <h2 id="@($"{Id}-heading")" class="visually-hidden">@Title</h2>
+    @if (Counts is null)
+    {
+        <LoadingIndicator Text="Counting results…" />
+    }
+    else
+    {
+        var c = Counts;
+        <ul class="result-summary">
+            <li><span class="result-summary__label">Total</span><span class="result-summary__value" data-testid="@($"{TestId}-total")">@UiText.Number(c.Total)</span></li>
+            <li><span class="result-summary__label">Passed</span><span class="result-summary__value" data-testid="@($"{TestId}-passed")">@UiText.Number(c.Passed)</span></li>
+            <li><span class="result-summary__label">Failed</span><span class="result-summary__value" data-testid="@($"{TestId}-failed")">@UiText.Number(c.Failed)</span></li>
+            <li><span class="result-summary__label">Blocked</span><span class="result-summary__value" data-testid="@($"{TestId}-blocked")">@UiText.Number(c.Blocked)</span></li>
+            <li><span class="result-summary__label">Not Run</span><span class="result-summary__value" data-testid="@($"{TestId}-notrun")">@UiText.Number(c.NotExecuted)</span></li>
+            <li><span class="result-summary__label">Not Applicable</span><span class="result-summary__value" data-testid="@($"{TestId}-na")">@UiText.Number(c.NotApplicable)</span></li>
+            <li>
+                <span class="result-summary__label">Pass rate</span>
+                <span class="result-summary__value" data-testid="@($"{TestId}-rate")">@TestResultsText.VerdictPassRate(c)</span>
+                <span class="result-summary__note">Passed ÷ (Passed + Failed)</span>
+            </li>
+        </ul>
+        <p class="field__hint" data-testid="@($"{TestId}-note")">
+            Counts cover every result matching the filters.@(c.Skipped > 0 ? $" Skipped: {UiText.Number(c.Skipped)}." : "")
+            The pass rate is not a conformance score; automated results alone do not establish Section 508 conformance.
+        </p>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Id { get; set; } = "summary";
+    [Parameter] public string Title { get; set; } = "Summary of the filtered results";
+    [Parameter] public TestOutcomeCounts? Counts { get; set; }
+    [Parameter] public string TestId { get; set; } = "results-summary";
+}

@@ -8,11 +8,11 @@ namespace CaseIntake.E2E;
 /// user's permissions with the radio group's arrow keys, and deactivates the user through the confirmation dialog, which
 /// returns focus on Escape. Every page is scanned with axe.
 /// </summary>
-public sealed class RolesAndPermissionsTests(PlaywrightFixture fixture) : E2ETestBase(fixture)
+public sealed class RolesAndPermissionsTests : E2ETestBase
 {
     private const string Password = "Initial-Passw0rd!";
 
-    [Fact]
+    [Test]
     public async Task Administrator_manages_a_role_a_user_and_their_permissions_with_the_keyboard_only()
     {
         await using var s = await StartAsync(Meta("Administrator manages roles, users and permissions (keyboard only)", "User and role administration",
@@ -111,6 +111,7 @@ public sealed class RolesAndPermissionsTests(PlaywrightFixture fixture) : E2ETes
             await page.GotoAsync("/account/login");
             await page.Locator("#login-email").FocusAsync();
             await page.Keyboard.TypeAsync(email);
+            await page.Keyboard.PressAsync("Tab");   // the "Forgot password?" link
             await page.Keyboard.PressAsync("Tab");
             await page.Keyboard.TypeAsync(Password);
             await page.Keyboard.PressAsync("Enter");
@@ -120,7 +121,7 @@ public sealed class RolesAndPermissionsTests(PlaywrightFixture fixture) : E2ETes
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task The_administration_pages_fit_a_phone_without_horizontal_scrolling()
     {
         await using var s = await StartAsync(Meta("Administration pages at 390x844", "User and role administration", ["R-4.2-12", "CR-1"],
@@ -150,7 +151,7 @@ public sealed class RolesAndPermissionsTests(PlaywrightFixture fixture) : E2ETes
         s.Complete();
     }
 
-    [Fact]
+    [Test]
     public async Task A_supervisor_sees_the_administrator_as_read_only_and_cannot_open_roles()
     {
         await using var s = await StartAsync(Meta("Supervisor cannot manage the administrator or roles", "User and role administration", ["CR-1"],
