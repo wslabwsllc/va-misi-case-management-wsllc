@@ -85,6 +85,18 @@ public sealed class RedesignInteractionTests : E2ETestBase
             await PressAsync(page.GetByTestId("clear-filters"));
             await Expect(page).Not.ToHaveURLAsync(new Regex("dueFrom|priority"));
         });
+        await s.StepAsync("A due date is picked from the calendar button", async () =>
+        {
+            // Headless Chromium draws no picker, so record that the button opened it (and that the CSP allowed the script).
+            await page.EvaluateAsync("HTMLInputElement.prototype.showPicker = function () { window.pickerOpenedFor = this.type; }");
+            await PressAsync(page.Locator("#filter-due-from ~ [data-date-picker]"));
+            Assert.Equal("date", await page.EvaluateAsync<string>("window.pickerOpenedFor"));
+            await page.Locator("#filter-due-from + .date-picker-proxy").FillAsync("2026-02-03");
+            await Expect(page).ToHaveURLAsync(new Regex("dueFrom=2026-02-03"));
+            await Expect(page.Locator("#filter-due-from")).ToHaveValueAsync("02-03-2026");
+            await PressAsync(page.GetByTestId("clear-filters"));
+            await Expect(page).Not.ToHaveURLAsync(new Regex("dueFrom"));
+        });
         await s.ScreenshotAsync("All cases");
 
         await s.StepAsync("New case: Cancel in 'Are you sure you want to submit?' keeps every value and creates nothing", async () =>

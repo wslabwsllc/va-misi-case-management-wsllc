@@ -157,3 +157,10 @@ document.addEventListener('click', (event) => {
     }
   }).observe(document.body, { childList: true, subtree: true });
 }
+
+// DateInput's calendar button (the CSP forbids inline handlers): opens the native picker of the hidden date input
+// just before it.
+document.addEventListener('click', (event) => {
+  const button = event.target instanceof Element ? event.target.closest('[data-date-picker]') : null;
+  button?.previousElementSibling?.showPicker();
+});

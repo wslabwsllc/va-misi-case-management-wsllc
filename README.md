@@ -113,7 +113,7 @@ Needs Docker with Compose v2, Git and free port 8080 (see **Install prerequisite
 ```bash
 git clone https://github.com/wslabwsllc/va-misi-case-management-wsllc.git
 cd va-misi-case-management-wsllc
-docker compose up --build --wait       # runs in the background, returns once web is healthy
+docker compose up --build       # runs in the background, returns once web is healthy
 ```
 
 Open <http://localhost:8080>: the landing page links to sign-in. The first build takes several minutes. No `.env` file or secrets are needed:

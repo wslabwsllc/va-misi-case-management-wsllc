@@ -78,6 +78,9 @@ public static class UiText
     /// </summary>
     public static string Time(DateTimeOffset value) => Eastern(value, "MM-dd-yyyy HH:mm");
 
+    /// <summary>"10-21-2026 09:05" for cells whose column header already says ET.</summary>
+    public static string TimeNoZone(DateTimeOffset value) => EasternTime.From(value).ToString("MM-dd-yyyy HH:mm", Culture);
+
     /// <summary>A compact label for charts and tight cells: "10-21 09:05 ET".</summary>
     public static string ShortTime(DateTimeOffset value) => Eastern(value, "MM-dd HH:mm");
 

@@ -34,7 +34,7 @@ public class CaseListTests : WebTestContext
         // The table is named by the visible "Cases (30 cases)" heading.
         var table = cut.Find("[data-testid=case-table]");
         Assert.StartsWith("Cases", cut.Find($"#{table.GetAttribute("aria-labelledby")}").TextContent.Trim(), StringComparison.Ordinal);
-        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date", "Updated", "Actions"],
+        Assert.Equal(["ID", "Title", "Status", "Priority", "Category", "Owner", "Due date (ET)", "Updated (ET)", "Actions"],
             cut.FindAll("[data-testid=case-table] thead th").Select(th => th.TextContent.Trim().Trim('▲', '▼', '⇅').Trim()));
         // Every data column sorts; the row menu column does not.
         Assert.Equal(8, cut.FindAll("[data-testid=case-table] thead th button.sort-button").Count);
@@ -134,6 +134,22 @@ public class CaseListTests : WebTestContext
         cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=case-table] tbody tr")));
         Assert.Contains("Case number 11", cut.Find("[data-testid=case-table] tbody").TextContent);
         Assert.Equal("Search by case ID, title or description", cut.Find("label[for=case-search]").TextContent);
+    }
+
+    [Test]
+    public void A_date_picked_from_the_calendar_applies_and_shows_as_MM_DD_YYYY()
+    {
+        SignInAs(AppRoles.Supervisor);
+        Navigation.NavigateTo("cases");
+        var cut = Render<CaseList>();
+
+        // The native picker reports an ISO date on the hidden input the calendar button opens.
+        Assert.NotNull(cut.Find("#filter-due-from ~ button[data-date-picker][aria-label='Choose date from calendar']"));
+        cut.Find("#filter-due-from + input.date-picker-proxy").Change("2026-11-01");
+
+        Assert.Contains("dueFrom=2026-11-01", Navigation.Uri, StringComparison.Ordinal);
+        Assert.Equal("11-01-2026", cut.Find("#filter-due-from").GetAttribute("value"));
+        Assert.Equal("2026-11-01", cut.Find("#filter-due-from + input.date-picker-proxy").GetAttribute("value"));
     }
 
     [Test]
