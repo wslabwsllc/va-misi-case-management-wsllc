@@ -41,11 +41,12 @@ public abstract class WebTestContext : BunitContext
         Services.AddSingleton<InMemoryCaseService>();
         Services.AddSingleton<ScriptedCaseService>();
         Services.AddSingleton<ICaseService>(sp => sp.GetRequiredService<ScriptedCaseService>());
-        Services.AddSingleton<ICaseAssignmentService>(sp => sp.GetRequiredService<InMemoryCaseService>());
+        Services.AddSingleton<ICaseAssignmentService>(sp => sp.GetRequiredService<ScriptedCaseService>());
         Services.AddSingleton<InMemoryAssigneeDirectory>();
         Services.AddSingleton<ICaseAssigneeDirectory>(sp => sp.GetRequiredService<InMemoryAssigneeDirectory>());
         Services.AddSingleton<FakeCaseNotificationService>();
-        Services.AddSingleton<ICaseNotificationService>(sp => sp.GetRequiredService<FakeCaseNotificationService>());
+        Services.AddSingleton<ScriptedNotificationService>();
+        Services.AddSingleton<ICaseNotificationService>(sp => sp.GetRequiredService<ScriptedNotificationService>());
         Services.AddSingleton<CaseActivitySignal>();
         Services.AddScoped<PageActivity>();
         Services.AddSingleton<FakeTestResultsService>();
@@ -55,7 +56,9 @@ public abstract class WebTestContext : BunitContext
         // The sign-in page injects AccountSignIn; presentation tests never submit, so an uninitialized instance suffices.
         Services.AddScoped(_ => (Identity.Account.AccountSignIn)System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(Identity.Account.AccountSignIn)));
         Services.AddSingleton<Microsoft.Extensions.Configuration.IConfiguration>(Configuration);
-        Services.AddSingleton<IAttachmentService, InMemoryAttachmentService>();
+        Services.AddSingleton<InMemoryAttachmentService>();
+        Services.AddSingleton<ScriptedAttachmentService>();
+        Services.AddSingleton<IAttachmentService>(sp => sp.GetRequiredService<ScriptedAttachmentService>());
         Services.AddSingleton<IVeteranLookupClient>(Lookup);
         Services.AddSingleton<ICaseWorkflow>(CaseWorkflow.Instance);
         Services.AddSingleton<AntiforgeryStateProvider, TestAntiforgeryStateProvider>();
@@ -76,6 +79,8 @@ public abstract class WebTestContext : BunitContext
 
     protected ScriptedCaseService CaseService => Services.GetRequiredService<ScriptedCaseService>();
     protected FakeCaseNotificationService NotificationFeed => Services.GetRequiredService<FakeCaseNotificationService>();
+    protected ScriptedNotificationService NotificationScript => Services.GetRequiredService<ScriptedNotificationService>();
+    protected ScriptedAttachmentService AttachmentScript => Services.GetRequiredService<ScriptedAttachmentService>();
     protected FakeTestResultsService TestResults => Services.GetRequiredService<FakeTestResultsService>();
     protected FakeUserAdministrationService UserAdmin => Services.GetRequiredService<FakeUserAdministrationService>();
     protected StatusAnnouncer Announcer => Services.GetRequiredService<StatusAnnouncer>();
@@ -93,13 +98,13 @@ public abstract class WebTestContext : BunitContext
     }
 
     /// <summary>Adds cases through the fake service as a temporary all-permissions actor, leaving the signed-in actor unchanged.</summary>
-    protected async Task<CaseDetailDto> SeedCaseAsync(string title, CaseStatus status = CaseStatus.New, string? description = null, CaseTriage? triage = null)
+    protected async Task<CaseDetailDto> SeedCaseAsync(string title, CaseStatus status = CaseStatus.New, string? description = null, CaseTriage? triage = null, VeteranSnapshot? veteran = null)
     {
         var actor = CurrentUser.Actor;
         CurrentUser.Actor = FakeCurrentUser.Authenticated("seed", "seed", AppRoles.Supervisor, FakeCurrentUser.AllPermissions);
         try
         {
-            var created = (await CaseService.CreateAsync(new CreateCaseRequest(title, description, null, triage), CancellationToken.None)).Value!;
+            var created = (await CaseService.CreateAsync(new CreateCaseRequest(title, description, veteran, triage), CancellationToken.None)).Value!;
             CaseStatus[] path = status switch
             {
                 CaseStatus.Triaged => [CaseStatus.Triaged],

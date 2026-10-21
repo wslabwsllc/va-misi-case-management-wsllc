@@ -69,6 +69,26 @@ docker compose up -d && E2E_BASE_URL=http://localhost:8080 dotnet test tests/Cas
 Locally, install the browser once: `pwsh tests/CaseIntake.E2E/bin/Debug/net10.0/playwright.ps1 install chromium`.
 Against the demo stack the browser tests create cases in the demo database; prefer the Docker command above.
 
+## Code coverage
+
+```bash
+scripts/coverage.sh        # threshold 80 (or pass a number, or set COVERAGE_THRESHOLD)
+```
+
+Runs every test project except `CaseIntake.E2E` with [coverage.runsettings](../coverage.runsettings) (Microsoft Code
+Coverage, already part of the test SDK; Docker required for the integration suite), then
+[scripts/coverage-report.cs](../scripts/coverage-report.cs) combines the suites line by line and prints line coverage
+per application assembly and in total to the console and `artifacts/coverage/summary.md`. It exits non-zero when a test
+fails or when the total **or any assembly** is below the threshold. The browser suite drives the app in another
+process, so it adds nothing to the figure.
+
+The integration suite counts: the services that rely on PostgreSQL behaviour (`ILIKE` search, the `xmin` row version,
+transactions) are tested against PostgreSQL rather than an in-memory substitute. Excluded, because they have no
+behaviour of their own to test: EF Core migrations and the model snapshot (generated; `MigrationTests` checks the
+schema), `DesignTimeDbContextFactory` (used only by `dotnet-ef`), source generator output under `obj/`, and anything
+marked `[ExcludeFromCodeCoverage]` or `[GeneratedCode]`. `CaseIntake.MigrationService` is a 40-line host entry point
+that no in-process test loads, so it does not appear in the report.
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

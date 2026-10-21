@@ -229,6 +229,9 @@ Results go to the `testresults` volume and are imported into the app within abou
 `qa@example.test` and open **Administration > Quality assurance > Test results** (`/test-results`). Suites, evidence
 and local browser runs: [docs/testing.md](docs/testing.md).
 
+`scripts/coverage.sh` measures line coverage on the host (unit, component and integration suites; Docker required) and
+fails below 80% in total or for any assembly ([docs/testing.md](docs/testing.md#code-coverage)).
+
 </details>
 
 ---
