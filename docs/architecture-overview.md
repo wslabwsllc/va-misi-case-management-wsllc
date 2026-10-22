@@ -3,7 +3,8 @@
 One page for the live walkthrough. The full detail is in [architecture.md](architecture.md), the decisions in the
 [ADRs](adr/README.md), and the exact versions in [versions.md](versions.md).
 
-## 1. What runs
+<details>
+<summary><span style="color: #0fb5ba;">1. What runs</span></summary>
 
 **.NET 10 LTS · Blazor Web App (Interactive Server) · EF Core 10 · PostgreSQL 18 · Linux containers (Docker Compose)**
 
@@ -21,7 +22,12 @@ flowchart LR
 same production image, with its own database (`caseintake_e2e`) and volumes, so they never touch the demo data. Every
 image and package is pinned.
 
-## 2. How the code is organised
+</details>
+
+---
+
+<details>
+<summary><span style="color: #0fb5ba;">2. How the code is organised</span></summary>
 
 A **modular monolith**: one deployable, with feature modules that **never reference each other**. An architecture
 test fails the build if one does.
@@ -35,7 +41,12 @@ test fails the build if one does.
 | `VeteranLookup.Client` | The resilient HTTP client for the lookup service |
 | `TestResults` | Imports test runs and their evidence into the app |
 
-## 3. Who can do what (roles and permissions in the database)
+</details>
+
+---
+
+<details>
+<summary><span style="color: #0fb5ba;">3. Who can do what (roles and permissions in the database)</span></summary>
 
 Since Change 1 ([ADR 0013](adr/0013-database-roles-and-permissions.md)) roles and their permissions are stored in the
 database, and every page, service and button checks a **permission**, never a role name. `RolePermissionMap` in code is
@@ -59,7 +70,12 @@ The four case roles nest (Auditor ⊂ IntakeClerk ⊂ CaseWorker ⊂ Supervisor)
 Administrator always holds every permission. Administration never escalates: nobody grants a permission they do not
 hold (C1-4).
 
-## 4. Decisions, tradeoffs, assumptions and known limitations
+</details>
+
+---
+
+<details>
+<summary><span style="color: #0fb5ba;">4. Decisions, tradeoffs, assumptions and known limitations</span></summary>
 
 | Decision | Alternative considered | Tradeoff | ADR |
 |---|---|---|---|
@@ -86,3 +102,7 @@ hold (C1-4).
 - No production identity provider and no HTTPS (the spec serves `http://localhost:8080`).
 - Logs go to stdout, and Error and Critical events are also stored for the in-app error log (ADR 0015); there is no
   production monitoring, alerting or tracing backend.
+
+</details>
+
+---
