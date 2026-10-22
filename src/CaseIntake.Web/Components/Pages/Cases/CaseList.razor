@@ -130,7 +130,7 @@
             <input type="checkbox" checked="@_state.Overdue" @onchange="OverdueChangedAsync" data-testid="filter-overdue" />
             Overdue only
         </label>
-        <button type="button" class="btn" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-filters">
+        <button type="button" class="btn" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-filters" data-focus-fallback="#case-search">
             <Icon Name="close" Small="true" /> Clear filters
         </button>
     </div>
@@ -148,7 +148,7 @@
                 var c = chip;
                 <span class="chip">
                     @c.Text
-                    <button type="button" class="chip__remove" @onclick="() => NavigateAsync(c.Remove(_state))" aria-label="@($"Remove filter: {c.Text}")">
+                    <button type="button" class="chip__remove" @onclick="() => NavigateAsync(c.Remove(_state))" data-focus-fallback="#results-heading" aria-label="@($"Remove filter: {c.Text}")">
                         <Icon Name="close" Small="true" />
                     </button>
                 </span>
@@ -172,7 +172,7 @@
             <EmptyState Title="No cases match these filters" Message="Try a different search or fewer filters." IconName="search" TestId="list-empty">
                 @if (HasFilters)
                 {
-                    <button type="button" class="btn" @onclick="ClearFiltersAsync">Clear filters</button>
+                    <button type="button" class="btn" @onclick="ClearFiltersAsync" data-focus-fallback="#results-heading">Clear filters</button>
                 }
             </EmptyState>
         }

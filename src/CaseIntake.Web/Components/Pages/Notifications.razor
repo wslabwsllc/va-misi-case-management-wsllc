@@ -19,11 +19,11 @@
 <PageShell Title="Notifications" Breadcrumbs="@([new Crumb("Dashboard", "")])" Subtitle="@Subtitle">
     <Actions>
         <div class="btn-row page-actions">
-            <button type="button" class="btn" @onclick="ReloadAsync" disabled="@_busy" data-testid="notifications-refresh">
+            <button type="button" class="btn" @onclick="RefreshAsync" disabled="@_busy" data-testid="notifications-refresh">
                 <Icon Name="refresh" Small="true" Class="@(_busy ? "icon--spin" : null)" /> Refresh
             </button>
             <button type="button" class="btn" @onclick="MarkAllReadAsync" disabled="@(_busy || _feed is not { UnreadCount: > 0 })"
-                    data-testid="mark-all-read">
+                    data-testid="mark-all-read" data-focus-fallback="#page-title">
                 <Icon Name="check-all" Small="true" /> Mark all as read
             </button>
         </div>
@@ -74,14 +74,14 @@ else if (_feed is { } feed)
                 @foreach (var n in items)
                 {
                     var item = n;
-                    <li class="record-card notification @(n.Unread ? "notification--unread" : null)" data-unread="@(n.Unread ? "true" : "false")" data-testid="notification">
+                    <li @key="n.Id" class="record-card notification @(n.Unread ? "notification--unread" : null)" data-unread="@(n.Unread ? "true" : "false")" data-testid="notification">
                         <div class="record-card__top">
                             <div class="record-card__title">
                                 @if (n.Unread)
                                 {
                                     <span class="badge badge--new">New</span>
                                 }
-                                <a href="@($"cases/{n.CaseId}?tab=history")" @onclick="() => OpenAsync(item)">@n.CaseTitle</a>
+                                <a href="@($"cases/{n.CaseId}?tab=history")" id="@($"notification-{n.Id}")" @onclick="() => OpenAsync(item)">@n.CaseTitle</a>
                             </div>
                             @if (n.ToStatus is { } to)
                             {
@@ -102,7 +102,8 @@ else if (_feed is { } feed)
                             }
                             @if (n.Unread)
                             {
-                                <button type="button" class="btn btn--link row-raise" @onclick="() => MarkReadAsync(item)" disabled="@_busy" data-testid="mark-read">
+                                <button type="button" class="btn btn--link row-raise" @onclick="() => MarkReadAsync(item)" disabled="@_busy" data-testid="mark-read"
+                                        data-focus-fallback="@($"#notification-{n.Id}|#page-title")">
                                     <Icon Name="check" Small="true" /> Mark as read<span class="visually-hidden">: @n.CaseTitle, @UiText.Time(n.OccurredAtUtc)</span>
                                 </button>
                             }
@@ -164,17 +165,21 @@ else if (_feed is { } feed)
     protected override async Task OnInitializedAsync()
     {
         ActivitySignal.Changed += OnActivity;
-        await ReloadAsync();
+        await LoadAsync(showBusy: true);
     }
 
     protected override void OnParametersSet() => _tab = Tabs.Any(t => t.Key == QueryShow) ? QueryShow! : "all";
 
-    private void OnActivity() => _ = InvokeAsync(ReloadAsync);
+    // A change by anyone reloads the list in the background without disabling the buttons, so a keyboard user's focus
+    // stays where it is; rows are keyed by notification, so a focused button keeps belonging to the same entry.
+    private void OnActivity() => _ = InvokeAsync(() => LoadAsync(showBusy: false));
 
-    private async Task ReloadAsync()
+    private Task RefreshAsync() => LoadAsync(showBusy: true);
+
+    private async Task LoadAsync(bool showBusy)
     {
         using var busy = Activity.Begin();
-        _busy = true;
+        _busy |= showBusy;
         try
         {
             var result = await NotificationService.GetFeedAsync(50, _cts.Token);
@@ -191,7 +196,10 @@ else if (_feed is { } feed)
         }
         finally
         {
-            _busy = false;
+            if (showBusy)
+            {
+                _busy = false;
+            }
             StateHasChanged();
         }
     }

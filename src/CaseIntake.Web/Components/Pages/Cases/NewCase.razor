@@ -32,7 +32,7 @@
 <div class="grid grid--main-side">
     <div class="card">
         <EditForm EditContext="_editContext" OnSubmit="RequestSubmitAsync" id="intake-form" novalidate class="form" data-testid="intake-form">
-            <FormErrorSummary @ref="_summary" Title="Invalid form" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" />
+            <FormErrorSummary @ref="_summary" Title="Invalid form" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" FormMessagesInputId="lookup-ssn" />
             <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title"
                               Hint="@($"A short summary, {CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
                               MaxCharacters="CaseFieldLimits.TitleMaxLength" />
@@ -77,13 +77,11 @@
                 </div>
                 <p class="page-header__subtitle">Attach the veteran's name and address to this case. A case cannot be submitted without a veteran.</p>
                 <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
-                    @* Focusing the SSN box dismisses the "attach a veteran" summary message. *@
-                    <div @onfocusin="() => _formMessages = []">
-                        <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
-                                          Hint="Nine digits, with or without dashes (NNN-NN-NNNN)."
-                                          InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput"
-                                          class="@(_formMessages.Count > 0 ? "invalid" : null)" />
-                    </div>
+                    @* A missing veteran is shown here as the SSN field's error (text, aria-invalid, aria-describedby) and
+                       linked from the form's error summary; it stays until a veteran is attached or a new lookup runs. *@
+                    <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
+                                      Hint="Nine digits, with or without dashes (NNN-NN-NNNN)."
+                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" />
                     <button type="submit" class="btn btn--outline btn--block" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
                         @if (_lookingUp)
                         {
@@ -147,6 +145,7 @@
         public CaseCategory Category { get; set; } = CaseCategory.General;
         public string? AssignedTo { get; set; }
         public DateOnly? DueOn { get; set; }
+        public bool DueOnTextInvalid { get; set; }
     }
 
     private sealed class LookupModel
@@ -235,7 +234,7 @@
         }
         _submitError = null;
         var request = new CreateCaseRequest(_model.Title ?? string.Empty, _model.Description, _selected, _model.ToTriage());
-        if (CaseRequestValidator.Validate(request) is { } invalid)
+        if (_model.WithDueOnText(CaseRequestValidator.Validate(request)) is { } invalid)
         {
             ShowValidation(invalid);
             return;
@@ -253,7 +252,7 @@
         }
         _submitError = null;
         var request = new CreateCaseRequest(_model.Title ?? string.Empty, _model.Description, _selected, _model.ToTriage());
-        if (CaseRequestValidator.Validate(request) is { } invalid)
+        if (_model.WithDueOnText(CaseRequestValidator.Validate(request)) is { } invalid)
         {
             ShowValidation(invalid);
             return;
@@ -301,6 +300,7 @@
     {
         _messages.Clear();
         _formMessages = [];
+        List<string> veteranMessages = [];
         foreach (var (field, fieldMessages) in error.FieldErrors ?? new Dictionary<string, string[]>())
         {
             if (field is CaseFieldNames.Title or CaseFieldNames.Description || TriageFormExtensions.IsTriageField(field))
@@ -309,10 +309,12 @@
             }
             else
             {
-                // Veteran snapshot problems (from lookup data) are not tied to an input on this form.
+                // Veteran problems are not tied to an input on this form: they belong to the lookup's SSN field.
                 _formMessages.AddRange(fieldMessages.Select(m => $"Veteran: {m}"));
+                veteranMessages.AddRange(fieldMessages);
             }
         }
+        SetVeteranError(veteranMessages);
         _showSummary = true;
         _focusSummary = true;
         _editContext.NotifyValidationStateChanged();
@@ -335,6 +337,19 @@
         _formMessages = [];
         _showSummary = false;
         _editContext.NotifyValidationStateChanged();
+        SetVeteranError([]);
+    }
+
+    /// <summary>Shows the veteran problems as the SSN field's error (or removes it).</summary>
+    private void SetVeteranError(IReadOnlyList<string> messages)
+    {
+        var ssn = new FieldIdentifier(_lookupModel, nameof(LookupModel.Ssn));
+        _lookupMessages.Clear(ssn);
+        if (messages.Count > 0)
+        {
+            _lookupMessages.Add(ssn, messages);
+        }
+        _lookupContext.NotifyValidationStateChanged();
     }
 
     private void ShowSubmitError(string message)
@@ -417,6 +432,8 @@
         _selected = _found;
         _found = null;
         _lookupMessage = null;
+        _formMessages = [];
+        SetVeteranError([]);
         _focusSelected = true;
         Announcer.Announce($"{_selected.Name} will be attached to the case.");
     }

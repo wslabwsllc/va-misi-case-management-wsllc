@@ -96,6 +96,9 @@ public static class UiText
     /// <summary>The hint shown beside every date field.</summary>
     public const string DateHint = "Format: MM-DD-YYYY";
 
+    /// <summary>The error for typed text that is not a real date.</summary>
+    public const string DateInvalid = "Enter a real date as MM-DD-YYYY, for example 10-21-2026.";
+
     /// <summary>
     /// Parses a typed date in MM-DD-YYYY (slashes are accepted too, and single-digit months and days). Calendar parsing
     /// only, so a date can never shift a day through a time zone. Null for anything that is not a real calendar date.

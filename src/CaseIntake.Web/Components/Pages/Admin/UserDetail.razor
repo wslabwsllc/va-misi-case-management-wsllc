@@ -82,7 +82,7 @@ else
                     }
                     @if (u.IsLockedOut(Time.GetUtcNow()))
                     {
-                        <button type="button" class="btn" @onclick="UnlockAsync" disabled="@_busy" data-testid="unlock-user">Unlock sign-in</button>
+                        <button type="button" class="btn" @onclick="UnlockAsync" disabled="@_busy" data-testid="unlock-user" data-focus-fallback="[data-testid=deactivate-user]|[data-testid=reactivate-user]">Unlock sign-in</button>
                     }
                 </div>
             }

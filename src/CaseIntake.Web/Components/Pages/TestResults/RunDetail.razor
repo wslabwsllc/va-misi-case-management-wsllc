@@ -100,7 +100,7 @@ else
                     </div>
                     <Section508Select Id="execution-508" Value="_query.Section508" ValueChanged="f => ApplyAsync(_query with { Section508 = f })" />
                     <div class="field">
-                        <button type="button" class="btn btn--block" @onclick="ResetAsync" disabled="@(!HasFilters)" data-testid="reset-execution-filters">
+                        <button type="button" class="btn btn--block" @onclick="ResetAsync" disabled="@(!HasFilters)" data-testid="reset-execution-filters" data-focus-fallback="#execution-search">
                             <Icon Name="close" Small="true" /> Reset filters
                         </button>
                     </div>

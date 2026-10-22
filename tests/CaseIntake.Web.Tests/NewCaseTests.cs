@@ -65,21 +65,47 @@ public class NewCaseTests : WebTestContext
     }
 
     [Test]
-    public void Typing_a_valid_title_and_focusing_the_SSN_box_dismiss_their_summary_messages()
+    public void Typing_a_valid_title_dismisses_its_summary_message()
     {
         var cut = RenderPage();
         cut.Find("[data-testid=intake-form]").Submit();
         Assert.Equal("Invalid form", cut.Find("#error-summary-title").TextContent);
         Assert.Equal(2, cut.FindAll("#error-summary li").Count);
-        Assert.Contains("invalid", cut.Find("#lookup-ssn").ClassList);
 
         cut.Find("#intake-title").Input("Valid title");
+
         Assert.Empty(cut.FindAll("#intake-title-error"));
         Assert.Contains(CaseRequestValidator.VeteranRequiredMessage, cut.Find("#error-summary").TextContent);
+    }
 
-        cut.Find("#lookup-ssn").FocusIn();
+    [Test]
+    public void Missing_veteran_is_the_SSN_fields_error_linked_from_the_summary_until_a_veteran_is_attached()
+    {
+        Lookup.Returns("900-12-3456", new VeteranLookupResult(VeteranLookupOutcome.Found, "Rowan Calloway", "6243 Placeholder Street"));
+        var cut = RenderPage();
+        cut.Find("#intake-title").Input("Valid title");
+        cut.Find("[data-testid=intake-form]").Submit();
+
+        // Text, aria-invalid and aria-describedby on the field, not a red border alone (WCAG 1.4.1, 3.3.1).
+        var ssn = cut.Find("#lookup-ssn");
+        Assert.Equal("true", ssn.GetAttribute("aria-invalid"));
+        Assert.Contains("lookup-ssn-error", ssn.GetAttribute("aria-describedby"));
+        Assert.Equal(CaseRequestValidator.VeteranRequiredMessage, cut.Find("#lookup-ssn-error").TextContent.Trim());
+        var link = cut.Find("#error-summary a");
+        Assert.Equal("#lookup-ssn", link.GetAttribute("href"));
+        Assert.Contains(CaseRequestValidator.VeteranRequiredMessage, link.TextContent);
+
+        // Reaching the field does not dismiss the message.
+        ssn.Input("900-12-3456");
+        Assert.Equal("true", cut.Find("#lookup-ssn").GetAttribute("aria-invalid"));
+        Assert.Single(cut.FindAll("#error-summary li"));
+
+        cut.Find("[data-testid=lookup-form]").Submit();
+        cut.Find("[data-testid=use-veteran]").Click();
+
+        Assert.Empty(cut.FindAll("#lookup-ssn-error"));
+        Assert.Null(cut.Find("#lookup-ssn").GetAttribute("aria-invalid"));
         Assert.Empty(cut.FindAll("#error-summary"));
-        Assert.DoesNotContain("invalid", cut.Find("#lookup-ssn").ClassList);
     }
 
     [Test]

@@ -149,6 +149,50 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("#edit-due", cut.Find("#error-summary a").GetAttribute("href"));
     }
 
+    [Test]
+    public async Task A_due_date_that_is_not_a_real_date_blocks_save_and_is_listed_in_the_summary()
+    {
+        SignInAs(AppRoles.CaseWorker);
+        var created = await SeedCaseAsync("Mistyped due date");
+        var cut = RenderCase(created.Id);
+        cut.WaitForElement("[data-testid=edit-case]").Click();
+        var updates = CaseService.Updates.Count;
+
+        cut.Find("#edit-due").Change("13-45-2026");
+        cut.Find("[data-testid=edit-form]").Submit();
+
+        // Not saved with the previous date; the error is on the field once (WCAG 3.3.1) and linked from the summary.
+        Assert.Equal(updates, CaseService.Updates.Count);
+        Assert.Equal("true", cut.Find("#edit-due").GetAttribute("aria-invalid"));
+        Assert.Equal(UiText.DateInvalid, cut.Find("#edit-due-error").TextContent.Trim());
+        Assert.Empty(cut.FindAll("#edit-due-format-error"));
+        Assert.Equal("#edit-due", cut.Find("#error-summary a").GetAttribute("href"));
+        Assert.Equal(UiText.DateInvalid, cut.Find("#error-summary a").TextContent);
+
+        cut.Find("#edit-due").Change("11-02-2026");
+        SubmitEdit(cut);
+
+        cut.WaitForAssertion(() => Assert.Equal("Changes saved", Announcer.Message));
+        Assert.Equal(new DateOnly(2026, 11, 2), CaseService.Updates.Last().Triage?.DueOn);
+    }
+
+    [Test]
+    public void A_due_date_that_is_not_a_real_date_blocks_intake()
+    {
+        SignInAs(AppRoles.CaseWorker);
+        var cut = Render<NewCase>();
+        cut.Find("#intake-title").Input("Valid title");
+
+        cut.Find("#intake-due").Change("02-30-2026");
+        Assert.Equal(UiText.DateInvalid, cut.Find("#intake-due-format-error").TextContent.Trim());   // shown as soon as it is typed
+        cut.Find("[data-testid=intake-form]").Submit();
+
+        Assert.Equal(UiText.DateInvalid, cut.Find("#intake-due-error").TextContent.Trim());
+        Assert.Empty(cut.FindAll("#intake-due-format-error"));
+        Assert.Contains(cut.FindAll("#error-summary a"), a => a.GetAttribute("href") == "#intake-due");
+        Assert.Empty(cut.FindAll("[data-testid=confirm-intake] .modal__footer"));   // "Are you sure?" is not offered
+    }
+
     // ---------- Assignment (supervisors assign; case workers take or hand back) ----------
 
     [Test]
@@ -344,6 +388,38 @@ public class CaseTriageAndNotificationUiTests : WebTestContext
         Assert.Equal("All notifications marked as read", Announcer.Message);
         Assert.All(cut.FindAll("[data-testid=notifications-list] > li"), i => Assert.Equal("false", i.GetAttribute("data-unread")));
         Assert.True(cut.Find("[data-testid=mark-all-read]").HasAttribute("disabled"));
+    }
+
+    [Test]
+    public void Notifications_reload_in_the_background_without_disabling_the_buttons()
+    {
+        SignInAs(AppRoles.CaseWorker);
+        AddNotification(1, unread: true, minutesAgo: 5);
+        var cut = Render<Notifications>();
+        cut.WaitForAssertion(() => Assert.Single(cut.FindAll("[data-testid=mark-read]")));
+
+        // Someone else's change reloads the list; a keyboard user's focused button must not be disabled meanwhile
+        // (a disabled control loses focus, WCAG 2.4.3).
+        NotificationScript.FeedGate = new TaskCompletionSource();
+        AddNotification(2, unread: true, minutesAgo: 1);
+        Services.GetRequiredService<CaseActivitySignal>().Raise();
+
+        Assert.False(cut.Find("[data-testid=mark-read]").HasAttribute("disabled"));
+        Assert.False(cut.Find("[data-testid=mark-all-read]").HasAttribute("disabled"));
+        Assert.False(cut.Find("[data-testid=notifications-refresh]").HasAttribute("disabled"));
+
+        NotificationScript.FeedGate.SetResult();
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll("[data-testid=mark-read]").Count));
+        Assert.Equal(["notification-2", "notification-1"], cut.FindAll("[data-testid=notifications-list] > li a").Select(a => a.Id));
+        // Each Mark as read names where focus goes when it disappears: its own entry, else the page heading.
+        Assert.Equal("#notification-2|#page-title", cut.FindAll("[data-testid=mark-read]")[0].GetAttribute("data-focus-fallback"));
+
+        // Refresh, chosen by the user, still shows that it is working.
+        NotificationScript.FeedGate = new TaskCompletionSource();
+        cut.Find("[data-testid=notifications-refresh]").Click();
+        Assert.True(cut.Find("[data-testid=notifications-refresh]").HasAttribute("disabled"));
+        NotificationScript.FeedGate.SetResult();
+        cut.WaitForAssertion(() => Assert.False(cut.Find("[data-testid=notifications-refresh]").HasAttribute("disabled")));
     }
 
     [Test]
