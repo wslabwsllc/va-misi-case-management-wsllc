@@ -10,11 +10,19 @@ One page for the live walkthrough. The full detail is in [architecture.md](archi
 
 ```mermaid
 flowchart LR
-    browser([Browser]) -- "HTTP + WebSocket" --> web["web :8080"]
-    migrator["migrator (one-shot)"] -- "migrate + seed" --> db[("db: PostgreSQL 18")]
+    browser([Browser])
+
+    subgraph compose["Compose network"]
+        db[("db: PostgreSQL 18")]
+        migrator["migrator (one-shot)"]
+        lookup["veteran-lookup :8081"]
+        web["web :8080"]
+    end
+
+    browser -- "HTTP + WebSocket" --> web
+    migrator -- "migrate + seed" --> db
     web --> db
-    web -- "POST /veterans/lookup" --> lookup["veteran-lookup :8081"]
-    web --> att[(attachments volume)]
+    web -- "POST /veterans/lookup" --> lookup
 ```
 
 **Start order is enforced:** `db` healthy → `migrator` applies the schema, seeds 72 synthetic cases and exits 0 →
