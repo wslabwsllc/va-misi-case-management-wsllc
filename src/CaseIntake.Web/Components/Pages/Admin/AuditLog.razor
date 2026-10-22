@@ -74,7 +74,7 @@
         </div>
         <div class="btn-row filters__actions">
             <button type="submit" class="btn btn--primary" data-testid="apply-audit-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
-            <button type="button" class="btn" @onclick="ClearAsync" disabled="@(!HasFilters)" data-testid="clear-audit-filters">Clear</button>
+            <button type="button" class="btn" @onclick="ClearAsync" disabled="@(!HasFilters)" data-testid="clear-audit-filters" data-focus-fallback="#audit-from">Clear</button>
         </div>
     </form>
     @if (_query.EntityType is not null || _query.EntityId is not null)
@@ -82,7 +82,7 @@
         <div class="filter-chips" role="group" aria-label="Subject filter" data-testid="audit-subject-filter">
             <span class="chip">
                 Subject: @(_query.EntityType ?? "any") @_query.EntityId
-                <button type="button" class="chip__remove" @onclick="ClearSubjectAsync" aria-label="Remove filter: subject">
+                <button type="button" class="chip__remove" @onclick="ClearSubjectAsync" aria-label="Remove filter: subject" data-focus-fallback="#audit-from">
                     <Icon Name="close" Small="true" />
                 </button>
             </span>

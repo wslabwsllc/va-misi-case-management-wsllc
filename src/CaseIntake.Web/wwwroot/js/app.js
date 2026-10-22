@@ -120,17 +120,34 @@ document.addEventListener('click', (event) => {
   else window.location.assign(href);
 });
 
-// Keep keyboard focus when a re-render replaces the focused control on the same page (WCAG 2.4.3). A filter, sort or page
-// change is a query-string navigation; when the permission check behind it has to reload (its cache expires every
-// minute), the router briefly shows "Checking your access" and rebuilds the page, which drops focus to <body>. When the
-// control comes back (same id, or same data-testid) within a few seconds on the same path, focus returns to it. A move
-// to another page is left to FocusOnNavigation (it focuses the new h1).
+// Keep keyboard focus when a re-render replaces, removes or disables the focused control on the same page (WCAG 2.4.3).
+// Browsers move focus to <body> in all three cases, so the next Tab starts again at the top of the page.
+// - Replaced: a filter, sort or page change is a query-string navigation; when the permission check behind it has to
+//   reload (its cache expires every minute), the router briefly shows "Checking your access" and rebuilds the page.
+//   When the control comes back (same id, or a data-testid no other control has) within a few seconds, focus returns
+//   to it.
+// - Disabled while it works (Save, Refresh, Look up): focus returns to it when it is enabled again.
+// - Removed or left disabled for good (Clear filters once nothing is filtered, a chip's remove button, Mark as read):
+//   the control names where focus goes instead in data-focus-fallback, a list of selectors separated by "|" and tried
+//   in order. A fallback that is not focusable (a heading) gets tabindex="-1".
+// A move to another page is left to FocusOnNavigation (it focuses the new h1).
 {
   let lost = null;
   let lastFocused = null;
   let lastPath = location.pathname;
   const keyOf = el => el.id ? `#${CSS.escape(el.id)}`
     : el.dataset?.testid ? `[data-testid="${CSS.escape(el.dataset.testid)}"]` : null;
+  const usable = el => el instanceof HTMLElement && el.isConnected && !el.matches(':disabled');
+  const fallbackOf = selectors => {
+    for (const selector of (selectors ?? '').split('|').map(s => s.trim()).filter(Boolean)) {
+      const el = document.querySelector(selector);
+      if (usable(el)) {
+        if (el.tabIndex < 0 && !el.hasAttribute('tabindex')) el.setAttribute('tabindex', '-1');
+        return el;
+      }
+    }
+    return null;
+  };
   document.addEventListener('focusin', event => {
     if (event.target instanceof Element) {
       lastFocused = event.target;
@@ -138,24 +155,44 @@ document.addEventListener('click', (event) => {
       lost = null;
     }
   }, true);
-  new MutationObserver(() => {
-    if (lost === null && lastFocused !== null && !lastFocused.isConnected) {
-      const key = keyOf(lastFocused);
-      lost = key === null ? null : { key, path: lastPath, until: performance.now() + 5000 };
-      lastFocused = null;
+  const restore = () => {
+    if (lost === null && lastFocused !== null) {
+      const removed = !lastFocused.isConnected;
+      if (removed || lastFocused.matches(':disabled')) {
+        lost = {
+          element: removed ? null : lastFocused,
+          key: keyOf(lastFocused),
+          fallback: lastFocused.getAttribute('data-focus-fallback'),
+          path: lastPath,
+          until: performance.now() + (removed ? 5000 : 15000),
+        };
+        lastFocused = null;
+        if (!removed) {
+          // Browsers move focus off a disabled control at their next rendering step, after this callback.
+          requestAnimationFrame(() => setTimeout(restore));
+        }
+        if (lost.key === null && lost.fallback === null && lost.element === null) lost = null;
+      }
     }
     if (lost === null) return;
-    const focusIsLost = document.activeElement === null || document.activeElement === document.body;
+    const active = document.activeElement;
+    if (active !== null && active === lost.element) return;   // not moved yet (or the browser keeps it): wait
+    const focusIsLost = active === null || active === document.body;
     if (!focusIsLost || location.pathname !== lost.path || performance.now() > lost.until) {
       lost = null;
       return;
     }
-    const replacement = document.querySelector(lost.key);
-    if (replacement instanceof HTMLElement) {
+    // A rebuilt control with a unique key is the same control; a key shared by several rows (Mark as read) is not.
+    const matches = lost.key === null ? [] : [...document.querySelectorAll(lost.key)].filter(usable);
+    const target = usable(lost.element) ? lost.element
+      : matches.length === 1 ? matches[0]
+      : fallbackOf(lost.fallback) ?? matches[0] ?? null;
+    if (target !== null) {
       lost = null;
-      replacement.focus();
+      target.focus();
     }
-  }).observe(document.body, { childList: true, subtree: true });
+  };
+  new MutationObserver(restore).observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['disabled'] });
 }
 
 // DateInput's calendar button (the CSP forbids inline handlers): opens the native picker of the hidden date input

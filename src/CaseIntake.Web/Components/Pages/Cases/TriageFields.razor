@@ -70,7 +70,7 @@
         {
             <span class="field__hint" id="@($"{IdPrefix}-due-hint")">@DueHint</span>
         }
-        <DateInput Id="@($"{IdPrefix}-due")" Value="Model.DueOn" ValueChanged="SetDueAsync"
+        <DateInput Id="@($"{IdPrefix}-due")" Value="Model.DueOn" ValueChanged="SetDueAsync" TextInvalidChanged="SetDueTextInvalid"
                    Invalid="@(Invalid(nameof(ITriageForm.DueOn)) is not null)" DescribedBy="@Described(nameof(ITriageForm.DueOn), hint: DueHint is not null)" />
         @Error(nameof(ITriageForm.DueOn))
     </div>
@@ -104,6 +104,8 @@
         Model.DueOn = due;
         return OnChangedAsync();
     }
+
+    private void SetDueTextInvalid(bool invalid) => Model.DueOnTextInvalid = invalid;
 
     private IReadOnlyList<string> Messages(string field) =>
         EditContext is null ? [] : EditContext.GetValidationMessages(new FieldIdentifier(EditContext.Model, field)).ToList();

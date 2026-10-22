@@ -315,6 +315,7 @@ else
         public CaseCategory Category { get; set; } = CaseCategory.General;
         public string? AssignedTo { get; set; }
         public DateOnly? DueOn { get; set; }
+        public bool DueOnTextInvalid { get; set; }
     }
 
     private sealed record Draft(string? Title, string? Description, CaseTriage Triage);
@@ -660,7 +661,7 @@ else
             return;
         }
         var request = new UpdateCaseRequest(_edit.Title ?? string.Empty, _edit.Description, _editVersion, _edit.ToTriage());
-        if (CaseRequestValidator.Validate(request) is { } invalid)
+        if (_edit.WithDueOnText(CaseRequestValidator.Validate(request)) is { } invalid)
         {
             ShowValidation(invalid);
             return;

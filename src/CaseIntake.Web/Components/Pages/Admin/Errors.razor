@@ -57,7 +57,7 @@
         </div>
         <div class="btn-row filters__actions">
             <button type="submit" class="btn btn--primary" data-testid="apply-error-filters"><Icon Name="filter" Small="true" /> Apply filters</button>
-            <button type="button" class="btn" @onclick="ClearAsync" disabled="@(ToQuery(_query with { Page = 1 }).Length == 0)">Clear</button>
+            <button type="button" class="btn" @onclick="ClearAsync" disabled="@(ToQuery(_query with { Page = 1 }).Length == 0)" data-focus-fallback="#errors-from">Clear</button>
         </div>
     </form>
     @if (_query.Fingerprint is { } fingerprint)
@@ -65,7 +65,7 @@
         <div class="filter-chips" role="group" aria-label="Same error filter">
             <span class="chip">
                 Same error as @fingerprint
-                <button type="button" class="chip__remove" @onclick="() => NavigateAsync(_query with { Fingerprint = null, Page = 1 })" aria-label="Remove filter: same error">
+                <button type="button" class="chip__remove" @onclick="() => NavigateAsync(_query with { Fingerprint = null, Page = 1 })" aria-label="Remove filter: same error" data-focus-fallback="#errors-from">
                     <Icon Name="close" Small="true" />
                 </button>
             </span>

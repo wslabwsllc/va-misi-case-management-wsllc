@@ -128,7 +128,7 @@ public sealed partial class PrimaryWorkflowTests : E2ETestBase
         await s.AxeAsync("New case with a validation error");
         await s.StepAsync("The summary link moves focus to the Title field; type the case", async () =>
         {
-            await PressAsync(page.Locator("#error-summary a"));
+            await PressAsync(page.Locator("#error-summary a[href=\"#intake-title\"]"));
             await E2ESession.ExpectFocusedAsync(page.Locator("#intake-title"));
             await page.Keyboard.TypeAsync(title);
             await page.Keyboard.PressAsync("Tab");

@@ -7,7 +7,7 @@ namespace CaseIntake.E2E;
 /// <summary>
 /// The redesign's interaction rules in a real browser: interactive cards show their "View details" hint on hover and on
 /// keyboard focus (and are one link); a chart card's background opens the larger view while its legend keeps the
-/// drill-through; dialogs return focus; filters apply as they change and announce the count; dates are typed as
+/// drill-through; dialogs return focus; a control that disables itself keeps or hands on focus; filters apply as they change and announce the count; dates are typed as
 /// MM-DD-YYYY; Cancel in the submit confirmation keeps every value.
 /// </summary>
 public sealed class RedesignInteractionTests : E2ETestBase
@@ -25,6 +25,13 @@ public sealed class RedesignInteractionTests : E2ETestBase
         var page = s.Page;
         await SignInAsync(s, DemoAccounts.Supervisor);
 
+        await s.StepAsync("Refresh disables itself while it works and keyboard focus returns to it", async () =>
+        {
+            var refresh = page.GetByTestId("dashboard-refresh");
+            await PressAsync(refresh);
+            await Expect(refresh).ToBeEnabledAsync();
+            await E2ESession.ExpectFocusedAsync(refresh);
+        });
         await s.StepAsync("A KPI card reveals 'View details' on keyboard focus and on hover, and is a single link", async () =>
         {
             var card = page.GetByTestId("kpi-open");
@@ -84,6 +91,8 @@ public sealed class RedesignInteractionTests : E2ETestBase
             await Expect(dueFrom).ToHaveValueAsync("01-05-2026");
             await PressAsync(page.GetByTestId("clear-filters"));
             await Expect(page).Not.ToHaveURLAsync(new Regex("dueFrom|priority"));
+            // Clear filters is now disabled, so focus moves to its data-focus-fallback (the search box), not to <body>.
+            await E2ESession.ExpectFocusedAsync(page.Locator("#case-search"));
         });
         await s.StepAsync("A due date is picked from the calendar button", async () =>
         {

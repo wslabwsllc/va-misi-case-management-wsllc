@@ -56,7 +56,7 @@
                 </select>
             </div>
             <div class="field">
-                <button type="button" class="btn btn--block" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-user-filters">
+                <button type="button" class="btn btn--block" @onclick="ClearFiltersAsync" disabled="@(!HasFilters)" data-testid="clear-user-filters" data-focus-fallback="#user-search">
                     <Icon Name="close" Small="true" /> Clear filters
                 </button>
             </div>

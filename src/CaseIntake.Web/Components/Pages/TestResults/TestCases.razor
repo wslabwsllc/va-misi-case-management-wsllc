@@ -66,7 +66,7 @@
         </div>
         <Section508Select Id="testcase-508" Value="_query.Section508" ValueChanged="f => ApplyAsync(_query with { Section508 = f })" />
         <div class="field">
-            <button type="button" class="btn btn--block" @onclick="ResetAsync" disabled="@(!HasFilters)" data-testid="reset-case-filters">
+            <button type="button" class="btn btn--block" @onclick="ResetAsync" disabled="@(!HasFilters)" data-testid="reset-case-filters" data-focus-fallback="#testcase-search">
                 <Icon Name="close" Small="true" /> Reset filters
             </button>
         </div>

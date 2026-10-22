@@ -17,13 +17,20 @@ public sealed class ScriptedNotificationService(FakeCaseNotificationService inne
     public Exception? CountException { get; set; }
     public int CountCalls { get; private set; }
 
-    public Task<Result<CaseNotificationFeed>> GetFeedAsync(int max, CancellationToken ct)
+    /// <summary>When set, feed loads wait for it, so a test can look at the page while a load is running.</summary>
+    public TaskCompletionSource? FeedGate { get; set; }
+
+    public async Task<Result<CaseNotificationFeed>> GetFeedAsync(int max, CancellationToken ct)
     {
+        if (FeedGate is { } gate)
+        {
+            await gate.Task;
+        }
         if (FeedException is { } ex)
         {
             throw ex;
         }
-        return FeedError is { } error ? Task.FromResult(Result<CaseNotificationFeed>.Failure(error)) : inner.GetFeedAsync(max, ct);
+        return FeedError is { } error ? Result<CaseNotificationFeed>.Failure(error) : await inner.GetFeedAsync(max, ct);
     }
 
     public Task<Result<int>> GetUnreadCountAsync(CancellationToken ct)

@@ -42,11 +42,11 @@
         @if (pageCount > 1)
         {
             <nav class="pager pager--compact" aria-label="Audit trail pages">
-                <button type="button" class="btn" disabled="@(page <= 1)" @onclick="() => GoTo(page - 1, ordered.Count)" data-testid="audit-previous">
+                <button type="button" class="btn" disabled="@(page <= 1)" @onclick="() => GoTo(page - 1, ordered.Count)" data-testid="audit-previous" data-focus-fallback="[data-testid=audit-next]">
                     <Icon Name="chevron-left" Small="true" /> Newer
                 </button>
                 <span class="pager__info" data-testid="audit-page-info">@UiText.ShowingRange(page, PageSize, ordered.Count, "entries")</span>
-                <button type="button" class="btn" disabled="@(page >= pageCount)" @onclick="() => GoTo(page + 1, ordered.Count)" data-testid="audit-next">
+                <button type="button" class="btn" disabled="@(page >= pageCount)" @onclick="() => GoTo(page + 1, ordered.Count)" data-testid="audit-next" data-focus-fallback="[data-testid=audit-previous]">
                     Older <Icon Name="chevron-right" Small="true" />
                 </button>
             </nav>

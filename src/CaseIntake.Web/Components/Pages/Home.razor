@@ -74,7 +74,7 @@
             </select>
         </div>
         <div class="field">
-            <button type="button" class="btn btn--outline btn--block" @onclick="ResetAsync" disabled="@_filter.IsEmpty" data-testid="dash-reset">
+            <button type="button" class="btn btn--outline btn--block" @onclick="ResetAsync" disabled="@_filter.IsEmpty" data-testid="dash-reset" data-focus-fallback="#dash-from">
                 <Icon Name="refresh" Small="true" /> Reset filters
             </button>
         </div>
@@ -85,7 +85,7 @@
 <ErrorAlert Title="@(_error is null ? null : "The dashboard could not be loaded")" Message="@_error" TestId="dashboard-error">
     @if (_error is not null)
     {
-        <div class="btn-row"><button type="button" class="btn" @onclick="RefreshAsync" data-testid="dashboard-retry">Try again</button></div>
+        <div class="btn-row"><button type="button" class="btn" @onclick="RefreshAsync" data-testid="dashboard-retry" data-focus-fallback="#page-title">Try again</button></div>
     }
 </ErrorAlert>
 

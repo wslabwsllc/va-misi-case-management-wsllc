@@ -3,7 +3,9 @@
    date input, whose display follows the browser locale and cannot show MM-DD-YYYY: it is fully keyboard operable,
    accepts paste, explains its format in visible text tied by aria-describedby, and validates on change. Typed text
    that is not a real date stays in the field with an inline error (aria-invalid) and leaves the bound value unchanged,
-   so nothing is ever applied or submitted from a half-typed date. Parsing is calendar-only: no time zone, no day shift. *@
+   so nothing is ever applied or submitted from a half-typed date. TextInvalidChanged tells a form about that state so
+   it can block submit and list the error in its summary; an owner that listens shows that error itself while it marks
+   the field Invalid, so the inline copy is left out then and the message is not read twice. Parsing is calendar-only: no time zone, no day shift. *@
 <span class="field__hint" id="@FormatId">@UiText.DateHint</span>
 <span class="input-wrap input-action">
 <input @attributes="AdditionalAttributes"
@@ -23,11 +25,11 @@
 <button type="button" class="btn btn--subtle btn--icon input-action__button" aria-label="Choose date from calendar"
         data-date-picker><Icon Name="calendar" Small="true" /></button>
 </span>
-@if (_invalid)
+@if (ShowLocalError)
 {
     <div class="field__error" id="@LocalErrorId">
         <Icon Name="error" Small="true" />
-        <span>Enter a real date as MM-DD-YYYY, for example 10-21-2026.</span>
+        <span>@UiText.DateInvalid</span>
     </div>
 }
 
@@ -40,6 +42,8 @@
     [Parameter] public DateOnly? Value { get; set; }
     [Parameter] public EventCallback<DateOnly?> ValueChanged { get; set; }
     [Parameter] public EventCallback AfterChange { get; set; }
+    /// <summary>Raised when the typed text becomes, or stops being, something that is not a real date.</summary>
+    [Parameter] public EventCallback<bool> TextInvalidChanged { get; set; }
     /// <summary>Other descriptions (a page hint or a server error id) placed after the format hint.</summary>
     [Parameter] public string? DescribedBy { get; set; }
     /// <summary>Set by the owner when a server or form rule rejects the date.</summary>
@@ -48,9 +52,10 @@
 
     private string FormatId => Id + "-format";
     private string LocalErrorId => Id + "-format-error";
-    private string DescribedByValue => string.Join(' ', new[] { FormatId, _invalid ? LocalErrorId : null, DescribedBy }.Where(s => !string.IsNullOrEmpty(s)));
+    private bool ShowLocalError => _invalid && !(Invalid && TextInvalidChanged.HasDelegate);
+    private string DescribedByValue => string.Join(' ', new[] { FormatId, ShowLocalError ? LocalErrorId : null, DescribedBy }.Where(s => !string.IsNullOrEmpty(s)));
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         // Re-render the text only when the bound value really changed (a reset, a restore from the URL), never while
         // the user's invalid text is waiting to be corrected.
@@ -58,7 +63,7 @@
         {
             _rendered = Value;
             _text = Value is { } d ? UiText.Date(d) : "";
-            _invalid = false;
+            await SetInvalidAsync(false);
         }
     }
 
@@ -76,17 +81,26 @@
             await CommitAsync(date);
             return;
         }
-        _invalid = true;
+        await SetInvalidAsync(true);
     }
 
     private async Task CommitAsync(DateOnly? date)
     {
-        _invalid = false;
+        await SetInvalidAsync(false);
         _rendered = date;
         if (date != Value)
         {
             await ValueChanged.InvokeAsync(date);
             await AfterChange.InvokeAsync();
+        }
+    }
+
+    private async Task SetInvalidAsync(bool invalid)
+    {
+        if (_invalid != invalid)
+        {
+            _invalid = invalid;
+            await TextInvalidChanged.InvokeAsync(invalid);
         }
     }
 }

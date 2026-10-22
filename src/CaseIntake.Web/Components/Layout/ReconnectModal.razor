@@ -6,11 +6,13 @@
 <script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
 <dialog id="components-reconnect-modal" data-nosnippet aria-labelledby="components-reconnect-title" aria-describedby="components-reconnect-status">
     <span class="components-rejoining-animation spinner" aria-hidden="true"></span>
-    <h2 id="components-reconnect-title">Connection to the server lost</h2>
+    <h2 id="components-reconnect-title" tabindex="-1">Connection to the server lost</h2>
     <div id="components-reconnect-status" role="status" aria-live="polite">
         <p class="components-reconnect-first-attempt-visible">Reconnecting&hellip; Your unsaved changes are kept on this page.</p>
         <p class="components-reconnect-repeated-attempt-visible">
-            Still reconnecting. Next attempt in <span id="components-seconds-to-next-attempt"></span> seconds.
+            @* The countdown changes every second, so it is hidden from assistive technology: inside the live region it
+               would be announced again and again. *@
+            Still reconnecting.<span aria-hidden="true"> Next attempt in <span id="components-seconds-to-next-attempt"></span> seconds.</span>
         </p>
         <p class="components-reconnect-failed-visible">The connection could not be restored.</p>
         <p class="components-pause-visible">The session was paused by the server.</p>

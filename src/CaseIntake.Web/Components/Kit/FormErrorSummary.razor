@@ -42,6 +42,9 @@
     /// <summary>Messages that belong to no field (for example a form-level error), shown without a link.</summary>
     [Parameter] public IReadOnlyList<string> FormMessages { get; set; } = [];
 
+    /// <summary>An input outside this form that <see cref="FormMessages"/> are about; set, they link to it.</summary>
+    [Parameter] public string? FormMessagesInputId { get; set; }
+
     private sealed record SummaryItem(string Message, string? InputId);
 
     private List<SummaryItem> Items
@@ -57,7 +60,7 @@
                     items.AddRange(EditContext.GetValidationMessages(identifier).Select(m => new SummaryItem(m, inputId)));
                 }
             }
-            items.AddRange(FormMessages.Select(m => new SummaryItem(m, null)));
+            items.AddRange(FormMessages.Select(m => new SummaryItem(m, FormMessagesInputId)));
             return items;
         }
     }
