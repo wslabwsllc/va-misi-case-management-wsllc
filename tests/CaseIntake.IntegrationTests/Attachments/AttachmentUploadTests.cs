@@ -133,7 +133,7 @@ public class AttachmentUploadTests : ClassFixture<AttachmentUploadTests, Postgre
         if (expectedCode is AttachmentErrors.TypeNotAllowedCode or AttachmentErrors.TooLargeCode)
         {
             Assert.Contains(".pdf, .png, .jpg, .jpeg, .txt, .docx", error.Message, StringComparison.Ordinal);
-            Assert.Contains("10 MiB", error.Message, StringComparison.Ordinal);
+            Assert.Contains("10 MB", error.Message, StringComparison.Ordinal);
         }
     }
 

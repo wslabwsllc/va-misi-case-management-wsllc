@@ -18,7 +18,7 @@ wwwroot, under `blobs/{shard}/{key}`, where the shard is the key's last two hex 
 version-7 GUID; its leading digits are a timestamp and would put every file in one directory). The key is a server-generated GUID, never the user's file name, and is
 validated before any path is built. Every metadata column is write-once; there is no delete operation (OQ-17).
 
-**Limits (configurable, validated at startup).** `Attachments:MaxBytes` (default 10 MiB) and `Attachments:AllowedTypes`
+**Limits (configurable, validated at startup).** `Attachments:MaxBytes` (default 10 MB) and `Attachments:AllowedTypes`
 as pairs of MIME type and extensions: PDF, PNG, JPEG (`.jpg`/`.jpeg`), plain text, DOCX. Both the claimed type and
 the extension must match one pair; the file is stored and served with the allowlisted type, not the browser's raw
 claim. Empty files and uploads to Closed cases are rejected (D7). The first bytes must also match the claimed type for
@@ -53,7 +53,7 @@ a controlled 404 with a diagnostic event (4105) and no path.
 ## Alternatives considered
 
 - **PostgreSQL `bytea`/large objects.** One transaction for bytes and metadata, so no compensation or reconciliation.
-  Rejected: 10 MiB rows bloat the database, backups and the EF change tracker, and streaming is awkward.
+  Rejected: 10 MB rows bloat the database, backups and the EF change tracker, and streaming is awkward.
 - **Object storage (S3/MinIO).** The production-shaped choice in VAEC, but another container and SDK for no benefit
   in a local evaluation. The internal `IAttachmentStore` keeps this swap contained to one class.
 - **Full content parsing or malware scanning.** Out of scope (4.7). The leading-byte signature check above catches

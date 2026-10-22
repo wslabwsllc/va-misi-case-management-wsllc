@@ -263,7 +263,7 @@ public class CaseDetailTests : WebTestContext
 
         var hint = cut.WaitForElement("#attachment-file-hint").TextContent;
         Assert.Contains("Allowed types: .txt, .pdf", hint);
-        Assert.Contains("Maximum size: 1 KiB", hint);
+        Assert.Contains("Maximum size: 1 KB", hint);
         Assert.Contains("Choose a file to attach", cut.Find("label[for=attachment-file]").TextContent);
 
         cut.FindComponent<InputFile>().UploadFiles(InputFileContent.CreateFromText("hello", "notes.txt", contentType: "text/plain"));

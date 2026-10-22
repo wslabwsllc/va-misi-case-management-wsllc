@@ -146,7 +146,7 @@ responses are documented extensions ([ADR 0008](docs/adr/0008-veteran-lookup-moc
 | `999-99-9999` | Not found (404) |
 | `12345` | Rejected by the app as an invalid format; no request is sent |
 
-**Attachments**: up to 10 MiB; `.pdf`, `.png`, `.jpg`/`.jpeg`, `.txt`, `.docx`. Files are stored on the `attachments`
+**Attachments**: up to 10 MB; `.pdf`, `.png`, `.jpg`/`.jpeg`, `.txt`, `.docx`. Files are stored on the `attachments`
 volume (metadata in PostgreSQL) and downloaded from `/cases/{caseId}/attachments/{id}/content` by users with
 `attachments.download` ([ADR 0009](docs/adr/0009-attachment-storage.md)). Limits are set in **Configuration** below.
 
@@ -261,13 +261,13 @@ separator (for example `Attachments__MaxBytes=5242880`). In Docker, set them und
 | `VeteranLookup:TotalTimeout` / `AttemptTimeout` / `RetryDelay` | `00:00:05` / `00:00:02` / `00:00:00.200` | lookup timeout budget (one retry at most) |
 | `Seed:DemoPassword` | `Demo-Passw0rd!` | password given to demo accounts **when first created** |
 | `Attachments:RootPath` | `<temp>/caseintake-attachments` (Compose: `/attachments`) | storage folder; must match for web and migrator |
-| `Attachments:MaxBytes` | `10485760` (10 MiB) | largest upload |
+| `Attachments:MaxBytes` | `10485760` (10 MB) | largest upload |
 | `Attachments:AllowedTypes:N:ContentType` / `:Extensions:M` | PDF, PNG, JPEG, TXT, DOCX | allowed attachment types |
 | `DataProtection:KeysPath` | unset, in memory (Compose: `/dataprotection`) | persist cookie encryption keys |
 | `TestResults:RootPath` | `<temp>/caseintake-test-results` (Compose: `/test-results`) | where test runs are read from |
 | `TestResults:ScanInterval` | `00:01:00` (`00:00:00` disables) | automatic import interval |
 | `TestResults:ArtifactRetention` / `KeepLatestRuns` | 90 days / 30 runs | evidence retention (results are kept) |
-| `TestResults:MaxArtifactBytes` | 200 MiB | largest evidence file imported |
+| `TestResults:MaxArtifactBytes` | 200 MB | largest evidence file imported |
 | `Identity:RevalidationInterval` | `00:01:00` | how often open sessions re-check roles |
 | `Dashboard:NewCasesDays` / `TrendMonths` / `RecentActivityDays` | 7 / 12 / 14 | dashboard calculations (Recent cases window, trend months, recent activity window) |
 | `Notifications:WindowDays` | 14 | how far back the notification feed reaches |

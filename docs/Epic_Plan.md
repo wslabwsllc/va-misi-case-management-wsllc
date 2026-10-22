@@ -24,7 +24,7 @@ The specification leaves these details to the offeror. Adopt the decisions below
 | A6 | **"Audit information"** means audit fields on each case (Created/Updated At/By, in UTC) plus an append-only audit trail of changes. | It's ambiguous, so both readings are covered (OQ-2). |
 | A7 | **Initial status** of a new case is `New`. Every transition **not** listed in 4.3 is rejected. | "Controlled status-workflow transitions" plus "the following transitions are allowed" (OQ-10, OQ-11). |
 | A8 | The **Veteran Lookup** happens during intake (optional). A snapshot of the result (name, address) is saved on the case. The full SSN is **not** persisted (last 4 only). | The spec doesn't say what the lookup is for (OQ-5). |
-| A9 | **Attachments** go on a Docker named volume. Their metadata goes in the DB. The size limit and type allowlist are configurable (adopted defaults: 10 MiB (10,485,760 bytes), common document and image types). | No constraints are given (OQ-6). Malware scanning is out of scope (4.7). |
+| A9 | **Attachments** go on a Docker named volume. Their metadata goes in the DB. The size limit and type allowlist are configurable (adopted defaults: 10 MB (10,485,760 bytes), common document and image types). | No constraints are given (OQ-6). Malware scanning is out of scope (4.7). |
 | A10 | **Accessibility target:** WCAG 2.2 AA used as the engineering yardstick for the primary workflow. | The spec names behaviors, not a standard (OQ-7). |
 | A11 | **"Primary workflow"** = sign in → case list → intake (with lookup) → detail → edit → status transition → attachment upload/download. | Not defined (OQ-8). |
 | A12 | The application tier is in-process (a modular monolith inside the Blazor host). The only separate service is the Veteran Lookup mock container. | Keeps coupling and ops minimal. The spec doesn't ask for a public REST API. |
@@ -715,7 +715,7 @@ Specify antiforgery expectations for cookie-authenticated HTTP POST forms/endpoi
 **Acceptance criteria:**
 - Given an attachment is stored, when I inspect the DB, then metadata (Guid Id, CaseId FK, sanitized file name, allowlisted content type, size, SHA-256, storage key, `UploadedAtUtc`, uploader ID and name) is saved, every column is write-once, and the bytes are in the store under a server-generated key (never the user's file name).
 - Given the containers restart, when I download a previously uploaded file, then it's still available (named volume `attachments`).
-- Given configuration, when `Attachments:MaxBytes` and `Attachments:AllowedTypes` are set, then the service uses them; inconsistent configuration stops start-up (adopted defaults: 10 MiB (10,485,760 bytes); pdf, png, jpeg/jpg, txt, docx; OQ-6).
+- Given configuration, when `Attachments:MaxBytes` and `Attachments:AllowedTypes` are set, then the service uses them; inconsistent configuration stops start-up (adopted defaults: 10 MB (10,485,760 bytes); pdf, png, jpeg/jpg, txt, docx; OQ-6).
 **Technical notes:** internal `IAttachmentStore` with `FileSystemAttachmentStore`: `tmp/{random}.part` while receiving, `blobs/{last two hex digits of key}/{key}` when committed; keys are validated before any path is built. Storage decision (filesystem vs `bytea` vs object storage) in ADR 0009.
 **Testing:** unit tests for the store (temp directory) and options; integration tests for metadata mapping.
 **Traces to:** R-4.2-9, R-4.2-10, R-4.5-10
@@ -972,7 +972,7 @@ OQ-1 is the only unknown external requirement. Other rows are adopted implementa
 | OQ-5a | What is the lookup for in the workflow (at intake? linking a veteran to a case?)? | 4.2/4.6 | Optional lookup during intake. Snapshot of name/address saved on the case. | E2, E4, E5 |
 | OQ-5b | May the SSN be stored or displayed, even synthetic? | 4.1/4.6 | Store last 4 only, never log it, mask it in the UI. | E2, E4, E5 |
 | OQ-5c | The OpenAPI defines only 200/404. What should happen on a malformed or missing SSN, 5xx or timeout? Is there an SSN format rule? | 4.6 | Mock returns 400 for a missing/empty `ssn`. Client accepts exactly nine ASCII digits or `NNN-NN-NNNN`, and normalizes before POST. Invalid input maps to InvalidInput; denied access to Forbidden; transport/server/protocol failures to Unavailable. Intake may continue without lookup. | E4, E5 |
-| OQ-6 | Attachment limits: max size, allowed types, count per case, storage? | 4.2 | 10 MiB (10,485,760 bytes), pdf/png/jpeg/txt/docx, no count limit, filesystem volume. Size/type limits configurable; no count limit in the required scope. | E4, E5 |
+| OQ-6 | Attachment limits: max size, allowed types, count per case, storage? | 4.2 | 10 MB (10,485,760 bytes), pdf/png/jpeg/txt/docx, no count limit, filesystem volume. Size/type limits configurable; no count limit in the required scope. | E4, E5 |
 | OQ-7 | Which accessibility standard applies (WCAG 2.1 AA, 2.2 AA, Section 508)? | 4.2 | WCAG 2.2 AA as the target; axe, browser tests and manual keyboard/screen-reader review provide evidence, not a conformance claim. | E5 |
 | OQ-8 | Which steps make up the "primary workflow"? | 4.2 | A11 (sign in → list → intake → detail/edit → transition → attachments). | E5 |
 | OQ-9 | Edit rules: which fields can be edited, in which statuses, by which roles? Are Closed cases read-only? | 4.2/4.3 | Title/Description editable by both roles in any status except Closed. | E2, E5 |
