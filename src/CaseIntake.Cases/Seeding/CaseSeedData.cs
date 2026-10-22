@@ -56,12 +56,6 @@ internal static class CaseSeedData
         (index % 3) switch { 0 => CaseWorkerUserName, 1 => SupervisorUserName, _ => null },
         FirstDueOn.AddDays(index * DueStepDays % DueSpreadDays));
 
-    private static readonly string[] Qualifiers =
-    [
-        "follow-up needed", "initial contact", "missing form", "callback requested", "second request",
-        "priority review", "documents received", "awaiting reply", "routine check", "clarification needed",
-    ];
-
     private static readonly string[] Places =
     [
         "Example County office", "Testville clinic", "Sampleton center", "Demo Harbor annex", "Placeholder Springs site",
@@ -95,7 +89,8 @@ internal static class CaseSeedData
         for (var i = 0; i < CaseCount; i++)
         {
             var number = i + 1;
-            var title = $"{Subjects[i % Subjects.Length]} - {Qualifiers[random.Next(Qualifiers.Length)]} ({number:000})";
+            var title = $"Case {number:000}";
+            random.Next(10); // was the title qualifier; kept so the fixed-seed descriptions and times stay the same
             var description = i % 6 == 5
                 ? null
                 : $"Synthetic demo case for the {Places[random.Next(Places.Length)]}. {Details[random.Next(Details.Length)]}";
@@ -112,7 +107,7 @@ internal static class CaseSeedData
             var from = CaseWorkflow.InitialStatus;
             foreach (var target in Paths[i % Paths.Length])
             {
-                at = at.AddHours(random.Next(2, 48));
+                at = at.AddHours(random.Next(2, 24 * 30)); // up to 30 days per step so updated dates don't follow ID order
                 steps.Add(new SeedStep(at, ActorFor(from, target), target, null));
                 from = target;
             }

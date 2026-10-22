@@ -59,7 +59,18 @@ public class CaseSeedDataTests
         var fixtures = CaseSeedData.Build();
 
         Assert.Contains(fixtures, f => f.Steps.Count(s => s.TargetStatus == CaseStatus.InProgress) == 2);
-        Assert.Contains(fixtures, f => f.Title.Contains("water", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(fixtures, f => f.Description?.Contains("water", StringComparison.OrdinalIgnoreCase) == true);
+    }
+
+    [Test]
+    public void Updated_dates_do_not_follow_case_number_order()
+    {
+        var updated = CaseSeedData.Build().Select(f => f.Steps.Count > 0 ? f.Steps[^1].AtUtc : f.CreatedAtUtc).ToList();
+
+        var pairs = updated.SelectMany((a, i) => updated.Skip(i + 1).Select(b => a > b)).ToList();
+
+        // A lower case number updated after a higher one in at least a quarter of all pairs (fully random is half).
+        Assert.True(pairs.Count(outOfOrder => outOfOrder) * 4 >= pairs.Count, "Updated dates follow case number order.");
     }
 
     [Test]
