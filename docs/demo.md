@@ -20,7 +20,7 @@ application (no scripted screens). Start from a clean state with `docker compose
 | `999-99-9999` | Not found |
 | `12345` | Invalid SSN format (no request sent) |
 
-Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MiB; an `.exe` or a renamed file is rejected.
+Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MB; an `.exe` or a renamed file is rejected.
 
 ## Walkthrough (keyboard friendly; mouse works too)
 

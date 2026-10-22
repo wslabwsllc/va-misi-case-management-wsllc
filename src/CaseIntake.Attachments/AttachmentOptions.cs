@@ -18,7 +18,7 @@ public sealed class AllowedAttachmentType
 public sealed class AttachmentOptions
 {
     public const string SectionName = "Attachments";
-    public const long DefaultMaxBytes = 10 * 1024 * 1024;   // 10 MiB (10,485,760 bytes)
+    public const long DefaultMaxBytes = 10 * 1024 * 1024;   // 10 MB (10,485,760 bytes)
 
     /// <summary>
     /// Directory holding <c>tmp/</c> (uploads in progress) and <c>blobs/</c> (committed content), outside wwwroot.
@@ -62,8 +62,8 @@ public sealed class AttachmentOptions
 
     private static string FormatSize(long bytes) => bytes switch
     {
-        >= 1024 * 1024 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024d * 1024):0.##} MiB"),
-        >= 1024 => string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024d:0.##} KiB"),
+        >= 1024 * 1024 => string.Create(CultureInfo.InvariantCulture, $"{bytes / (1024d * 1024):0.##} MB"),
+        >= 1024 => string.Create(CultureInfo.InvariantCulture, $"{bytes / 1024d:0.##} KB"),
         _ => string.Create(CultureInfo.InvariantCulture, $"{bytes} bytes"),
     };
 

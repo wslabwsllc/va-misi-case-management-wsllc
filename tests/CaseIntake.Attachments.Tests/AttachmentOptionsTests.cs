@@ -17,7 +17,7 @@ public class AttachmentOptionsTests
     }
 
     [Test]
-    public void Defaults_are_10_MiB_and_the_five_adopted_types()
+    public void Defaults_are_10_MB_and_the_five_adopted_types()
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = "/tmp/a" });
 
@@ -125,9 +125,9 @@ public class AttachmentOptionsTests
         Assert.Contains(failure.Failures, f => f.Contains("invalid content type", StringComparison.Ordinal));
     }
 
-    [TestCase(10_485_760, "10 MiB")]
-    [TestCase(1_572_864, "1.5 MiB")]
-    [TestCase(1024, "1 KiB")]
+    [TestCase(10_485_760, "10 MB")]
+    [TestCase(1_572_864, "1.5 MB")]
+    [TestCase(1024, "1 KB")]
     [TestCase(500, "500 bytes")]
     public void The_size_limit_is_described_in_a_readable_unit(long maxBytes, string expected)
     {
@@ -157,6 +157,6 @@ public class AttachmentOptionsTests
     {
         var options = Resolve(new() { ["Attachments:RootPath"] = "/tmp/a" });
 
-        Assert.Equal("Allowed types: .pdf, .png, .jpg, .jpeg, .txt, .docx. Maximum size: 10 MiB.", options.Describe());
+        Assert.Equal("Allowed types: .pdf, .png, .jpg, .jpeg, .txt, .docx. Maximum size: 10 MB.", options.Describe());
     }
 }

@@ -425,7 +425,7 @@ sequenceDiagram
   input never reaches a path. The display name is sanitized: path segments, control and format characters (such as
   RTL overrides) and unpaired surrogates are removed, and the name is capped at 200 scalar values.
 - The served content type is the **allowlisted** one, never the type the browser claimed. The defaults are PDF, PNG,
-  JPEG, TXT and DOCX, up to 10 MiB, configurable under `Attachments:*` and validated at startup.
+  JPEG, TXT and DOCX, up to 10 MB, configurable under `Attachments:*` and validated at startup.
 - `AttachmentStorageReconciler` runs in the migrator before `web` accepts uploads. It deletes temporary files and blobs
   that have no metadata row once they are older than a grace period, and counts metadata rows whose blob is missing.
   It never deletes committed content.
