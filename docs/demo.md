@@ -32,7 +32,7 @@ Attachments: any small `.pdf`, `.png`, `.jpg`, `.txt` or `.docx` under 10 MB; an
    "Refreshing…", then announces the new time. Recent cases lists only New cases from the last 7 days.
 2. **List controls**: Cases > tick *In Progress*, Apply (the count is announced: "Showing 1–n of N cases"); activate the
    *Title* header twice (ascending, then descending); Next page; reload the browser: the same view returns from the URL.
-   Search "Benefit inquiry" to filter by text; a search with no match shows the empty state with *Clear filters*.
+   Search "Case 01" to filter by text; a search with no match shows the empty state with *Clear filters*.
 3. **Validation and intake**: New case > Create case with an empty title: the error summary takes focus and the Title
    field explains the rule. Enter a title and a description (counters show the limits). In *Veteran lookup* enter
    `999-99-9999` (Not found), `12345` (invalid format alert), then `900-12-3456`: Rowan Calloway is found; choose
