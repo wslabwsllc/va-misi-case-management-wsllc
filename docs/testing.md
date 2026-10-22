@@ -89,6 +89,29 @@ schema), `DesignTimeDbContextFactory` (used only by `dotnet-ef`), source generat
 marked `[ExcludeFromCodeCoverage]` or `[GeneratedCode]`. `CaseIntake.MigrationService` is a 40-line host entry point
 that no in-process test loads, so it does not appear in the report.
 
+## Static analysis (SonarQube)
+
+```bash
+scripts/sonar.sh                 # build, run the coverage suites, publish to http://localhost:9000/dashboard?id=caseintake
+scripts/sonar.sh --skip-tests    # analysis only (about 3 minutes; no coverage figure)
+```
+
+Runs [SonarQube Community Build](https://docs.sonarsource.com/sonarqube-community-build/) locally in Docker
+([docker-compose.sonar.yml](../docker-compose.sonar.yml), its own Compose project, so the app stack's `up` and `down -v`
+leave it alone) and analyses the solution with SonarScanner for .NET, pinned in `dotnet-tools.json`. Nothing is
+installed on the host beyond the .NET SDK and Docker: the scanner downloads the Java runtime it needs from the server.
+
+On the first run the script sets a local-only admin password (`CaseIntake-Sonar-local-only1!`, or `SONAR_ADMIN_PASSWORD`)
+and caches an analysis token in `artifacts/sonar/token`; sign in to the dashboard as `admin` with that password. The
+test step runs the same suites as `scripts/coverage.sh` with the same [coverage.runsettings](../coverage.runsettings)
+module filters, in the XML format SonarQube reads for C#, and Migrations and `DesignTimeDbContextFactory` are excluded
+from coverage there too. Failing tests do not stop the upload; the coverage figure then covers the tests that ran.
+The script fails when the build fails or the upload does not complete; it does not enforce the quality gate.
+
+The server uses SonarQube's embedded evaluation database, which suits one developer's machine. Stop it with
+`docker compose -f docker-compose.sonar.yml stop`; `down -v` also deletes the analysis history and the admin password
+(the next run sets them up again).
+
 ## Troubleshooting
 
 | Symptom | Cause / fix |

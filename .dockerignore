@@ -8,3 +8,4 @@ results/
 artifacts/
 /attachments/
 src/CaseIntake.Web/attachments/
+.sonarqube/

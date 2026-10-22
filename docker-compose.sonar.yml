@@ -1,0 +1,27 @@
+# Local static analysis server (SonarQube Community Build), separate from the demo stack: its own Compose project, so
+# `docker compose up` / `down -v` for the app never touch it. Used by scripts/sonar.sh; not part of the build or tests.
+#   docker compose -f docker-compose.sonar.yml up -d       # http://localhost:9000
+#   docker compose -f docker-compose.sonar.yml down -v     # remove the server and its data
+# The embedded H2 database is SonarQube's evaluation mode: fine for one developer's machine, not for a shared server.
+# The admin password scripts/sonar.sh sets is synthetic and local-only.
+name: caseintake-sonar
+
+services:
+  sonarqube:
+    # Pinned by tag and digest like every other image (docs/versions.md). Multi-platform, so it runs natively on Apple Silicon.
+    image: sonarqube:26.10.0.133078-community@sha256:0b3408443fb6a311253de27941b10977c9b977fd53be2265947bfe14161308b8
+    environment:
+      # Elasticsearch's bootstrap checks need vm.max_map_count tuning on Linux hosts; not needed for a local single node.
+      SONAR_SEARCH_JAVAADDITIONALOPTS: "-Dnode.store.allow_mmap=false"
+      SONAR_TELEMETRY_ENABLE: "false"
+    ports:
+      - "127.0.0.1:${SONAR_PORT:-9000}:9000"
+    volumes:
+      - sonar-data:/opt/sonarqube/data
+      - sonar-extensions:/opt/sonarqube/extensions
+      - sonar-logs:/opt/sonarqube/logs
+
+volumes:
+  sonar-data:
+  sonar-extensions:
+  sonar-logs:

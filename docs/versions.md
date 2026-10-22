@@ -30,6 +30,7 @@ run natively on the build machine while the final images are linux/amd64.
 | App and lookup mock runtime | `mcr.microsoft.com/dotnet/aspnet:10.0.13-noble@sha256:d5633778c754e89a386882eddf8dbee6942447a8a4b8267c19cf1e1158d0b0ac` |
 | Database (`docker/db/Dockerfile` base for Compose `db`; Testcontainers) | `postgres:18.6-alpine3.24@sha256:77f585114c32fbca283dc835b0596f4e52b51b4c6662d7810b2f4084f60a1873` |
 | Image vulnerability scan (`scripts/scan-images.sh`; not part of the build or tests) | `aquasec/trivy:0.75.0@sha256:af6acf9a6b85dfe389a1941505c0ce9efef52a4719635e1a962f022a3d855daa` |
+| Local static analysis server (`docker-compose.sonar.yml`, `scripts/sonar.sh`; not part of the build or tests) | `sonarqube:26.10.0.133078-community@sha256:0b3408443fb6a311253de27941b10977c9b977fd53be2265947bfe14161308b8` |
 
 ## OS packages
 
@@ -81,7 +82,8 @@ uncached build. The Chromium build itself is fixed by
 (TBS 4.6); it brings `SharpYaml` 2.1.5 (MIT) transitively, recorded in that project's lock file. Neither ships in an
 application image (assumption D13).
 
-Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
+Tools (see `dotnet-tools.json`): `dotnet-ef` 10.0.13; `dotnet-sonarscanner` 12.0.0 (SonarScanner for .NET, used only by
+`scripts/sonar.sh`).
 
 ## Updating
 
@@ -89,7 +91,7 @@ Tool: `dotnet-ef` 10.0.13 (see `dotnet-tools.json`).
    `dotnet restore CaseIntake.sln --force-evaluate` and commit the changed `packages.lock.json` files.
 2. For an image, look up the new digest with `docker buildx imagetools inspect <image>:<tag>` (the `Digest:` line of
    the index) and update every reference: `Dockerfile`, `src/CaseIntake.VeteranLookup.Mock/Dockerfile`,
-   `docker-compose.yml`, `docker/db/Dockerfile`, `PostgresDatabaseFixture.PostgresImage`, `scripts/scan-images.sh`
+   `docker-compose.yml`, `docker-compose.sonar.yml`, `docker/db/Dockerfile`, `PostgresDatabaseFixture.PostgresImage`, `scripts/scan-images.sh`
    (Trivy) and the README.
 3. OS packages follow the live mirror on every uncached build. For a pinned build pass `APT_SNAPSHOT` (not older than the base images' build date).
 4. Update the tables above.

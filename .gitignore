@@ -13,3 +13,5 @@ obj/
 # Anchored paths only: an unanchored "attachments/" would also hide the Attachments source folders.
 /attachments/
 /src/CaseIntake.Web/attachments/
+# SonarScanner for .NET working folder (scripts/sonar.sh).
+/.sonarqube/
