@@ -48,7 +48,7 @@ public class NewCaseTests : WebTestContext
 
     [TestCase("", CaseTextRules.TitleRequiredMessage)]
     [TestCase("    ", CaseTextRules.TitleRequiredMessage)]
-    [TestCase("abcd", "Title must be between 5 and 200 characters.")]
+    [TestCase("abcd", CaseTextRules.TitleLengthMessage)]
     public void Invalid_title_is_rejected_with_the_server_message_and_the_summary_takes_focus(string title, string message)
     {
         var cut = RenderPage();
@@ -62,6 +62,24 @@ public class NewCaseTests : WebTestContext
         JSInterop.VerifyFocusAsyncInvoke();
         Assert.Empty(CaseService.ListQueries);
         Assert.False(Navigation.Uri.Contains("/cases/", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void Typing_a_valid_title_and_focusing_the_SSN_box_dismiss_their_summary_messages()
+    {
+        var cut = RenderPage();
+        cut.Find("[data-testid=intake-form]").Submit();
+        Assert.Equal("Invalid form", cut.Find("#error-summary-title").TextContent);
+        Assert.Equal(2, cut.FindAll("#error-summary li").Count);
+        Assert.Contains("invalid", cut.Find("#lookup-ssn").ClassList);
+
+        cut.Find("#intake-title").Input("Valid title");
+        Assert.Empty(cut.FindAll("#intake-title-error"));
+        Assert.Contains(CaseRequestValidator.VeteranRequiredMessage, cut.Find("#error-summary").TextContent);
+
+        cut.Find("#lookup-ssn").FocusIn();
+        Assert.Empty(cut.FindAll("#error-summary"));
+        Assert.DoesNotContain("invalid", cut.Find("#lookup-ssn").ClassList);
     }
 
     [Test]

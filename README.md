@@ -6,100 +6,19 @@ results module, built per [docs/Epic_Plan.md](docs/Epic_Plan.md). It works the s
 <details>
 <summary><b>Install prerequisites</b></summary>
 
-| Tool | Needed for | Check |
+To run the app with Docker Compose, you only need **Docker**. Git is for cloning; .NET is only for building and testing
+from source.
+
+| Tool | Needed for | Install |
 |---|---|---|
-| Docker Desktop or Docker Engine with **Compose v2** | everything (the old `docker-compose` v1 is not supported) | `docker compose version` |
-| Git | cloning | `git --version` |
-| bash | the helper scripts in `scripts/` | `bash --version` |
-| .NET SDK **10.0.402** exactly | building, running and testing from source (`global.json` sets `rollForward: disable`) | `dotnet --version` in the repo folder |
+| Docker Desktop | running the app (`docker compose`) | [docs.docker.com/get-started/get-docker](https://docs.docker.com/get-started/get-docker/) |
+| Git | cloning the repo | [git-scm.com/downloads](https://git-scm.com/downloads) |
+| .NET SDK **10.0.402** | local development from source only | [dotnet.microsoft.com/download/dotnet/10.0](https://dotnet.microsoft.com/download/dotnet/10.0) |
 
-Also needed: free host port **8080**, several GB of disk, and network access at **build** time only (nothing is
-downloaded when containers run). Images are `linux/amd64`; the .NET build runs natively, so on Apple Silicon only the
-running containers are emulated. All pinned versions: [docs/versions.md](docs/versions.md).
+Pick SDK **10.0.402** exactly: `global.json` disables roll-forward, so other patch versions are rejected.
 
-**Apple Silicon (M-series) Macs.** Every container runs under x86-64 emulation, so the stack is slower than on an x86-64
-host and needs enough Docker resources:
-
-- In Docker Desktop **Settings > Resources**, give Docker at least **8 GB of memory**. The test run starts PostgreSQL,
-  the lookup mock, a second copy of the app and headless Chromium at the same time. The suite has been verified with
-  10 CPUs and 8 GB (7.7 GiB reported by `docker info`); with less, expect slower runs.
-- In **Settings > General**, turn on **Use Rosetta for x86_64/amd64 emulation on Apple Silicon** if your Docker
-  Desktop version offers it; it is faster than the default emulation.
-- Expect `docker compose run --rm tests` to take roughly **7 to 15 minutes** there, including the image rebuild it does
-  on every run. First requests after a container starts are the slowest; the tests allow for that, but if a single test
-  fails on a timeout, check the resources above and run the command again.
-
-<details>
-<summary>macOS</summary>
-
-0. [Homebrew](https://brew.sh/), if `brew --version` fails:
-
-   ```bash
-   /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-   echo 'eval "$(/opt/homebrew/bin/brew shellenv)"' >> ~/.zprofile   # Apple Silicon; Intel: /usr/local/bin/brew
-   eval "$(/opt/homebrew/bin/brew shellenv)"
-   brew --version
-   ```
-
-1. Install [Docker Desktop for Mac](https://docs.docker.com/desktop/setup/install/mac-install/) (Apple Silicon or Intel)
-   and start it. Compose v2 is included. On Apple Silicon, set the Docker resources from the **Apple Silicon (M-series)
-   Macs** note above before the first build.
-2. Git: `xcode-select --install` (or `brew install git`). bash is preinstalled.
-3. .NET SDK 10.0.402 with [mise](https://mise.jdx.dev/):
-
-   ```bash
-   brew install mise                                  # or: curl https://mise.run | sh
-   echo 'eval "$(mise activate zsh)"' >> ~/.zshrc     # bash: mise activate bash >> ~/.bashrc
-   exec $SHELL                                        # reload the shell
-   mise use -g dotnet@10.0.402
-   dotnet --version                                   # 10.0.402
-   ```
-
-</details>
-
-<details>
-<summary>Windows</summary>
-
-1. Install [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) with the
-   **WSL 2 backend** and **Linux containers**, and start it.
-2. Install [Git for Windows](https://git-scm.com/download/win); it includes **Git Bash**. Run the `scripts/` from Git Bash.
-3. .NET SDK 10.0.402: download the **SDK 10.0.402** x64 installer from the
-   [.NET 10.0 downloads page](https://dotnet.microsoft.com/download/dotnet/10.0), or in PowerShell:
-
-   ```powershell
-   Invoke-WebRequest https://dot.net/v1/dotnet-install.ps1 -OutFile dotnet-install.ps1
-   ./dotnet-install.ps1 -Version 10.0.402             # installs to %LOCALAPPDATA%\Microsoft\dotnet; add it to PATH
-   dotnet --version                                   # 10.0.402
-   ```
-
-   `winget install Microsoft.DotNet.SDK.10` installs the latest 10.0 patch, which `global.json` rejects if it isn't 10.0.402.
-
-Notes:
-- `.gitattributes` keeps shell scripts in LF. If you see `bash\r: No such file or directory`, the scripts were copied
-  with CRLF; delete `scripts/*.sh` and run `git checkout -- scripts`.
-- The scripts handle Git Bash path conversion. For your own `docker compose exec` commands with container paths such as
-  `/src/...`, prefix them with `MSYS_NO_PATHCONV=1`.
-
-</details>
-
-<details>
-<summary>Linux</summary>
-
-1. Install [Docker Engine](https://docs.docker.com/engine/install/) and the
-   [Compose plugin](https://docs.docker.com/compose/install/linux/) (`docker-compose-plugin`). Optionally
-   [run Docker without sudo](https://docs.docker.com/engine/install/linux-postinstall/).
-2. Git and bash from your package manager (for example `sudo apt install git`).
-3. .NET SDK 10.0.402 with the official install script (or with mise, as on macOS):
-
-   ```bash
-   curl -sSL https://dot.net/v1/dotnet-install.sh | bash -s -- --version 10.0.402
-   echo 'export DOTNET_ROOT=$HOME/.dotnet PATH=$HOME/.dotnet:$PATH' >> ~/.bashrc && exec $SHELL
-   dotnet --version                                   # 10.0.402
-   ```
-
-   Distribution packages (`apt install dotnet-sdk-10.0`) usually ship a different patch version.
-
-</details>
+On Apple Silicon Macs, give Docker at least **8 GB of memory** (Docker Desktop **Settings > Resources**) and turn on
+**Use Rosetta for x86_64/amd64 emulation** if offered; the images are `linux/amd64` and run emulated.
 
 </details>
 
@@ -108,16 +27,31 @@ Notes:
 <details>
 <summary><b>Quick start</b></summary>
 
-Needs Docker with Compose v2, Git and free port 8080 (see **Install prerequisites** above).
+Needs only Docker and free port 8080 (see **Install prerequisites** above).
+
+**1. Start docker desktop**
+
+Go to your finder and open the docker desktop application you installed in the installation step
+
+**2. clone the**
 
 ```bash
 git clone https://github.com/wslabwsllc/va-misi-case-management-wsllc.git
+```
+
+**3. Change directory**
+
+```bash
 cd va-misi-case-management-wsllc
+```
+
+**3. Start the application**
+
+```bash
 docker compose up --build       # runs in the background, returns once web is healthy
 ```
 
-Open <http://localhost:8080>: the landing page links to sign-in. The first build takes several minutes. No `.env` file or secrets are needed:
-every setting, including the synthetic local database credentials, is in `docker-compose.yml`.
+Open [http://localhost:8080](http://localhost:8080) to access the running application. The first build takes several minutes. No `.env` file or secrets are needed:
 
 Startup order: `db` (PostgreSQL 18) → `migrator` (migrates, seeds, exits 0) → `veteran-lookup` → `web`. `web` waits for
 the migrator to succeed and the lookup to be healthy.

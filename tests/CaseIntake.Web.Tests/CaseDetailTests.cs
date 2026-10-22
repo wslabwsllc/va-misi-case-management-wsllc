@@ -87,7 +87,7 @@ public class CaseDetailTests : WebTestContext
 
         cut.Find("[data-testid=edit-form]").Submit();
 
-        Assert.Equal("Title must be between 5 and 200 characters.", cut.Find("#error-summary a").TextContent);
+        Assert.Equal(CaseTextRules.TitleLengthMessage, cut.Find("#error-summary a").TextContent);
         Assert.Empty(CaseService.Updates);
     }
 
