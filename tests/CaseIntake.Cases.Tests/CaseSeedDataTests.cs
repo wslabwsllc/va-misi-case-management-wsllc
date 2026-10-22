@@ -63,14 +63,21 @@ public class CaseSeedDataTests
     }
 
     [Test]
-    public void Updated_dates_do_not_follow_case_number_order()
+    public void Created_and_updated_dates_do_not_follow_case_number_order()
     {
-        var updated = CaseSeedData.Build().Select(f => f.Steps.Count > 0 ? f.Steps[^1].AtUtc : f.CreatedAtUtc).ToList();
+        var fixtures = CaseSeedData.Build();
+        AssertMixed(fixtures.Select(f => f.CreatedAtUtc).ToList(), "Created");
+        AssertMixed(fixtures.Select(f => f.Steps.Count > 0 ? f.Steps[^1].AtUtc : f.CreatedAtUtc).ToList(), "Updated");
+        Assert.True(fixtures.SelectMany(f => f.Steps).All(s => s.AtUtc < new DateTimeOffset(2026, 10, 16, 0, 0, 0, TimeSpan.Zero)),
+            "Seeded history must not be in the future.");
+        Assert.True(fixtures.Select(f => f.CreatedAtUtc.Month).Distinct().Count() >= 10, "Created dates span most of a year.");
 
-        var pairs = updated.SelectMany((a, i) => updated.Skip(i + 1).Select(b => a > b)).ToList();
-
-        // A lower case number updated after a higher one in at least a quarter of all pairs (fully random is half).
-        Assert.True(pairs.Count(outOfOrder => outOfOrder) * 4 >= pairs.Count, "Updated dates follow case number order.");
+        // A lower case number dated after a higher one in at least a quarter of all pairs (fully random is half).
+        static void AssertMixed(List<DateTimeOffset> dates, string name)
+        {
+            var pairs = dates.SelectMany((a, i) => dates.Skip(i + 1).Select(b => a > b)).ToList();
+            Assert.True(pairs.Count(outOfOrder => outOfOrder) * 4 >= pairs.Count, $"{name} dates follow case number order.");
+        }
     }
 
     [Test]

@@ -21,7 +21,10 @@ internal static class CaseSeedData
     public const string CaseWorkerUserName = "caseworker@example.test";
     public const string SupervisorUserName = "supervisor@example.test";
 
-    public static readonly DateTimeOffset BaseTimeUtc = new(2026, 1, 5, 9, 0, 0, TimeSpan.Zero);
+    public static readonly DateTimeOffset BaseTimeUtc = new(2025, 11, 1, 9, 0, 0, TimeSpan.Zero);
+
+    /// <summary>Cases are created at random over this many days from <see cref="BaseTimeUtc"/> (to mid-September 2026).</summary>
+    public const int CreatedSpreadDays = 318;
 
     private static readonly string[] Subjects =
     [
@@ -90,11 +93,11 @@ internal static class CaseSeedData
         {
             var number = i + 1;
             var title = $"Case {number:000}";
-            random.Next(10); // was the title qualifier; kept so the fixed-seed descriptions and times stay the same
+            random.Next(10); // was the title qualifier; kept so the fixed-seed descriptions stay the same
             var description = i % 6 == 5
                 ? null
                 : $"Synthetic demo case for the {Places[random.Next(Places.Length)]}. {Details[random.Next(Details.Length)]}";
-            var created = BaseTimeUtc.AddHours(i * 9).AddMinutes(random.Next(0, 60));
+            var created = BaseTimeUtc.AddMinutes(random.Next(0, CreatedSpreadDays * 24 * 60));
 
             List<SeedStep> steps = [];
             var at = created;
@@ -107,7 +110,7 @@ internal static class CaseSeedData
             var from = CaseWorkflow.InitialStatus;
             foreach (var target in Paths[i % Paths.Length])
             {
-                at = at.AddHours(random.Next(2, 24 * 30)); // up to 30 days per step so updated dates don't follow ID order
+                at = at.AddHours(random.Next(2, 24 * 7));
                 steps.Add(new SeedStep(at, ActorFor(from, target), target, null));
                 from = target;
             }
