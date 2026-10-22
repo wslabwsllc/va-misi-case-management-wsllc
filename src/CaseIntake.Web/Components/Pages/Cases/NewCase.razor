@@ -32,7 +32,7 @@
 <div class="grid grid--main-side">
     <div class="card">
         <EditForm EditContext="_editContext" OnSubmit="RequestSubmitAsync" id="intake-form" novalidate class="form" data-testid="intake-form">
-            <FormErrorSummary @ref="_summary" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" />
+            <FormErrorSummary @ref="_summary" Title="Invalid form" Visible="_showSummary" Fields="SummaryFields" FormMessages="_formMessages" />
             <LabeledInputText Id="intake-title" Label="Title" Required="true" @bind-Value="_model.Title"
                               Hint="@($"A short summary, {CaseFieldLimits.TitleMinLength} to {CaseFieldLimits.TitleMaxLength} characters.")"
                               MaxCharacters="CaseFieldLimits.TitleMaxLength" />
@@ -77,9 +77,13 @@
                 </div>
                 <p class="page-header__subtitle">Attach the veteran's name and address to this case. A case cannot be submitted without a veteran.</p>
                 <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
-                    <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
-                                      Hint="Nine digits, with or without dashes (NNN-NN-NNNN)."
-                                      InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput" />
+                    @* Focusing the SSN box dismisses the "attach a veteran" summary message. *@
+                    <div @onfocusin="() => _formMessages = []">
+                        <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
+                                          Hint="Nine digits, with or without dashes (NNN-NN-NNNN)."
+                                          InputMode="numeric" AutoComplete="off" Spellcheck="false" @ref="_ssnInput"
+                                          class="@(_formMessages.Count > 0 ? "invalid" : null)" />
+                    </div>
                     <button type="submit" class="btn btn--outline btn--block" disabled="@_lookingUp" aria-busy="@(_lookingUp ? "true" : "false")" data-testid="lookup-button">
                         @if (_lookingUp)
                         {
@@ -204,6 +208,7 @@
         _messages = new ValidationMessageStore(_editContext);
         _lookupContext = new EditContext(_lookupModel);
         _lookupMessages = new ValidationMessageStore(_lookupContext);
+        _editContext.OnFieldChanged += OnFieldChanged;
 
         // Only supervisors (cases.assign) choose the owner at intake; the service enforces the same rule.
         _canAssign = (await CurrentUser.GetAsync(_cts.Token)).HasPermission(Permissions.CasesAssign);
@@ -311,6 +316,17 @@
         _showSummary = true;
         _focusSummary = true;
         _editContext.NotifyValidationStateChanged();
+    }
+
+    /// <summary>Once the title is valid while typing, its error (field and summary) goes away.</summary>
+    private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        var title = new FieldIdentifier(_model, CaseFieldNames.Title);
+        if (e.FieldIdentifier.Equals(title) && !CaseTextRules.ValidateTitle(CaseTextRules.NormalizeTitle(_model.Title)).Any())
+        {
+            _messages.Clear(title);
+            _editContext.NotifyValidationStateChanged();
+        }
     }
 
     private void ClearValidation()
@@ -436,6 +452,7 @@
 
     public void Dispose()
     {
+        _editContext.OnFieldChanged -= OnFieldChanged;
         _cts.Cancel();
         _cts.Dispose();
     }

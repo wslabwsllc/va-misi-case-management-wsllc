@@ -121,10 +121,10 @@ public sealed partial class PrimaryWorkflowTests : E2ETestBase
             await PressAsync(page.GetByTestId("create-case"));
             var summary = page.Locator("#error-summary");
             await E2ESession.ExpectFocusedAsync(summary);
-            await Expect(summary).ToContainTextAsync("Title is required.");
+            await Expect(summary).ToContainTextAsync("Title is required: minimum 5 characters and maximum 200 characters.");
             await Expect(page.Locator("#intake-title")).ToHaveAttributeAsync("aria-invalid", "true");
-            await Expect(page.Locator("#intake-title-error")).ToHaveTextAsync("Title is required.");
-        }, expected: "Summary focused with 'Title is required.'; nothing saved");
+            await Expect(page.Locator("#intake-title-error")).ToHaveTextAsync("Title is required: minimum 5 characters and maximum 200 characters.");
+        }, expected: "Summary focused with the Title message; nothing saved");
         await s.AxeAsync("New case with a validation error");
         await s.StepAsync("The summary link moves focus to the Title field; type the case", async () =>
         {

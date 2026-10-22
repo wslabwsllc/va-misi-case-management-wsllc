@@ -46,9 +46,9 @@ public readonly record struct FieldError(string Field, string Message);
 /// </summary>
 public static class CaseTextRules
 {
-    public const string TitleRequiredMessage = "Title is required.";
-    public static readonly string TitleLengthMessage = string.Create(CultureInfo.InvariantCulture,
-        $"Title must be between {CaseFieldLimits.TitleMinLength} and {CaseFieldLimits.TitleMaxLength} characters.");
+    // One message for empty and out-of-range titles; the numbers must match CaseFieldLimits.
+    public const string TitleRequiredMessage = "Title is required: minimum 5 characters and maximum 200 characters.";
+    public const string TitleLengthMessage = TitleRequiredMessage;
     public static readonly string DescriptionLengthMessage = string.Create(CultureInfo.InvariantCulture,
         $"Description must be {CaseFieldLimits.DescriptionMaxLength:N0} characters or fewer.");
 
