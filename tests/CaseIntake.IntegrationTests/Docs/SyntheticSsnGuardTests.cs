@@ -24,10 +24,11 @@ public partial class SyntheticSsnGuardTests
         ".git", "bin", "obj", "node_modules", ".vs", ".idea",
     };
 
-    // Test and build output written at the repository root (not the TestResults source folders under src/ or tests/).
+    // Test and build output written at the repository root (not the TestResults source folders under src/ or tests/), and
+    // untracked local tool state: .claude/worktrees holds whole extra checkouts, which would be scanned as duplicates.
     private static readonly HashSet<string> SkippedRootDirectories = new(StringComparer.OrdinalIgnoreCase)
     {
-        "artifacts", "TestResults", "results",
+        "artifacts", "TestResults", "results", ".claude",
     };
 
     // The Government's Veteran Lookup definition (TBS 4.6) must stay byte for byte, and it contains the Government's own
