@@ -116,17 +116,15 @@ Only G1 (content and timing of the requirement change) remains a Government depe
 
 ## Known gaps (tracked, not hidden)
 
-- **SSN-shaped values in Git history (review F05, R24/R35).** Earlier commits contain SSN-shaped test values in the
-  issuable number range (areas 123, 13 occurrences, and 555; the full values are deliberately not repeated here), introduced 2026-10-16 to 2026-10-20 in
-  commits `d4ab5ac`, `790c43e`, `6acbbb1`, `55c3397` and `ae13e5f` (find them with
-  `git log --all -G "123-45-67|555-44-33" --oneline`). They are synthetic placeholders, not any person's data, and
-  the current tree no longer uses them: `SyntheticSsnGuardTests` fails the build for any SSN-shaped literal outside the
-  never-issued areas (000, 666, 900-999). The one remaining area-123 value is the example inside the Government's lookup
-  contract (`docs/contracts/veteran-lookup.spec.openapi.yaml`), which is kept verbatim as delivered. **Decision
-  (2026-10-21):** history is not rewritten, because a rewrite and force-push would invalidate every clone and open pull
-  request; this entry records the occurrences instead. If a clean history is required before the demo baseline, the
-  team must agree a freeze, run `git filter-repo --replace-text` with these values, force-push, and have everyone
-  re-clone.
+- **SSN-shaped values in Git history (review F05, R24/R35).** Commits from 2026-10-16 to 2026-10-20 (`d4ab5ac`,
+  `790c43e`, `55c3397`) contain SSN-shaped test values in issuable areas (123, 10 occurrences; 555; 111; the full values
+  are deliberately not repeated here). They are synthetic placeholders, not any person's data, but potentially valid
+  numbers. The current tree no longer uses them: `SyntheticSsnGuardTests` fails the build for any SSN-shaped literal
+  outside the never-issued areas (000, 666, 900-999). The one remaining area-123 value is the example inside the
+  Government's lookup contract (`docs/contracts/veteran-lookup.spec.openapi.yaml`), which is kept verbatim as delivered.
+  **Decision (2026-10-21):** history is not rewritten; the occurrences are recorded instead. The reasons, the full list
+  of commits, the command that finds them and the steps for a later rewrite are in
+  [ADR 0017](adr/0017-ssn-shaped-values-in-git-history.md).
 
 - Manual accessibility review (native file picker, download prompt, screen reader, zoom/reflow, real iOS/Android
   devices, reconnect) is not yet performed: [accessibility-review.md](accessibility-review.md).
