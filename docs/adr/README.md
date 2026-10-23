@@ -11,7 +11,7 @@ MADR-style records (context, decision, alternatives, tradeoffs, consequences). C
 | [0005](0005-case-workflow.md) | Case status workflow as a domain-owned edge table | E2 | accepted |
 | [0006](0006-audit-trail.md) | Audit information: audit fields plus an append-only trail | E2 | accepted |
 | [0007](0007-roles-and-permissions.md) | Local Identity authentication, roles and the permission matrix | E3 | accepted; matrix, user administration and current user superseded by 0013 |
-| [0008](0008-veteran-lookup-mock-and-client.md) | Veteran Lookup: Government contract served verbatim, conformance-tested mock, resilient client | E4 | accepted |
+| [0008](0008-veteran-lookup-mock-and-client.md) | Veteran Lookup: Government contract served verbatim, conformance-tested mock, resilient client | E4 | accepted; extended by 0018 |
 | [0009](0009-attachment-storage.md) | Attachment storage and protection | E4 | accepted |
 | [0010](0010-render-mode.md) | Render mode: Interactive Server, account pages static SSR | E5 | accepted |
 | [0011](0011-ui-accessibility-and-mobile.md) | UI kit, accessibility approach, responsive shell, dashboard definitions and PWA policy | E5 | accepted |
@@ -21,5 +21,6 @@ MADR-style records (context, decision, alternatives, tradeoffs, consequences). C
 | [0015](0015-error-log-and-system-health.md) | Stored error log, System Health and error pages | E3 | accepted |
 | [0016](0016-nunit-and-playwright-pins.md) | NUnit 4.4 and Playwright 1.52 for every test suite (supersedes the framework choice in 0004) | E1 | accepted |
 | [0017](0017-ssn-shaped-values-in-git-history.md) | Git history is not rewritten to remove SSN-shaped test values | E1 | accepted |
+| [0018](0018-veteran-service-history.md) | Veteran Service History: separate mock, shared client transport, outcome stored with the case (Change 2) | E4 | accepted |
 
 The render-mode and accessibility records required by E1-S8 are 0010 and 0011.

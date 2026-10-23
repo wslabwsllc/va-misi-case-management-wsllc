@@ -383,15 +383,17 @@
         _lookingUp = true;
         // Both calls can take up to about 10 s together; the busy state is announced in the status region (F6).
         _lookupMessage = BusyMessage;
+        // Read once, before any await: if the page is disposed mid-lookup, _cts.Token would throw ObjectDisposedException.
+        var ct = _cts.Token;
         try
         {
-            var result = await VeteranLookup.LookupAsync(ssn, _cts.Token);
+            var result = await VeteranLookup.LookupAsync(ssn, ct);
             switch (result.Outcome)
             {
                 case VeteranLookupOutcome.Found when result.Name is not null && result.Address is not null && digits.Length == 9:
                     _lookupMessage = $"Veteran found: {result.Name}. Looking up their service history…";
                     StateHasChanged();
-                    var (status, history) = await LookUpServiceHistoryAsync(ssn);
+                    var (status, history) = await LookUpServiceHistoryAsync(ssn, ct);
                     _found = new VeteranSnapshot(result.Name, result.Address, digits[^4..], status, history);
                     _lookupMessage = $"Veteran found: {result.Name}. {ServiceHistoryDetails.Summary(status)} Review the details and choose Use this veteran to attach them.";
                     break;
@@ -413,7 +415,7 @@
                     break;
             }
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             return;
         }
@@ -439,11 +441,11 @@
     /// other than Found or NotFound, including a client that throws, is stored as Unavailable (D6). Only the caller's
     /// cancellation (the page closing) propagates.
     /// </summary>
-    private async Task<(ServiceHistoryStatus Status, ServiceHistory? History)> LookUpServiceHistoryAsync(string ssn)
+    private async Task<(ServiceHistoryStatus Status, ServiceHistory? History)> LookUpServiceHistoryAsync(string ssn, CancellationToken ct)
     {
         try
         {
-            var result = await ServiceHistoryLookup.LookupAsync(ssn, _cts.Token);
+            var result = await ServiceHistoryLookup.LookupAsync(ssn, ct);
             return result.Outcome switch
             {
                 VeteranLookupOutcome.Found when result.History is not null => (ServiceHistoryStatus.Found, result.History),
@@ -451,7 +453,7 @@
                 _ => (ServiceHistoryStatus.Unavailable, null),
             };
         }
-        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             throw;
         }

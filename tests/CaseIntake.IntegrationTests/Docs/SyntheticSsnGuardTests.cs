@@ -62,6 +62,8 @@ public partial class SyntheticSsnGuardTests
     /// E3-C2-2: the Service History dataset and contract (Change 2) are scanned like every other file, and every SSN in
     /// them is in the never-issued 900-999 area. Neither has an exemption.
     /// </summary>
+    [Category("Story:E3-C2-2")]
+    [Category("Req:R-CR2-8")]
     [TestCase("src", "CaseIntake.VeteranHistory.Mock", "Data", "service-history.json")]
     [TestCase("docs", "contracts", "veteran-service-history.openapi.yaml")]
     public void The_service_history_data_and_contract_are_scanned_and_use_area_900_to_999_only(params string[] path)

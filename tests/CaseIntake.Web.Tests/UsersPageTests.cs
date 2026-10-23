@@ -366,6 +366,8 @@ public class RolesPageTests : WebTestContext
     }
 
     /// <summary>Change 2, D5 (E3-C2-1): the role editor offers exactly the catalog's permissions and none for service history.</summary>
+    [Category("Story:E3-C2-1")]
+    [Category("Req:R-CR2-1")]
     [Test]
     public void The_role_editor_lists_exactly_the_catalog_permissions_and_none_for_service_history()
     {

@@ -1,7 +1,7 @@
 # Change request 2: Veteran Service History, implementation plan
 
 **Source:** Government Common Requirement Change, "Additional Data Source" (section 1 below)
-**Review status:** Reviewed against the requirement text and the current code (`main` at a43e242). Every requirement has story ownership and verification criteria. Implementation has not started. Begin with gate H0.
+**Review status:** Reviewed against the requirement text and the current code (`main` at a43e242). Every requirement has story ownership and verification criteria. Implementation is under way: H0 and the E2, E3-C2-1, E4-C2-1 to E4-C2-3 and E5-C2-1/2 stories are merged (PRs #61 to #63); the remaining work is uncommitted or open, and the per-story status lines below are current. Gate H3 is not yet passed.
 **Target stack:** unchanged from `docs/Epic_Plan.md` (.NET 10, Blazor Interactive Server, EF Core 10, PostgreSQL, Docker Compose v2, Linux x86-64)
 **Execution model:** five engineers, each with AI agents, keep the epic ownership areas of `docs/Epic_Plan.md` (E1 to E5). One shared contract PR (H0) comes first. After it, all five lanes work in parallel against fakes, then integrate at H2. Gates express dependencies, not dates or effort.
 
@@ -69,13 +69,13 @@ The Government is specifying the required outcome, not a prescribed implementati
 
 ### 0.3 Decisions
 
-Each decision is recorded in ADR 0018 (E4-C2-4) and in `docs/assumptions-and-limitations.md` (CR2-1 to CR2-6).
+Each decision is recorded in ADR 0018 (E4-C2-4). The assumption rows CR2-1 to CR2-6 in `docs/assumptions-and-limitations.md` are added by E1-C2-3 (not yet done).
 
 | # | Decision | Why |
 |---|---|---|
 | D1 | **Separate service:** new project `CaseIntake.VeteranHistory.Mock`, own container `veteran-history` on port 8082. | The Government describes a separate service. Its failure must be independent, so `docker compose stop veteran-history` gives a real outage demo. The Lookup mock and its pinned Government contract stay untouched. |
 | D2 | **History is fetched only at lookup time**, inside the New case page, right after the Lookup returns `Found`. | The SSN is never saved (A8). Once the case exists, nothing can query the service again. A user who sees "unavailable" can look up again before submitting. |
-| D3 | **The case stores the outcome, not just the data:** nullable `ServiceHistoryStatus` (`Found`, `NotFound`, `Unavailable`). Null means the case predates this change. | "The application shall communicate the result": the detail page must tell "no record", "service was down" and "not requested" apart. |
+| D3 | **The case stores the outcome, not just the data:** nullable `ServiceHistoryStatus` (`Found`, `NotFound`, `Unavailable`). Null means service history was not requested (a case created before this change, or a caller that omits it). | "The application shall communicate the result": the detail page must tell "no record", "service was down" and "not requested" apart. |
 | D4 | **Flat nullable columns on `Cases`**, following the existing `VeteranName` / `VeteranAddress` / `VeteranSsnLast4` pattern. | One snapshot per case, taken at intake. No history-of-history is needed. |
 | D5 | **Reuse `Permissions.VeteranLookup`**. No new permission. | C1-3 already guarantees anyone who can create cases holds it. A new permission would change the golden matrix and the Roles page for no gain. |
 | D6 | **Reuse `VeteranLookupOutcome`** for the client result. Any outcome other than `Found` or `NotFound` is stored as `Unavailable`. | It already has Found, NotFound, InvalidInput, Unavailable and Forbidden. InvalidInput and Forbidden cannot follow a successful lookup (same SSN; C1-3 grants `veteran.lookup` to every case creator), so they need no state of their own. |
@@ -171,7 +171,7 @@ As in `docs/Epic_Plan.md` 0.8, Contracts, Persistence snapshot, package pins, Co
 `docs/Epic_Plan.md` 0.5 applies to every story unchanged. In addition:
 1. An outage of `veteran-history` never stops the app from starting, staying healthy, or creating and working cases.
 2. No SSN, full or partial beyond the stored last four, appears in a log, audit row, database column or exception message.
-3. Cases created before the change keep working and show "Not requested".
+3. Cases created before the change keep working. One with a veteran shows "Not requested"; the seeded cases have no veteran and show no service-history section.
 
 ### 0.9 Review of the earlier single-engineer plan
 
@@ -201,7 +201,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Out of scope:** domain rules (E2), the mock and client (E4), UI (E5).
 
 ### E1-C2-1: Shared contract foundation PR
-**Status: ⏳ Not started**
+**Status: ✅ Done** (`6665558`, PR #61, with the E2 and E4 parts of 0.5)
 **Story:** As an engineer on any lane, I want the shared types, fake and configuration key merged first, so that all five lanes can build in parallel without waiting for each other.
 **Acceptance criteria:**
 - Given the H0 PR, when the solution builds, then the types in 0.5 exist exactly once, with zero warnings.
@@ -214,7 +214,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-2, R-CR2-8
 
 ### E1-C2-2: `veteran-history` container and outage-safe topology
-**Status: ⏳ Not started**
+**Status: ⏳ In progress**: configuration and tests are merged (`6665558`; `docker-compose.yml`, `ArchitectureTests`, `VersionConsistencyTests`). Not yet recorded: a clean `docker compose up --build` showing `veteran-history` healthy, and the manual `docker compose stop veteran-history` check, which belong with the H3 entry in `docs/verification.md`.
 **Story:** As an evaluator, I want the new service to start with `docker compose up --build` and to be stoppable without harming the app, so that I can see both normal and outage behavior.
 **Acceptance criteria:**
 - Given a clean clone, when I run `docker compose up --build`, then `veteran-history` starts as `linux/amd64` on port 8082, is not published to the host, and becomes healthy.
@@ -375,7 +375,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-1, R-CR2-4, R-CR2-5
 
 ### E4-C2-4: ADR 0018 and ADR 0008 note
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As an evaluator, I want the design of this change recorded, so that I can judge the alternatives considered.
 **Acceptance criteria:**
 - Given `docs/adr/0018-veteran-service-history.md` (from `0000-template.md`), when I read it, then it records D1 to D9, the options considered (same vs separate container; fetch at lookup vs later; flat columns vs a separate table) and the consequences (an outage never blocks startup or intake; history is never refreshed).
@@ -470,7 +470,7 @@ E3 has the lightest load. After E3-C2-1, Dev 3 pairs with Dev 4 on `VeteranServi
 - [ ] `docker compose up --build` starts `veteran-history`; `900-12-3456` shows and saves the Army / Honorable history.
 - [ ] `902-17-3062` shows "no record"; `962-91-6025` shows "unavailable"; both cases are created.
 - [ ] With `docker compose stop veteran-history`, the app stays healthy, lookups still find veterans, and cases are created as `Unavailable`.
-- [ ] Seeded cases show "Not requested".
+- [ ] Pre-change cases keep working: one with a veteran shows "Not requested"; seeded cases (no veteran) show no service-history section.
 - [ ] No SSN appears in logs, audit rows or the database.
 - [ ] `docker compose run --rm tests` passes, including the SSN guard, the architecture rules and version consistency.
 - [ ] ADR 0018 is accepted and indexed; the architecture diagrams and startup order show `veteran-history`.

@@ -17,6 +17,9 @@ public static class VeteranLookupModule
     public const string PipelineName = "veteran-lookup";
     public const string HistoryPipelineName = "veteran-history";
 
+    /// <summary>Largest response body either client reads (64 KiB); anything larger is Unavailable.</summary>
+    public const int MaxResponseBytes = 64 * 1024;
+
     private static readonly TimeSpan MinimumTimeout = TimeSpan.FromMilliseconds(10);
     private static readonly TimeSpan MaximumTimeout = TimeSpan.FromDays(1);
 
@@ -74,6 +77,9 @@ public static class VeteranLookupModule
             var options = sp.GetRequiredService<IOptions<TOptions>>().Value;
             client.BaseAddress = WithTrailingSlash(new Uri(options.BaseUrl, UriKind.Absolute));
             client.Timeout = Timeout.InfiniteTimeSpan;   // the pipeline owns every timeout
+            // Both answers are a few hundred bytes. A larger body fails the buffered read with HttpRequestException,
+            // which the transport maps to Unavailable, so a faulty service cannot fill the web process's memory.
+            client.MaxResponseContentBufferSize = MaxResponseBytes;
         });
         http.AddResilienceHandler(pipelineName, (pipeline, context) =>
             {

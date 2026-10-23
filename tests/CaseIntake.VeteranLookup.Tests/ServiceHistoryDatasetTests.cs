@@ -5,6 +5,8 @@ using CaseIntake.VeteranLookup.Mock;
 namespace CaseIntake.VeteranLookup.Tests;
 
 /// <summary>E4-C2-1: the embedded service-history dataset is deterministic, synthetic and storable with a case.</summary>
+[Category("Story:E4-C2-1")]
+[Category("Req:R-CR2-7")]
 public class ServiceHistoryDatasetTests
 {
     [Test]

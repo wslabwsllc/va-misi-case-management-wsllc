@@ -9,6 +9,9 @@ public sealed class FakeVeteranLookupClient : IVeteranLookupClient
 
     public int CallCount { get; private set; }
 
+    /// <summary>When set, answers every call instead of the registered answers (for example a pending task).</summary>
+    public Func<string, CancellationToken, Task<VeteranLookupResult>>? Respond { get; set; }
+
     public FakeVeteranLookupClient Returns(string ssn, VeteranLookupResult result)
     {
         _answers[ssn] = result;
@@ -18,6 +21,10 @@ public sealed class FakeVeteranLookupClient : IVeteranLookupClient
     public Task<VeteranLookupResult> LookupAsync(string ssn, CancellationToken ct)
     {
         CallCount++;
+        if (Respond is { } respond)
+        {
+            return respond(ssn, ct);
+        }
         var result = _answers.TryGetValue(ssn, out var found)
             ? found
             : new VeteranLookupResult(VeteranLookupOutcome.NotFound, null, null);
