@@ -23,8 +23,8 @@ The full procedures (M1 to M9) and their sign-off table are in [section-508/manu
 
 | Check | Status | Notes |
 |---|---|---|
-| Native file picker opened and operated by keyboard (Space/Enter on the file input, choose a file, Upload) | Not yet performed | automated tests use programmatic file selection (`SetInputFiles`), which bypasses the native picker |
-| Download prompt/behaviour with the keyboard (Enter on Download) | Not yet performed | automated test verifies the downloaded bytes, not the browser prompt |
+| Native file picker opened and operated by keyboard (Space/Enter on the file input, choose a file, Upload) | Performed and approved by Rikhin Bhuta (2026-10-22) | manual keyboard check passed; automated tests use programmatic file selection (`SetInputFiles`), which bypasses the native picker |
+| Download prompt/behaviour with the keyboard (Enter on Download) | Performed and approved by Rikhin Bhuta (2026-10-22) | manual keyboard check passed; automated test verifies the downloaded bytes, not the browser prompt |
 | Screen-reader spot check (NVDA + Chrome or VoiceOver + Safari): field labels and hints, error summary, "Showing ... cases", "Case N created", "Status changed to ...", lookup outcomes, upload errors, reconnect dialog | Not yet performed | |
 | Zoom 200% and 400% (reflow at 320 CSS px) on dashboard, list, intake, detail | Not yet performed | 375 px automated only |
 | Visible focus on every control in light conditions and Windows high-contrast mode | Not yet performed | focus style: 2 px black outline with white ring; forced-colors rules in app.css |
@@ -32,6 +32,7 @@ The full procedures (M1 to M9) and their sign-off table are in [section-508/manu
 | Screen reader on the administration pages (Change 1): role checkbox group with hints and the "can't add or remove" reason, permission table with row and group headers, per-permission radio groups ("Override for ..."), read-only reason, "Permissions saved." announcement | Not yet performed | automated: bUnit (legends, describedby, live region text) and axe on every page |
 | Reconnect: stop `web` while a page is open (`docker compose stop web`), observe and hear the reconnect dialog, start it again | Not yet performed | |
 | iOS Safari and Android Chrome on real devices (safe areas, keyboard types, bottom bar) | Not yet performed | Chromium device emulation only in automation |
+| Focus not obscured and target size by keyboard (M6): Tab through case list, user detail and audit log at desktop and phone widths | Partially performed (2026-10-22) | no focused control fully hidden by the sticky header or phone bottom bar; targets under 24 px pass by label or spacing. Sizes, method and what is still open: M6 row in [section-508/manual-test-procedures.md](section-508/manual-test-procedures.md) |
 
 ## Known limitations
 

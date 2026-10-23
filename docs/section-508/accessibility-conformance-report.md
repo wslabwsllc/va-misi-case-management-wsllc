@@ -34,7 +34,7 @@ Manual checks are referenced as M1 to M9 ([manual-test-procedures.md](manual-tes
 | 1.3.3 Sensory Characteristics | Supports | Instructions refer to labels and names, never to shape, position or colour alone |
 | 1.4.1 Use of Color | Supports | Statuses, outcomes, health states and priorities are text plus colour (and an icon for health); links in text are underlined |
 | 1.4.2 Audio Control | Not Applicable | No audio |
-| 2.1.1 Keyboard | Partially Supports | Keyboard-only browser tests complete intake to closure, user and role administration, permission overrides, audit log filtering and export; all controls are native or have keyboard handlers. Native file picker and download prompt need M2 |
+| 2.1.1 Keyboard | Partially Supports | Keyboard-only browser tests complete intake to closure, user and role administration, permission overrides, audit log filtering and export; all controls are native or have keyboard handlers. M2 (partially performed, 2026-10-22): native file picker and attachment download pass by keyboard; audit CSV download by keyboard not yet checked manually |
 | 2.1.2 No Keyboard Trap | Supports | Focus sweep on every page leaves and re-enters the document; modal dialogs close with Esc and return focus (tested) |
 | 2.1.4 Character Key Shortcuts (2.1) | Not Applicable | No single-character shortcuts |
 | 2.2.1 Timing Adjustable | Partially Supports | No task has a time limit. The sign-in session ends after 8 hours without activity with no warning (an interactive page reconnects or asks to sign in again); see Known gaps |
@@ -76,9 +76,9 @@ Manual checks are referenced as M1 to M9 ([manual-test-procedures.md](manual-tes
 | 2.4.5 Multiple Ways | Supports | Navigation menu, breadcrumbs, dashboard drill-through links and search on every list |
 | 2.4.6 Headings and Labels | Partially Supports | One h1 per page (sweep), sections have h2 headings, labels describe purpose. Needs M1 |
 | 2.4.7 Focus Visible | Supports | Every focused element on every page has a visible indicator on itself, its card or its chart shape (sweep, 30 Tab stops per page) |
-| 2.4.11 Focus Not Obscured (Minimum) (2.2) | Partially Supports | Scroll padding keeps a control that Tab scrolls into view clear of the sticky header and the phone bottom bar; the focus sweep fails if a focused control is under the header on any page. Phone bottom bar needs M6 |
+| 2.4.11 Focus Not Obscured (Minimum) (2.2) | Partially Supports | Scroll padding keeps a control that Tab scrolls into view clear of the sticky header and the phone bottom bar; the focus sweep fails if a focused control is under the header on any page. M6 (partially performed, 2026-10-22): no focused control fully hidden on the case list, user detail and audit log at desktop width, or on the audit log in the phone layout with the bottom bar; the other pages in the phone layout are still open |
 | 2.5.7 Dragging Movements (2.2) | Not Applicable | No dragging |
-| 2.5.8 Target Size (Minimum) (2.2) | Partially Supports | Phone navigation targets are at least 44x44 px (tested); desktop controls are at least 24x24 px by design (checkboxes 24 px, radio 20 px with label text as part of the target). Needs M6 |
+| 2.5.8 Target Size (Minimum) (2.2) | Partially Supports | Phone navigation targets are at least 44x44 px (tested); desktop controls are at least 24x24 px or pass by spacing (checkboxes and radios 20 px with label text as part of the target). M6 (partially performed, 2026-10-22) measured 20x20 checkboxes and radios with clickable labels at least 44 px tall and at least 48 px apart, and 16 px table links at least 47 px apart |
 | 3.1.2 Language of Parts | Not Applicable | All content is English |
 | 3.2.3 Consistent Navigation | Supports | One site map drives the sidebar, bottom bar and More sheet (`AppNavigation`) |
 | 3.2.4 Consistent Identification | Supports | Shared components (pager, filters, error summary, dialogs) are used everywhere |
