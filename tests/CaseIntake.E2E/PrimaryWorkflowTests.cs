@@ -311,6 +311,7 @@ public sealed partial class PrimaryWorkflowTests : E2ETestBase
         {
             await GotoAsync(page, "/cases/new");
             await page.Locator("#intake-title").FillAsync("E2E conflict " + Guid.NewGuid().ToString("N")[..8]);
+            await AttachVeteranAsync(page);
             await PressAsync(page.GetByTestId("create-case"));
             await ConfirmSubmitAsync(page, "confirm-intake");
             await Expect(page).ToHaveURLAsync(CaseUrl());
