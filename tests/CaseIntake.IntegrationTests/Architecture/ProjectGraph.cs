@@ -6,6 +6,7 @@ namespace CaseIntake.IntegrationTests.Architecture;
 public sealed class ProjectGraph(IReadOnlyDictionary<string, ProjectNode> projects)
 {
     private static readonly string[] FeatureModules = ["Cases", "Identity", "Attachments", "VeteranLookup.Client", "TestResults"];
+    private static readonly string[] Mocks = ["VeteranLookup.Mock", "VeteranHistory.Mock"];
     private static readonly string[] ForbiddenInCore = ["Microsoft.EntityFrameworkCore", "Microsoft.AspNetCore.Identity", "Npgsql"];
 
     public IReadOnlyDictionary<string, ProjectNode> Projects => projects;
@@ -60,14 +61,14 @@ public sealed class ProjectGraph(IReadOnlyDictionary<string, ProjectNode> projec
             {
                 Expect(refs.All(r => r == "Contracts"), $"{node.Name} may reference only Contracts (found: {string.Join(", ", refs)}).");
             }
-            else if (short_ is "VeteranLookup.Mock")
+            else if (Mocks.Contains(short_))
             {
                 Expect(!refs.Contains("Persistence") && !refs.Contains("Domain"),
                     $"{node.Name} must not reference application persistence or the domain.");
             }
             else if (FeatureModules.Contains(short_))
             {
-                var otherFeatures = refs.Where(r => FeatureModules.Contains(r) || r == "VeteranLookup.Mock").ToList();
+                var otherFeatures = refs.Where(r => FeatureModules.Contains(r) || Mocks.Contains(r)).ToList();
                 Expect(otherFeatures.Count == 0,
                     $"{node.Name} must not reference another feature module (found: {string.Join(", ", otherFeatures)}).");
                 Expect(refs.All(r => r is "Persistence" or "Domain" or "Contracts"),

@@ -1,7 +1,16 @@
 namespace CaseIntake.Domain.Cases;
 
 /// <summary>Veteran details captured from the lookup at intake. Only the last four SSN digits are ever held (A8, OQ-5b).</summary>
-public sealed record CaseVeteran(string Name, string Address, string SsnLast4);
+public sealed record CaseVeteran(string Name, string Address, string SsnLast4,
+    ServiceHistoryStatus? HistoryStatus = null, ServiceHistory? History = null);
+
+/// <summary>Result of the service-history lookup taken at intake. Null on a case means it predates Change 2 (D3).</summary>
+public enum ServiceHistoryStatus { Found, NotFound, Unavailable }
+
+/// <summary>Service history from the Veteran Service History service, its authoritative source (R-CR2-4). Branch and
+/// character of service are free text (D9); the end and last-verified dates are optional (D7).</summary>
+public sealed record ServiceHistory(string Branch, DateOnly ServiceStartDate, DateOnly? ServiceEndDate,
+    string CharacterOfService, DateOnly? LastVerifiedOn);
 
 /// <summary>A domain rule was violated. Services check the rules first and return a result; this is the last line of defense.</summary>
 public sealed class CaseRuleException(string code, string message, IReadOnlyList<FieldError>? fieldErrors = null)

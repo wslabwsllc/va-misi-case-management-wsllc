@@ -13,6 +13,8 @@ public static class CaseFieldLimits
     public const int VeteranNameMaxLength = 200;
     public const int VeteranAddressMaxLength = 500;
     public const int SsnLast4Length = 4;
+    public const int ServiceBranchMaxLength = 50;
+    public const int CharacterOfServiceMaxLength = 100;
     public const int ActorMaxLength = 256;
     public const int AuditActionMaxLength = 50;
     public const int AuditDetailsMaxLength = 1000;
@@ -29,6 +31,10 @@ public static class CaseFieldNames
     public const string VeteranName = "Veteran.Name";
     public const string VeteranAddress = "Veteran.Address";
     public const string VeteranSsnLast4 = "Veteran.SsnLast4";
+    public const string ServiceBranch = "Veteran.History.Branch";
+    public const string ServiceStartDate = "Veteran.History.ServiceStartDate";
+    public const string ServiceEndDate = "Veteran.History.ServiceEndDate";
+    public const string CharacterOfService = "Veteran.History.CharacterOfService";
     public const string Priority = "Priority";
     public const string Category = "Category";
     public const string AssignedTo = "AssignedTo";

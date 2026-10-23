@@ -20,12 +20,15 @@ public static class FakeModules
         services.RemoveAll<ICaseService>();
         services.RemoveAll<IAttachmentService>();
         services.RemoveAll<IVeteranLookupClient>();
+        services.RemoveAll<IVeteranServiceHistoryClient>();
         services.AddSingleton<FakeCurrentUser>();
         services.AddSingleton<ICurrentUser>(sp => sp.GetRequiredService<FakeCurrentUser>());
         services.AddSingleton<ICaseService, InMemoryCaseService>();
         services.AddSingleton<IAttachmentService, InMemoryAttachmentService>();
         services.AddSingleton<FakeVeteranLookupClient>();
         services.AddSingleton<IVeteranLookupClient>(sp => sp.GetRequiredService<FakeVeteranLookupClient>());
+        services.AddSingleton<FakeVeteranServiceHistoryClient>();
+        services.AddSingleton<IVeteranServiceHistoryClient>(sp => sp.GetRequiredService<FakeVeteranServiceHistoryClient>());
         services.TryAddSingleton(TimeProvider.System);
         return services;
     }

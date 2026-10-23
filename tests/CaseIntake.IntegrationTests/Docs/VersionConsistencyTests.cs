@@ -126,7 +126,8 @@ public class VersionConsistencyTests
     private static string DatabaseDockerfile => RepositoryRoot.File("docker", "db", "Dockerfile");
 
     private static IEnumerable<string> Dockerfiles =>
-        [RepositoryRoot.File("Dockerfile"), RepositoryRoot.File("src", "CaseIntake.VeteranLookup.Mock", "Dockerfile"), DatabaseDockerfile];
+        [RepositoryRoot.File("Dockerfile"), RepositoryRoot.File("src", "CaseIntake.VeteranLookup.Mock", "Dockerfile"),
+         RepositoryRoot.File("src", "CaseIntake.VeteranHistory.Mock", "Dockerfile"), DatabaseDockerfile];
 
     private static IEnumerable<string> ProjectFiles() =>
         Directory.EnumerateFiles(RepositoryRoot.File("src"), "*.csproj", SearchOption.AllDirectories)

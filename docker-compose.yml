@@ -96,6 +96,22 @@ services:
       timeout: 5s
       retries: 30
 
+  # Owned by E4: src/CaseIntake.VeteranHistory.Mock/Dockerfile builds the synthetic service-history mock (Change 2, D1).
+  # Same network-only exposure and inline probe as veteran-lookup. web and web-e2e wait only for it to start, never for
+  # it to be healthy (D8): `docker compose stop veteran-history` is the outage demo and must not stop or degrade web.
+  veteran-history:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: src/CaseIntake.VeteranHistory.Mock/Dockerfile
+    environment:
+      ASPNETCORE_URLS: http://+:8082
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8082 && printf 'GET /health HTTP/1.0\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3 && read -r -t 5 status <&3 && [[ $$status == HTTP/*' 200 '* ]]"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
   web:
     <<: *app-image
     command: ["dotnet", "/app/web/CaseIntake.Web.dll"]
@@ -108,6 +124,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__CaseIntake: *conn
       VeteranLookup__BaseUrl: http://veteran-lookup:8081
+      VeteranHistory__BaseUrl: http://veteran-history:8082
       Attachments__RootPath: /attachments
       DataProtection__KeysPath: /dataprotection
       Seed__DemoPassword: *demo-password
@@ -123,6 +140,8 @@ services:
         condition: service_completed_successfully
       veteran-lookup:
         condition: service_healthy
+      veteran-history:
+        condition: service_started
     healthcheck: *web-healthcheck
 
   # ---- Test profile: an isolated copy of the production app for the browser suite (its own database, attachments and
@@ -155,6 +174,7 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__CaseIntake: *conn-e2e
       VeteranLookup__BaseUrl: http://veteran-lookup:8081
+      VeteranHistory__BaseUrl: http://veteran-history:8082
       Attachments__RootPath: /attachments-e2e
       Seed__DemoPassword: *demo-password
       TestResults__RootPath: /e2e-fixtures
@@ -167,6 +187,8 @@ services:
         condition: service_completed_successfully
       veteran-lookup:
         condition: service_healthy
+      veteran-history:
+        condition: service_started
     healthcheck: *web-healthcheck
 
   tests:
@@ -179,6 +201,7 @@ services:
     environment:
       TESTKIT_POSTGRES_ADMIN: "Host=db;Port=5432;Database=postgres;Username=caseintake;Password=caseintake_local_only"
       VeteranLookup__BaseUrl: http://veteran-lookup:8081
+      VeteranHistory__BaseUrl: http://veteran-history:8082
       E2E_BASE_URL: http://web-e2e:8080
       E2E_FIXTURES_ROOT: /e2e-fixtures
       E2E_TRACE: ${E2E_TRACE:-}
@@ -195,6 +218,8 @@ services:
       db:
         condition: service_healthy
       veteran-lookup:
+        condition: service_healthy
+      veteran-history:
         condition: service_healthy
       web-e2e:
         condition: service_healthy
