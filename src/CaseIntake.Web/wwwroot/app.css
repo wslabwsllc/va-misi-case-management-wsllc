@@ -1023,8 +1023,9 @@ pre.log { background: #101828; color: #f2f4f7; padding: var(--space-3); border-r
 }
 @keyframes sheet-in { from { transform: translateY(40px); opacity: 0.4; } to { transform: none; opacity: 1; } }
 
+/* Transitions are 0s, not 0.01ms: with a near-zero duration Chromium leaves a :focus-within outline at 0px (no ring). */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0s !important; scroll-behavior: auto !important; }
   .icard:hover, .icard:focus-visible { transform: none; }
 }
 

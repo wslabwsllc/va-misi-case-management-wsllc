@@ -67,6 +67,9 @@ public abstract class E2ETestBase
     /// <summary>Moves keyboard focus to a control and activates it with Enter (links, buttons) or Space (checkboxes).</summary>
     protected static async Task PressAsync(ILocator control, string key = "Enter")
     {
+        // A control can still be disabled from the previous render (Clear filters right after a filter changes the URL);
+        // focusing it then does nothing and is not retried, so wait until it can take focus.
+        await Expect(control).ToBeEnabledAsync();
         await control.FocusAsync();
         await E2ESession.ExpectFocusedAsync(control);
         await control.PressAsync(key);
