@@ -120,7 +120,8 @@ else
         <h2 id="permissions-heading" class="card__header">Permissions</h2>
         <p class="card__note" id="permissions-help">
             A person holds the permissions of all their roles. Allow adds a permission their roles don't give; Deny removes one
-            even if a role gives it. Deny always wins. You can only change permissions you hold yourself.
+            even if a role gives it. Deny wins, except that anyone who can create cases can always look up veterans, because
+            a case needs one. You can only change permissions you hold yourself.
         </p>
         <form @onsubmit="SaveOverridesAsync" @onsubmit:preventDefault="true" aria-describedby="permissions-help" data-testid="overrides-form">
             @if (_overridesError is not null)

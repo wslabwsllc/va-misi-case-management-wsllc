@@ -266,7 +266,8 @@ cookies survive container recreation.
 **Permissions, not roles, are checked.** Since Change 1 ([ADR 0013](adr/0013-database-roles-and-permissions.md)) the
 database is the source of truth for who holds what: role permissions and per-user Allow/Deny overrides are stored in
 PostgreSQL and changed on the Roles and Users pages. A user's effective permissions are the union over their roles,
-plus Allow overrides, minus Deny overrides (Deny always wins; an inactive user holds nothing), resolved by
+plus Allow overrides, minus Deny overrides (Deny wins, except that `cases.create` always brings `veteran.lookup`
+because intake requires a veteran; an inactive user holds nothing), resolved by
 `PermissionResolver` and built into the actor snapshot by `OperationActorFactory`. `RolePermissionMap` in `Contracts`
 defines the permission names and the **defaults** the seed writes into each built-in role once; administrators' later
 changes are never overwritten. One authorization policy is registered for each entry in

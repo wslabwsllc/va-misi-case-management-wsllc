@@ -18,7 +18,7 @@ public class AppRolePermission
     public required string PermissionName { get; set; }
 }
 
-/// <summary>A permission allowed or denied for one user regardless of their roles; a denial always wins.</summary>
+/// <summary>A permission allowed or denied for one user regardless of their roles; a denial wins (except the veteran lookup for anyone who can create cases; see <c>EffectivePermissions</c>).</summary>
 public class AppUserPermissionOverride
 {
     public required string UserId { get; set; }
