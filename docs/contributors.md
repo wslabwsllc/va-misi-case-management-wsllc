@@ -1,6 +1,6 @@
 # Team
 
-Five engineers from World Services LLC built this application; each owned one epic and all five are presenting.
+Five engineers from World Services LLC and KAT Enterprises built this application; each owned one epic and all five are presenting.
 
 ### Rikhin Bhuta
 
@@ -28,7 +28,7 @@ Senior Software Engineer · World Services LLC · E2 · 25+ years
 
 ### Dr. Janarthanan Senthurpandi
 
-Senior Solutions Architect · World Services LLC · E3 · 25+ years
+Senior Solutions Architect · KAT Enterprises · E3 · 25+ years
 
 - Sign-in, roles and permission matrix, server-side authorization, security headers and lockout (EPIC 3)
 - Tech-lead review (PRs #2 and #4, the D1 contract decision) and the Amendment 0002 readiness audit
@@ -36,7 +36,7 @@ Senior Solutions Architect · World Services LLC · E3 · 25+ years
 
 ### Antony Pon Jeyakumar Selvaraj
 
-Senior Frontend Engineer · World Services LLC · E5 · 15+ years
+Senior Frontend Engineer · KAT Enterprises · E5 · 15+ years
 
 - Blazor UI: dashboard, list, intake, detail, edit and conflict UI, mobile (PR #5)
 - Accessibility, Playwright and axe browser tests, test results module (PR #5); triage and assignment (PR #29)

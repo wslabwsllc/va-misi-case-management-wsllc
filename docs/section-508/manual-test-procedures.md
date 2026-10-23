@@ -80,11 +80,11 @@ Run twice: NVDA (current) with Chrome on Windows, and VoiceOver with Safari on m
 |---|---|---|---|---|---|
 | M1 NVDA + Chrome | | | | Not yet performed | |
 | M1 VoiceOver + Safari | | | | Not yet performed | |
-| M2 | | | | Not yet performed | |
+| M2 | Rikhin Bhuta | 2026-10-22 | Chrome, macOS 26.2 | Partially performed. Pass: step 1 (native file picker opened with the keyboard, file chosen, Upload) and the attachment Download with Enter. Not yet run: audit CSV download with Enter (step 2) | None found |
 | M3 | | | | Not yet performed | |
 | M4 | | | | Not yet performed | |
 | M5 | | | | Not yet performed | |
-| M6 | | | | Not yet performed | |
+| M6 | Rikhin Bhuta (reviewed); run with Claude Code through the Claude in Chrome extension | 2026-10-22 | Chrome 151, macOS 26.2; real Tab key presses, focused-control visibility and target sizes measured by script after each scroll settled; `main` @ `10125df` | Partially performed. Pass: no focused control fully hidden on case list (45 stops, 1512x771), user detail permission table (45 stops, 1280x720), audit log (39 stops, 1280x720; 32 stops, 500x772 phone layout with bottom bar). Targets under 24 px pass by label or spacing: checkboxes and radios 20x20 with clickable labels at least 44 px tall and at least 48 px apart; 16 px table links at least 47 px apart. Not yet run: case list at 1280x720, case list and user detail in the phone layout, exact 390x844 (Chrome's minimum window width is 500 px; needs DevTools device mode) | None found |
 | M7 | | | | Not yet performed | |
 | M8 | | | | Not yet performed | |
 | M9 | | | | Not yet performed | |
