@@ -87,7 +87,4 @@ app.MapAuditExportEndpoints();                                    // Change 1 au
 app.MapTestResultEndpoints();                                     // E5 test evidence downloads and exports
 app.MapRazorComponents<App>().AddInteractiveServerRenderMode();
 
-app.Run();
-
-/// <summary>Entry point type for WebApplicationFactory.</summary>
-public partial class Program;
+await app.RunAsync();

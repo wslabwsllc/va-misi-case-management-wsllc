@@ -80,9 +80,13 @@
         _announcement = UiText.ShowingRange(page, PageSize, total, "entries");
     }
 
+    // "StatusChanged" -> "Status Changed"; the timeout bounds matching on stored audit text.
+    private static readonly Regex WordBoundary =
+        new("(?<=[a-z])(?=[A-Z])", RegexOptions.CultureInvariant | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100));
+
     private static string Describe(AuditEntryDto entry)
     {
-        var action = Regex.Replace(entry.Action, "(?<=[a-z])(?=[A-Z])", " ");
+        var action = WordBoundary.Replace(entry.Action, " ");
         action = action.Length > 1 ? char.ToUpperInvariant(action[0]) + action[1..].ToLowerInvariant() : action;
         return entry is { FromStatus: { } from, ToStatus: { } to }
             ? $"{action}: {UiText.Status(from)} to {UiText.Status(to)}"
