@@ -1,6 +1,6 @@
 # Veteran Service History Service: the team's own contract (Change 2, E4-C2-2, ADR 0018).
 # The Government supplied an interface table, not an OpenAPI definition (docs/change-request-plan.md, section 0.1). This
-# document restates that table. Additions beyond it are marked with x-extension: the 400 response and the optional
+# document restates that table. Additions beyond it are marked with x-extension: the 400 and 415 responses and the optional
 # lastVerifiedDate (decision D7: the requirement lists "date last verified", the example response omits it).
 # The example SSN is synthetic (area 900-999, never issued).
 openapi: 3.0.3
@@ -54,7 +54,7 @@ paths:
                     example: '2026-01-05'
                     x-extension: true
         '400':
-          description: The body is not JSON, or ssn is missing, null, not a string or blank
+          description: The body is absent or not valid JSON, or ssn is missing, null, not a string or blank
           x-extension: true
           content:
             application/problem+json:
@@ -67,5 +67,8 @@ paths:
                     type: integer
         '404':
           description: No service-history record found
+        '415':
+          description: The request content type is not application/json; the response has no body
+          x-extension: true
         '503':
           description: Service temporarily unavailable

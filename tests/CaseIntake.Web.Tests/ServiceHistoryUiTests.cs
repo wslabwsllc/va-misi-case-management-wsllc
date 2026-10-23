@@ -128,6 +128,25 @@ public class ServiceHistoryIntakeTests : WebTestContext
     }
 
     [Test]
+    public async Task Closing_the_page_while_the_lookup_runs_logs_no_false_service_history_failure()
+    {
+        var pending = new TaskCompletionSource<VeteranLookupResult>();
+        Lookup.Respond = (_, _) => pending.Task;
+        LookUp();
+
+        await DisposeComponentsAsync();   // disposes the page's CancellationTokenSource mid-lookup
+        pending.SetResult(new VeteranLookupResult(VeteranLookupOutcome.Found, "Rowan Calloway", "6243 Placeholder Street"));
+
+        // The continuation runs on the renderer: wait until it either calls the history client or logs a failure.
+        for (var i = 0; i < 500 && History.CallCount == 0 && !Logs.GetSnapshot().Any(r => r.Id.Id == 5014); i++)
+        {
+            await Task.Delay(10);   // at most 5 s
+        }
+        Assert.Equal(1, History.CallCount);
+        Assert.DoesNotContain(Logs.GetSnapshot(), r => r.Id.Id == 5014);
+    }
+
+    [Test]
     public void Service_history_is_not_requested_when_the_lookup_does_not_find_a_veteran()
     {
         LookUp("999-99-9999");

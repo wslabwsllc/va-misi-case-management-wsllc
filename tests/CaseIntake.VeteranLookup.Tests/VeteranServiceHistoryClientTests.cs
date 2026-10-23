@@ -15,6 +15,11 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// E4-C2-3: every outcome of the Service History client, with the real resilience pipeline and a scripted transport.
 /// The permission and log cases are E3-C2-1 and E3-C2-2.
 /// </summary>
+[Category("Story:E4-C2-3")]
+[Category("Story:E3-C2-1")]
+[Category("Req:R-CR2-1")]
+[Category("Req:R-CR2-4")]
+[Category("Req:R-CR2-5")]
 public class VeteranServiceHistoryClientTests
 {
     private const string FoundBody =
@@ -218,6 +223,18 @@ public class VeteranServiceHistoryClientTests
     }
 
     [Test]
+    public async Task A_body_over_the_size_cap_is_Unavailable_even_when_it_is_valid()
+    {
+        // Valid JSON padded with whitespace: without the cap this would be Found.
+        var body = FoundBody + new string(' ', VeteranLookupModule.MaxResponseBytes);
+        var (client, _, logs, provider) = Build((_, _, _) => Respond(HttpStatusCode.OK, body));
+        await using var _ = provider;
+
+        Assert.Equal(new ServiceHistoryResult(VeteranLookupOutcome.Unavailable, null), await client.LookupAsync("900-12-3456", CancellationToken.None));
+        Assert.Equal("HttpRequestException", Assert.Single(logs.WithEventId(4011)).GetStructuredStateValue("Reason"));
+    }
+
+    [Test]
     public async Task A_connection_failure_is_retried_once_then_Unavailable()
     {
         var (client, handler, logs, provider) = Build((_, _, _) => throw new HttpRequestException("connection refused"));
@@ -303,6 +320,8 @@ public class VeteranServiceHistoryClientTests
     /// E3-C2-2: events 4010 to 4013 and the denial carry outcome, duration, status and exception type only; never the
     /// SSN or any history value, on success and on every failure path.
     /// </summary>
+    [Category("Story:E3-C2-2")]
+    [Category("Req:R-CR2-8")]
     [Test]
     public async Task Logs_record_outcome_and_duration_but_never_the_SSN_or_history_values()
     {

@@ -11,6 +11,9 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// <c>tests</c> service, against the real <c>veteran-history</c> container as well. Every response the contract
 /// document lists is produced here.
 /// </summary>
+[Category("Story:E4-C2-1")]
+[Category("Story:E4-C2-2")]
+[Category("Req:R-CR2-7")]
 public class HistoryMockServiceTests : ClassFixture<HistoryMockServiceTests, HistoryMockServiceFactory>
 {
     private static HistoryMockServiceFactory factory => Shared;
@@ -124,6 +127,17 @@ public class HistoryMockServiceTests : ClassFixture<HistoryMockServiceTests, His
     }
 
     [TestCaseSource(typeof(HistoryTarget), nameof(HistoryTarget.All))]
+    public async Task A_non_JSON_content_type_returns_415(string target)
+    {
+        using var client = HistoryTarget.CreateClient(target, factory);
+        using var content = new StringContent(VeteranDatasetGenerator.KnownFoundSsn, Encoding.UTF8, "text/plain");
+
+        using var response = await client.PostAsync(Route, content);
+
+        Assert.Equal(HttpStatusCode.UnsupportedMediaType, response.StatusCode);
+    }
+
+    [TestCaseSource(typeof(HistoryTarget), nameof(HistoryTarget.All))]
     public async Task Health_returns_200(string target)
     {
         using var client = HistoryTarget.CreateClient(target, factory);
@@ -144,11 +158,18 @@ public class HistoryMockServiceTests : ClassFixture<HistoryMockServiceTests, His
             using var response = await client.PostAsJsonAsync(Route, new { ssn });
             produced.Add(((int)response.StatusCode).ToString(System.Globalization.CultureInfo.InvariantCulture));
         }
+        using (var text = new StringContent(VeteranDatasetGenerator.KnownFoundSsn, Encoding.UTF8, "text/plain"))
+        using (var response = await client.PostAsync(Route, text))
+        {
+            produced.Add(((int)response.StatusCode).ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
 
         Assert.Equal(documented.Order(StringComparer.Ordinal), produced.Order(StringComparer.Ordinal));
     }
 
     /// <summary>E3-C2-2: event 4060 carries the outcome and duration only, never the SSN or the history values.</summary>
+    [Category("Story:E3-C2-2")]
+    [Category("Req:R-CR2-8")]
     [Test]
     public async Task Lookups_log_the_outcome_and_duration_but_never_the_SSN_or_history_values()
     {

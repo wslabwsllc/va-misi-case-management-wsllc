@@ -7,7 +7,7 @@ namespace CaseIntake.VeteranHistory.Mock;
 /// <summary>
 /// Local, deterministic Veteran Service History service (Change 2, D1, E4-C2-1). Its contract is the team's own document
 /// <c>docs/contracts/veteran-service-history.openapi.yaml</c> (E4-C2-2): the Government's interface table, plus 400 for an
-/// unusable body and the optional <c>lastVerifiedDate</c> (D7). <see cref="ServiceHistoryDataset.OutageSsn"/> always
+/// unusable body, 415 for a non-JSON content type (from the framework) and the optional <c>lastVerifiedDate</c> (D7). <see cref="ServiceHistoryDataset.OutageSsn"/> always
 /// answers 503, so the outage path can be shown without stopping the container.
 /// An explicit class (not top-level statements) so its entry point never collides with the web app's <c>Program</c>,
 /// and a different name from the Lookup mock's <c>MockProgram</c>, so one test project can host both.

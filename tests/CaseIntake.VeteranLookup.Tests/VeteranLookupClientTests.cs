@@ -161,6 +161,18 @@ public class VeteranLookupClientTests
     }
 
     [Test]
+    public async Task A_body_over_the_size_cap_is_Unavailable_even_when_it_is_valid()
+    {
+        // Valid JSON padded with whitespace: without the cap this would be Found.
+        var body = FoundBody + new string(' ', VeteranLookupModule.MaxResponseBytes);
+        var (client, _, logs, provider) = Build((_, _, _) => Respond(HttpStatusCode.OK, body));
+        await using var _ = provider;
+
+        Assert.Equal(VeteranLookupOutcome.Unavailable, (await client.LookupAsync("900-12-3456", CancellationToken.None)).Outcome);
+        Assert.Equal("HttpRequestException", Assert.Single(logs.WithEventId(4002)).GetStructuredStateValue("Reason"));
+    }
+
+    [Test]
     public async Task A_connection_dropped_while_the_body_is_read_is_Unavailable()
     {
         var (client, _, _, provider) = Build((_, _, _) => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
