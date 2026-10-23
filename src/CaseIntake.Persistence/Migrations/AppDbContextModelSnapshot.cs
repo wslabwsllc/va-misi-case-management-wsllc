@@ -101,6 +101,10 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<int>("Category")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CharacterOfService")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<DateTimeOffset>("CreatedAtUtc")
                         .HasColumnType("timestamp with time zone");
 
@@ -122,6 +126,22 @@ namespace CaseIntake.Persistence.Migrations
                     b.Property<string>("SeedKey")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
+
+                    b.Property<string>("ServiceBranch")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<DateOnly?>("ServiceEndDate")
+                        .HasColumnType("date");
+
+                    b.Property<int?>("ServiceHistoryStatus")
+                        .HasColumnType("integer");
+
+                    b.Property<DateOnly?>("ServiceRecordVerifiedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateOnly?>("ServiceStartDate")
+                        .HasColumnType("date");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -183,6 +203,14 @@ namespace CaseIntake.Persistence.Migrations
                             t.HasCheckConstraint("CK_Case_Id_Positive", "\"Id\" > 0");
 
                             t.HasCheckConstraint("CK_Case_Priority_Range", "\"Priority\" BETWEEN 0 AND 3");
+
+                            t.HasCheckConstraint("CK_Case_ServiceHistory_Complete", "CASE WHEN \"ServiceHistoryStatus\" = 0 THEN \"ServiceBranch\" IS NOT NULL AND \"ServiceStartDate\" IS NOT NULL AND \"CharacterOfService\" IS NOT NULL ELSE \"ServiceBranch\" IS NULL AND \"ServiceStartDate\" IS NULL AND \"ServiceEndDate\" IS NULL AND \"CharacterOfService\" IS NULL AND \"ServiceRecordVerifiedOn\" IS NULL END");
+
+                            t.HasCheckConstraint("CK_Case_ServiceHistory_Dates", "\"ServiceEndDate\" IS NULL OR \"ServiceEndDate\" >= \"ServiceStartDate\"");
+
+                            t.HasCheckConstraint("CK_Case_ServiceHistory_Range", "\"ServiceHistoryStatus\" IS NULL OR \"ServiceHistoryStatus\" BETWEEN 0 AND 2");
+
+                            t.HasCheckConstraint("CK_Case_ServiceHistory_RequiresVeteran", "\"ServiceHistoryStatus\" IS NULL OR \"VeteranName\" IS NOT NULL");
 
                             t.HasCheckConstraint("CK_Case_Status_Range", "\"Status\" BETWEEN 0 AND 4");
 

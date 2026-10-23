@@ -25,6 +25,20 @@ internal sealed class CaseConfiguration : IEntityTypeConfiguration<Case>
                 $"\"Priority\" BETWEEN {(int)CasePriority.Low} AND {(int)CasePriority.Urgent}");
             t.HasCheckConstraint("CK_Case_Category_Range",
                 $"\"Category\" BETWEEN {(int)CaseCategory.General} AND {(int)Enum.GetValues<CaseCategory>().Max()}");
+
+            // Service history (Change 2): the same rules as CaseTextRules.ValidateServiceHistory. A null status is a
+            // case from before the change and carries no history.
+            t.HasCheckConstraint("CK_Case_ServiceHistory_Range",
+                $"\"ServiceHistoryStatus\" IS NULL OR \"ServiceHistoryStatus\" BETWEEN {(int)ServiceHistoryStatus.Found} AND {(int)Enum.GetValues<ServiceHistoryStatus>().Max()}");
+            t.HasCheckConstraint("CK_Case_ServiceHistory_RequiresVeteran",
+                "\"ServiceHistoryStatus\" IS NULL OR \"VeteranName\" IS NOT NULL");
+            t.HasCheckConstraint("CK_Case_ServiceHistory_Complete",
+                $"CASE WHEN \"ServiceHistoryStatus\" = {(int)ServiceHistoryStatus.Found} " +
+                "THEN \"ServiceBranch\" IS NOT NULL AND \"ServiceStartDate\" IS NOT NULL AND \"CharacterOfService\" IS NOT NULL " +
+                "ELSE \"ServiceBranch\" IS NULL AND \"ServiceStartDate\" IS NULL AND \"ServiceEndDate\" IS NULL " +
+                "AND \"CharacterOfService\" IS NULL AND \"ServiceRecordVerifiedOn\" IS NULL END");
+            t.HasCheckConstraint("CK_Case_ServiceHistory_Dates",
+                "\"ServiceEndDate\" IS NULL OR \"ServiceEndDate\" >= \"ServiceStartDate\"");
         });
 
         builder.HasKey(c => c.Id);
@@ -45,6 +59,12 @@ internal sealed class CaseConfiguration : IEntityTypeConfiguration<Case>
         builder.Property(c => c.VeteranName).HasMaxLength(CaseFieldLimits.VeteranNameMaxLength);
         builder.Property(c => c.VeteranAddress).HasMaxLength(CaseFieldLimits.VeteranAddressMaxLength);
         builder.Property(c => c.VeteranSsnLast4).HasMaxLength(CaseFieldLimits.SsnLast4Length).IsFixedLength();
+        builder.Property(c => c.ServiceHistoryStatus).HasConversion<int>();
+        builder.Property(c => c.ServiceBranch).HasMaxLength(CaseFieldLimits.ServiceBranchMaxLength);
+        builder.Property(c => c.ServiceStartDate).HasColumnType("date");
+        builder.Property(c => c.ServiceEndDate).HasColumnType("date");
+        builder.Property(c => c.CharacterOfService).HasMaxLength(CaseFieldLimits.CharacterOfServiceMaxLength);
+        builder.Property(c => c.ServiceRecordVerifiedOn).HasColumnType("date");
         builder.Property(c => c.SeedKey).HasMaxLength(CaseFieldLimits.SeedKeyMaxLength);
         builder.Ignore(c => c.Veteran);
         builder.Ignore(c => c.Triage);

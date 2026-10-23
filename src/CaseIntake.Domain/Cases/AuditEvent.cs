@@ -23,9 +23,17 @@ public sealed record AuditEvent(
     CaseStatus? ToStatus = null,
     string? Details = null)
 {
-    public static AuditEvent Created(DateTimeOffset occurredAtUtc, bool hasVeteranSnapshot) =>
-        new(AuditActions.Created, occurredAtUtc, null, CaseWorkflow.InitialStatus,
-            hasVeteranSnapshot ? "Veteran snapshot recorded" : null);
+    /// <summary>
+    /// The case was opened. With a service-history outcome the details name the status only, never the history values:
+    /// "Veteran snapshot recorded; service history: NotFound".
+    /// </summary>
+    public static AuditEvent Created(DateTimeOffset occurredAtUtc, bool hasVeteranSnapshot, ServiceHistoryStatus? serviceHistory = null) =>
+        new(AuditActions.Created, occurredAtUtc, null, CaseWorkflow.InitialStatus, (hasVeteranSnapshot, serviceHistory) switch
+        {
+            (true, { } status) => $"Veteran snapshot recorded; service history: {status}",
+            (true, null) => "Veteran snapshot recorded",
+            _ => null,
+        });
 
     public static AuditEvent Edited(DateTimeOffset occurredAtUtc, IReadOnlyCollection<string> changedFields) =>
         new(AuditActions.Edited, occurredAtUtc, Details: $"Changed: {string.Join(", ", changedFields)}");

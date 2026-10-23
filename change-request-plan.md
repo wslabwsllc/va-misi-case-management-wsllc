@@ -254,7 +254,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Out of scope:** fetching history (E4, E5), display (E5).
 
 ### E2-C2-1: Service-history domain rules
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a system, I want the case to accept only a consistent service-history snapshot, so that bad data from any caller is rejected before it is saved.
 **Acceptance criteria:**
 - Given status `Found`, when a case is created, then a history is required; given any other status or null, then a history is rejected.
@@ -267,7 +267,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-2, R-CR2-4
 
 ### E2-C2-2: Persistence mapping and migration
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a system, I want the database to enforce the same service-history rules, so that no inconsistent row can be stored.
 **Acceptance criteria:**
 - Given the migration, when it is applied to a database with the 72 seeded cases, then six nullable columns are added and existing rows are unchanged.
@@ -278,7 +278,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-2
 
 ### E2-C2-3: Create and read service history through `ICaseService`
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a case worker, I want the service history captured at intake to be saved with the case and returned with its detail, so that it is available later.
 **Acceptance criteria:**
 - Given a `CreateCaseRequest` with each of `Found`, `NotFound` and `Unavailable`, when the case is created and read back, then `CaseDetailDto.Veteran` carries the same status and history.

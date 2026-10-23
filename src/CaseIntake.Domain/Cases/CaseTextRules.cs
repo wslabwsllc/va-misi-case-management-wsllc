@@ -139,6 +139,51 @@ public static class CaseTextRules
         return errors;
     }
 
+    public const string ServiceHistoryRequiredMessage = "A service-history record is required when the service found one.";
+    public const string ServiceHistoryNotAllowedMessage = "A service-history record can only be attached when the service found one.";
+    public const string ServiceHistoryStatusMessage = "The service-history status is not recognized.";
+    public const string ServiceDatesMessage = "Service end date cannot be before the service start date.";
+
+    /// <summary>
+    /// The service-history outcome captured with the veteran snapshot (Change 2, D3). A history is required for
+    /// <see cref="ServiceHistoryStatus.Found"/> and rejected for any other status or none. Branch and character of service
+    /// are free text (D9) and only length-capped; an open end date is allowed (D7). There is no "verified not in the
+    /// future" rule: domain rules take no clock and the service is authoritative. Status and history errors are reported
+    /// on <see cref="CaseFieldNames.Veteran"/>, where forms show lookup problems.
+    /// </summary>
+    public static IReadOnlyList<FieldError> ValidateServiceHistory(ServiceHistoryStatus? status, ServiceHistory? history)
+    {
+        List<FieldError> errors = [];
+        if (status is { } s && !Enum.IsDefined(s))
+        {
+            errors.Add(new FieldError(CaseFieldNames.Veteran, ServiceHistoryStatusMessage));
+            return errors;
+        }
+        if (status != ServiceHistoryStatus.Found)
+        {
+            if (history is not null)
+            {
+                errors.Add(new FieldError(CaseFieldNames.Veteran, ServiceHistoryNotAllowedMessage));
+            }
+            return errors;
+        }
+        if (history is null)
+        {
+            errors.Add(new FieldError(CaseFieldNames.Veteran, ServiceHistoryRequiredMessage));
+            return errors;
+        }
+
+        RequiredText(history.Branch, CaseFieldNames.ServiceBranch, "Service branch", CaseFieldLimits.ServiceBranchMaxLength, errors);
+        RequiredText(history.CharacterOfService, CaseFieldNames.CharacterOfService, "Character of service",
+            CaseFieldLimits.CharacterOfServiceMaxLength, errors);
+        if (history.ServiceEndDate is { } end && end < history.ServiceStartDate)
+        {
+            errors.Add(new FieldError(CaseFieldNames.ServiceEndDate, ServiceDatesMessage));
+        }
+
+        return errors;
+    }
+
     /// <summary>
     /// Caps an actor identifier or display name at <see cref="CaseFieldLimits.ActorMaxLength"/> UTF-16 units (the
     /// column limit) without splitting a surrogate pair, which PostgreSQL could not store.
