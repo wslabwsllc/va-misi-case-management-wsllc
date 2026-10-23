@@ -1,6 +1,6 @@
 # 0008. Veteran Lookup: mock serving the Government contract verbatim, conformance-tested implementation and a resilient typed client
 
-* Status: accepted
+* Status: accepted; extended by [0018](0018-veteran-service-history.md) (shared client transport, second mock)
 * Owner: E4
 * Amended: 2026-10-20 (US-4.1 / R12). The contract is the Government's definition, not one generated from our code.
 
@@ -50,8 +50,9 @@ type. The SSN format is checked by the client, not the mock.
 
 1. checks `veteran.lookup` for the current actor (denied → `Forbidden`, no request; `AuthorizationDenied` logged);
 2. accepts exactly nine ASCII digits or `NNN-NN-NNNN` (otherwise `InvalidInput`, no request) and sends the dashed form;
-3. maps 200 with a usable body to `Found`, 404 to `NotFound`, and everything else (other statuses, malformed or
-   oversized bodies, connection errors, timeouts) to `Unavailable`, so intake can continue without the lookup. The
+3. maps 200 with a usable body to `Found`, 404 to `NotFound`, and everything else (other statuses, malformed bodies,
+   any response over 64 KiB including a 404, connection errors, timeouts) to `Unavailable`, so intake can continue
+   without the lookup. The
    definition leaves `name` and `address` optional; a 200 without both cannot fill the case's veteran snapshot, so it is
    `Unavailable` too (D14);
 4. lets the caller's own cancellation propagate.
