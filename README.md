@@ -173,6 +173,10 @@ and local browser runs: [docs/testing.md](docs/testing.md).
 `scripts/coverage.sh` measures line coverage on the host (unit, component and integration suites; Docker required) and
 fails below 80% in total or for any assembly ([docs/testing.md](docs/testing.md#code-coverage)).
 
+`scripts/sonar.sh` runs a local SonarQube analysis (bugs, vulnerabilities, code smells, duplication and coverage) and
+publishes it to a SonarQube server in Docker at http://localhost:9000; `--skip-tests` analyses without running the
+tests ([docs/testing.md](docs/testing.md#static-analysis-sonarqube)).
+
 </details>
 
 ---
@@ -209,7 +213,7 @@ Needs the .NET SDK 10.0.402 and Docker (for PostgreSQL). Each `dotnet run` below
 
 ```bash
 # 1. Tools and build
-dotnet tool restore                              # restores dotnet-ef
+dotnet tool restore                              # restores dotnet-ef and dotnet-sonarscanner
 dotnet build
 
 # 2. PostgreSQL 18 on localhost:5432 (a standalone container, separate from the Compose database)

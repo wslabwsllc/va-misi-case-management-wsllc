@@ -57,7 +57,8 @@ public class VersionConsistencyTests
     public void Every_container_image_is_pinned_by_tag_and_digest_and_listed_in_versions_md()
     {
         var images = Dockerfiles.SelectMany(BaseImages)
-            .Concat(Regex.Matches(File.ReadAllText(RepositoryRoot.File("docker-compose.yml")), @"^\s*image:\s*(\S+)", RegexOptions.Multiline)
+            .Concat(new[] { "docker-compose.yml", "docker-compose.sonar.yml" }
+                .SelectMany(compose => Regex.Matches(File.ReadAllText(RepositoryRoot.File(compose)), @"^\s*image:\s*(\S+)", RegexOptions.Multiline))
                 .Select(m => m.Groups[1].Value)
                 .Where(image => !image.StartsWith("caseintake-", StringComparison.Ordinal)))   // built locally from the Dockerfile
             .Distinct().ToList();
