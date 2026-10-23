@@ -15,6 +15,7 @@
 /src/CaseIntake.Attachments/              @epic4-owner
 /src/CaseIntake.VeteranLookup.Client/     @epic4-owner
 /src/CaseIntake.VeteranLookup.Mock/       @epic4-owner
+/src/CaseIntake.VeteranHistory.Mock/      @epic4-owner
 /src/CaseIntake.TestResults/              @epic5-owner
 /src/CaseIntake.Web/                      @epic5-owner
 /src/CaseIntake.Web/Components/Account/   @epic3-owner

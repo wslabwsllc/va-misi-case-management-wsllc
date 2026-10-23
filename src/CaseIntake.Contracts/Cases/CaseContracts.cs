@@ -10,7 +10,8 @@ public sealed record CreateCaseRequest(string Title, string? Description, Vetera
 /// <summary>Edit. A null <paramref name="Triage"/> leaves priority, category, owner and due date unchanged.</summary>
 public sealed record UpdateCaseRequest(string Title, string? Description, uint Version, CaseTriage? Triage = null);   // Version = optimistic concurrency token
 public sealed record ChangeStatusRequest(CaseStatus TargetStatus, uint Version);
-public sealed record VeteranSnapshot(string Name, string Address, string SsnLast4);
+public sealed record VeteranSnapshot(string Name, string Address, string SsnLast4,
+    ServiceHistoryStatus? HistoryStatus = null, ServiceHistory? History = null);
 
 public sealed record CaseSummaryDto(long Id, string Title, CaseStatus Status,
     DateTimeOffset CreatedAtUtc, DateTimeOffset UpdatedAtUtc,

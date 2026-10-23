@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Time.Testing;
 using Npgsql;
 
@@ -109,5 +110,15 @@ public class TestKitTests
         Assert.Equal(VeteranLookupOutcome.Found, (await fake.LookupAsync("900223333", default)).Outcome);
         Assert.Equal(VeteranLookupOutcome.NotFound, (await fake.LookupAsync("000000000", default)).Outcome);
         Assert.Equal(2, fake.CallCount);
+    }
+
+    [Test]
+    public async Task Fake_modules_register_the_service_history_fake_which_answers_NotFound_by_default()
+    {
+        await using var provider = new ServiceCollection().AddFakeModules().BuildServiceProvider();
+        var client = provider.GetRequiredService<IVeteranServiceHistoryClient>();
+
+        Assert.IsType<FakeVeteranServiceHistoryClient>(client);
+        Assert.Equal(new ServiceHistoryResult(VeteranLookupOutcome.NotFound, null), await client.LookupAsync("900223333", default));
     }
 }

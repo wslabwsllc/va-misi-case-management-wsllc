@@ -1,0 +1,10 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- Standalone Veteran Service History mock (Change 2, D1), its own container on port 8082. References ServiceDefaults
+       only (JSON logs, SSN scrubbing); never Domain or application persistence, like the Lookup mock. -->
+  <ItemGroup>
+    <ProjectReference Include="..\CaseIntake.ServiceDefaults\CaseIntake.ServiceDefaults.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaseIntake.VeteranLookup.Tests" />
+  </ItemGroup>
+</Project>

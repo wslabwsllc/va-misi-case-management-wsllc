@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline (no egress) runtime check (review F07, gate G3). Requires the images built by `scripts/run-all-tests.sh` (or
 # `docker compose --profile tests build`) and an internet-connected host only for that build. It then
-#   1. starts db, migrator, veteran-lookup and web-e2e on an internal Compose network (docker-compose.offline.yml),
+#   1. starts db, migrator, veteran-lookup, veteran-history and web-e2e on an internal Compose network (docker-compose.offline.yml),
 #   2. proves inside the tests container that DNS and outbound connections to the internet fail, and
 #   3. runs the complete suite (unit, component, integration and the Playwright + axe browser suite) with no egress.
 # Exit code: 0 only when egress is blocked and every suite passes.

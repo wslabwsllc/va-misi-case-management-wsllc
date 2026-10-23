@@ -62,6 +62,16 @@ public class ArchitectureTests
     }
 
     [Test]
+    public void VeteranHistory_mock_referencing_Domain_or_a_feature_module_referencing_it_fails()
+    {
+        var graph = Graph(Node("VeteranHistory.Mock", "Domain"), Node("Cases", "Persistence,Domain,Contracts,VeteranHistory.Mock"));
+
+        var violations = graph.Violations();
+        Assert.Contains(violations, v => v.Contains("CaseIntake.VeteranHistory.Mock must not reference application persistence"));
+        Assert.Contains(violations, v => v.Contains("CaseIntake.Cases") && v.Contains("another feature module"));
+    }
+
+    [Test]
     public void Domain_and_Contracts_assemblies_have_no_EF_or_Identity_dependency()
     {
         foreach (var assembly in new[] { typeof(CaseIntake.Domain.Cases.CaseStatus).Assembly, typeof(CaseIntake.Contracts.Common.Error).Assembly })

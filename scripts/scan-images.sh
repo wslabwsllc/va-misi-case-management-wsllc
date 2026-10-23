@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Container image vulnerability scan with Trivy (run in Docker, so nothing is installed on the host).
 # Build first, then scan: docker compose build && scripts/scan-images.sh [--all]
-# Scans the images docker-compose.yml runs (app, veteran-lookup, db); --all adds the test image (caseintake-eval).
+# Scans the images docker-compose.yml runs (app, veteran-lookup, veteran-history, db); --all adds the test image (caseintake-eval).
 # TRIVY_SEVERITY overrides HIGH,CRITICAL; TRIVY_IGNORE_UNFIXED=1 leaves out findings with no fixed version yet.
 # Exits 1 if any image has a HIGH or CRITICAL finding that is not listed in .trivyignore. Reports are written to
 # artifacts/security-scan/; record the summary in docs/security-scan.md. Needs network access for the vulnerability
