@@ -50,7 +50,8 @@ self.addEventListener('fetch', (event) => {
       .then((response) => {
         if (response.ok && response.type === 'basic') {
           const copy = response.clone();
-          caches.open(CACHE).then((cache) => cache.put(request, copy));
+          // Best effort: a failed cache write (quota, storage cleared) must not fail the response.
+          event.waitUntil(caches.open(CACHE).then((cache) => cache.put(request, copy)).catch(() => {}));
         }
         return response;
       })
