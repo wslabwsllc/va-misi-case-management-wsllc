@@ -22,6 +22,7 @@ public static class CaseRequestValidator
         if (request.Veteran is { } veteran)
         {
             errors.AddRange(CaseTextRules.ValidateVeteran(veteran.Name, veteran.Address, veteran.SsnLast4));
+            errors.AddRange(CaseTextRules.ValidateServiceHistory(veteran.HistoryStatus, veteran.History));
         }
         else
         {

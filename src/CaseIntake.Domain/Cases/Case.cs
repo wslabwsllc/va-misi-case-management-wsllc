@@ -51,6 +51,14 @@ public sealed class Case
     public string? VeteranAddress { get; private set; }
     public string? VeteranSsnLast4 { get; private set; }
 
+    /// <summary>Outcome of the service-history lookup at intake; null for cases created before Change 2 (D3).</summary>
+    public ServiceHistoryStatus? ServiceHistoryStatus { get; private set; }
+    public string? ServiceBranch { get; private set; }
+    public DateOnly? ServiceStartDate { get; private set; }
+    public DateOnly? ServiceEndDate { get; private set; }
+    public string? CharacterOfService { get; private set; }
+    public DateOnly? ServiceRecordVerifiedOn { get; private set; }
+
     /// <summary>Stable fixture key for seeded demo cases; null for cases entered by users.</summary>
     public string? SeedKey { get; private set; }
 
@@ -65,7 +73,10 @@ public sealed class Case
 
     public CaseVeteran? Veteran => VeteranName is null || VeteranAddress is null || VeteranSsnLast4 is null
         ? null
-        : new CaseVeteran(VeteranName, VeteranAddress, VeteranSsnLast4);
+        : new CaseVeteran(VeteranName, VeteranAddress, VeteranSsnLast4, ServiceHistoryStatus,
+            ServiceBranch is not null && ServiceStartDate is { } start && CharacterOfService is not null
+                ? new ServiceHistory(ServiceBranch, start, ServiceEndDate, CharacterOfService, ServiceRecordVerifiedOn)
+                : null);
 
     public CaseTriage Triage => new(Priority, Category, AssignedTo, DueOn);
 
@@ -87,6 +98,7 @@ public sealed class Case
         if (veteran is not null)
         {
             errors.AddRange(CaseTextRules.ValidateVeteran(veteran.Name, veteran.Address, veteran.SsnLast4));
+            errors.AddRange(CaseTextRules.ValidateServiceHistory(veteran.HistoryStatus, veteran.History));
         }
         errors.AddRange(CaseTriageRules.Validate(normalizedTriage));
         ThrowIfInvalid(errors);
@@ -104,6 +116,12 @@ public sealed class Case
             VeteranName = veteran?.Name,
             VeteranAddress = veteran?.Address,
             VeteranSsnLast4 = veteran?.SsnLast4,
+            ServiceHistoryStatus = veteran?.HistoryStatus,
+            ServiceBranch = veteran?.History?.Branch,
+            ServiceStartDate = veteran?.History?.ServiceStartDate,
+            ServiceEndDate = veteran?.History?.ServiceEndDate,
+            CharacterOfService = veteran?.History?.CharacterOfService,
+            ServiceRecordVerifiedOn = veteran?.History?.LastVerifiedOn,
             SeedKey = seedKey,
             Priority = normalizedTriage.Priority,
             Category = normalizedTriage.Category,

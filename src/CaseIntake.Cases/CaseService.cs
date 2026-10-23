@@ -120,10 +120,10 @@ public sealed class CaseService(
             }
         }
 
-        var veteran = request.Veteran is { } v ? new CaseVeteran(v.Name, v.Address, v.SsnLast4) : null;
+        var veteran = request.Veteran is { } v ? new CaseVeteran(v.Name, v.Address, v.SsnLast4, v.HistoryStatus, v.History) : null;
         var entity = Case.Create(request.Title, request.Description, veteran, AuditAppender.ActorName(actor), now, triage: triage);
         db.Cases.Add(entity);
-        AuditAppender.Append(db, entity, actor, AuditEvent.Created(now, veteran is not null));
+        AuditAppender.Append(db, entity, actor, AuditEvent.Created(now, veteran is not null, veteran?.HistoryStatus));
         await db.SaveChangesAsync(ct);
 
         CaseLog.CaseCreated(logger, entity.Id, actor.UserId!);
@@ -298,7 +298,7 @@ public sealed class CaseService(
 
     private CaseDetailDto ToDetail(Case c, OperationActor actor) => new(
         c.Id, c.Title, c.Description, c.Status, c.CreatedAtUtc, c.CreatedBy, c.UpdatedAtUtc, c.UpdatedBy, c.Version,
-        c.Veteran is { } v ? new VeteranSnapshot(v.Name, v.Address, v.SsnLast4) : null,
+        c.Veteran is { } v ? new VeteranSnapshot(v.Name, v.Address, v.SsnLast4, v.HistoryStatus, v.History) : null,
         AllowedNextStatuses(c.Status, actor, workflow),
         c.Priority, c.Category, c.AssignedTo, c.DueOn);
 
