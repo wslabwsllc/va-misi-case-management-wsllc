@@ -33,7 +33,9 @@ mapping is: read = `cases.view`, update = `cases.edit`, create = `cases.create`;
 role administration = `roles.manage`.
 
 **Effective permissions** (`EffectivePermissions`, Contracts): the union of the permissions of the user's roles, plus the
-user's Allow overrides, minus the user's Deny overrides. Deny always wins. An inactive user holds nothing.
+user's Allow overrides, minus the user's Deny overrides. Deny wins, with one exception: a user who holds `cases.create`
+also holds `veteran.lookup`, even over a Deny, because a case cannot be created without a veteran (added 2026-10-21 with
+the required lookup; assumptions A8 and C1-3). An inactive user holds nothing.
 
 **Roles.** Six built-in roles: the five of ADR 0007 plus `Administrator`, which holds every permission. The seed grants
 each default permission from `RolePermissionMap` to its built-in role once (recorded in `DefaultPermissionsApplied`), so

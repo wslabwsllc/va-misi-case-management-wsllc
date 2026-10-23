@@ -60,7 +60,8 @@ public enum PermissionEffect { Allow, Deny }
 
 /// <summary>
 /// The effective-permission rule (ADR 0013): the union of the user's role permissions, plus the permissions allowed for the
-/// user, minus the permissions denied for the user. Deny always wins. An inactive user holds nothing.
+/// user, minus the permissions denied for the user. Deny wins, except that <see cref="Permissions.CasesCreate"/> always
+/// brings <see cref="Permissions.VeteranLookup"/> (intake requires a veteran). An inactive user holds nothing.
 /// </summary>
 public static class EffectivePermissions
 {

@@ -59,7 +59,8 @@ test fails the build if one does.
 Since Change 1 ([ADR 0013](adr/0013-database-roles-and-permissions.md)) roles and their permissions are stored in the
 database, and every page, service and button checks a **permission**, never a role name. `RolePermissionMap` in code is
 the **default** each built-in role is seeded with once; administrators change it on the Roles page and the seed never
-overwrites those changes. Per-user Allow and Deny overrides apply on top, and Deny always wins (C1-3). The defaults:
+overwrites those changes. Per-user Allow and Deny overrides apply on top, and Deny wins, with one exception: a user who can create cases
+always holds `veteran.lookup`, because intake requires a veteran (C1-3, A8). The defaults:
 
 | Permission | Auditor | IntakeClerk | CaseWorker | Supervisor | QualityAnalyst | Administrator |
 |---|:-:|:-:|:-:|:-:|:-:|:-:|
