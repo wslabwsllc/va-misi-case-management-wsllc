@@ -26,6 +26,12 @@ public abstract class WebTestContext : BunitContext
     protected FakeTimeProvider Time { get; } = new(new DateTimeOffset(2026, 10, 19, 12, 0, 0, TimeSpan.Zero));
     protected FakeCurrentUser CurrentUser { get; } = new();
     protected FakeVeteranLookupClient Lookup { get; } = new();
+
+    /// <summary>Service history (Change 2); answers NotFound unless scripted.</summary>
+    protected FakeVeteranServiceHistoryClient History { get; } = new();
+
+    /// <summary>Log events written by components (5004, 5014, ...), for the SSN-free logging checks.</summary>
+    protected Microsoft.Extensions.Logging.Testing.FakeLogCollector Logs => Services.GetFakeLogCollector();
     protected BunitAuthorizationContext Auth { get; }
 
     /// <summary>The application JS module (wwwroot/js/interop.js); calls such as focusSelector are verified here.</summary>
@@ -68,6 +74,8 @@ public abstract class WebTestContext : BunitContext
         Services.AddSingleton<ScriptedAttachmentService>();
         Services.AddSingleton<IAttachmentService>(sp => sp.GetRequiredService<ScriptedAttachmentService>());
         Services.AddSingleton<IVeteranLookupClient>(Lookup);
+        Services.AddSingleton<IVeteranServiceHistoryClient>(History);
+        Services.AddFakeLogging();
         Services.AddSingleton<ICaseWorkflow>(CaseWorkflow.Instance);
         Services.AddSingleton<AntiforgeryStateProvider, TestAntiforgeryStateProvider>();
         Services.AddSingleton(Options.Create(new DashboardOptions()));

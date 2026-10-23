@@ -302,7 +302,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Out of scope:** new permissions (D5), feature code.
 
 ### E3-C2-1: Authorization for service history
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a security reviewer, I want the service-history lookup governed by the existing `veteran.lookup` permission, so that the change adds no new access path.
 **Acceptance criteria:**
 - Given a user without `veteran.lookup`, when the history client is called, then it returns `Forbidden`, makes no network request and logs `AuthorizationDenied`.
@@ -313,7 +313,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-1, R-CR2-3
 
 ### E3-C2-2: SSN and PII hygiene for the new data path
-**Status: ⏳ Not started**
+**Status: ⏳ In progress** (tests done; the `docs/security-scan.md` row needs an image scan with Docker)
 **Story:** As a security reviewer, I want automated proof that no SSN reaches logs, audit or storage on the new path, so that the original PII rule still holds.
 **Acceptance criteria:**
 - Given every new log event (4010 to 4013, 4060, 5014), when it is captured on success and failure paths, then it contains no SSN and no veteran name, address or history values; only outcome and duration.
@@ -337,7 +337,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Out of scope:** UI (E5), storage (E2).
 
 ### E4-C2-1: Service History mock service
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As an evaluator, I want a local, deterministic Service History service with synthetic data, so that the change can be evaluated without an external dependency.
 **Acceptance criteria:**
 - Given `900-12-3456`, when `POST /veterans/service-history/lookup` is called, then it returns 200 `{ branch, serviceStartDate, serviceEndDate, characterOfService, lastVerifiedDate }` matching the Government example; dashed and nine-digit forms give the same result.
@@ -350,7 +350,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-7
 
 ### E4-C2-2: Service History contract document
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a reviewer, I want a written contract for the new service, so that the mock and client can be checked against something other than each other.
 **Acceptance criteria:**
 - Given `docs/contracts/veteran-service-history.openapi.yaml`, when I read it, then it describes the path, request, 200, 404 and 503 from section 0.1, adds 400 and the optional `lastVerifiedDate` (D7) as marked extensions, and uses a 900-area example SSN.
@@ -360,7 +360,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-7
 
 ### E4-C2-3: Resilient Service History client with shared transport
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a case worker, I want the app to fetch service history and handle every outcome gracefully, so that intake keeps working whatever the service does.
 **Acceptance criteria:**
 - Given 200 with a body that passes `ValidateServiceHistory`, when `LookupAsync` is called, then the result is `Found` with the history.
@@ -397,7 +397,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Out of scope:** client behavior (E4), storage rules (E2).
 
 ### E5-C2-1: Service history at intake
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a case worker, I want to see the veteran's service history right after the lookup, and to submit the case whatever the result, so that history problems never block my work.
 **Acceptance criteria:**
 - Given a lookup returns `Found`, when the page continues, then it calls the history client with the same SSN before the SSN is cleared.
@@ -413,7 +413,7 @@ The decisions and code references in the earlier plan were checked against the c
 **Traces to:** R-CR2-1, R-CR2-5, R-CR2-6
 
 ### E5-C2-2: Service history on the case detail
-**Status: ⏳ Not started**
+**Status: ✅ Done**
 **Story:** As a case worker, I want the case detail to show the service history captured at intake, or why there is none, so that I know what was found.
 **Acceptance criteria:**
 - Given the Veteran card, when the case renders, then an `h3` "Service history" is followed by a `dl` or one sentence:

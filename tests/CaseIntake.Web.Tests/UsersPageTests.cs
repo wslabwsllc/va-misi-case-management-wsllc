@@ -365,6 +365,18 @@ public class RolesPageTests : WebTestContext
         Assert.Empty(cut.FindAll("[data-testid=delete-role]"));
     }
 
+    /// <summary>Change 2, D5 (E3-C2-1): the role editor offers exactly the catalog's permissions and none for service history.</summary>
+    [Test]
+    public void The_role_editor_lists_exactly_the_catalog_permissions_and_none_for_service_history()
+    {
+        var cut = Render<RoleEditor>(p => p.Add(x => x.Id, "role-caseworker"));
+
+        var boxes = cut.FindAll("[data-testid=role-permissions] input[type=checkbox]");
+        Assert.Equal(PermissionCatalog.All.Length, boxes.Count);
+        Assert.Equal(RolePermissionMap.AllPermissions.Length, boxes.Count);
+        Assert.DoesNotContain("service history", cut.Find("[data-testid=role-permissions]").TextContent, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Test]
     public void The_administrator_role_is_read_only_with_the_reason()
     {

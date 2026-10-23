@@ -243,6 +243,8 @@ else
                                 <dt>SSN</dt>
                                 <dd data-testid="ssn-last4">Ending @v.SsnLast4</dd>
                             </dl>
+                            @* Captured at intake and stored with the case (Change 2): case data, shown to anyone with cases.view. *@
+                            <ServiceHistoryDetails Status="v.HistoryStatus" History="v.History" />
                         }
                         else
                         {

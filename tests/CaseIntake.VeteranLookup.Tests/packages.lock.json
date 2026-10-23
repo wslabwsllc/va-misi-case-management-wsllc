@@ -259,6 +259,12 @@
           "NUnit": "[4.4.0, )"
         }
       },
+      "caseintake.veteranhistory.mock": {
+        "type": "Project",
+        "dependencies": {
+          "CaseIntake.ServiceDefaults": "[1.0.0, )"
+        }
+      },
       "caseintake.veteranlookup.client": {
         "type": "Project",
         "dependencies": {
