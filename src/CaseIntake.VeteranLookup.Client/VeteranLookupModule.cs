@@ -15,53 +15,70 @@ namespace CaseIntake.VeteranLookup.Client;
 public static class VeteranLookupModule
 {
     public const string PipelineName = "veteran-lookup";
+    public const string HistoryPipelineName = "veteran-history";
 
     private static readonly TimeSpan MinimumTimeout = TimeSpan.FromMilliseconds(10);
     private static readonly TimeSpan MaximumTimeout = TimeSpan.FromDays(1);
 
     /// <summary>
-    /// Registers <see cref="IVeteranLookupClient"/> as a typed HTTP client. It is resolved in the caller's scope, so it
-    /// sees the circuit's or request's <c>ICurrentUser</c>. The resilience pipeline is one retry for connection errors,
-    /// timeouts, 408, 429 and 5xx (the lookup POST is read-only, so a retry is safe) around a per-attempt timeout
+    /// Registers <see cref="IVeteranLookupClient"/> and <see cref="IVeteranServiceHistoryClient"/> (Change 2) as typed
+    /// HTTP clients with the same settings shape and pipeline. They are resolved in the caller's scope, so they see the
+    /// circuit's or request's <c>ICurrentUser</c>. The resilience pipeline is one retry for connection errors,
+    /// timeouts, 408, 429 and 5xx (both POSTs are read-only, so a retry is safe) around a per-attempt timeout
     /// (2 s). The total budget (5 s) is owned by the client, because it must also cover reading the response body.
-    /// Readiness of the service is checked by ServiceDefaults.
+    /// Readiness of the Lookup service is checked by ServiceDefaults; the Service History service has no readiness
+    /// check, so its outage never marks the app unhealthy (D8).
     /// </summary>
     public static IServiceCollection AddVeteranLookupClient(this IServiceCollection services, IConfiguration configuration)
     {
         ArgumentNullException.ThrowIfNull(configuration);
         AddVeteranLookupHttpClient(services);
+        AddServiceHistoryHttpClient(services);
         return services;
     }
 
-    /// <summary>The registration behind <see cref="AddVeteranLookupClient"/>; tests chain a primary handler onto it.</summary>
-    internal static IHttpClientBuilder AddVeteranLookupHttpClient(IServiceCollection services)
+    /// <summary>The Lookup registration behind <see cref="AddVeteranLookupClient"/>; tests chain a primary handler onto it.</summary>
+    internal static IHttpClientBuilder AddVeteranLookupHttpClient(IServiceCollection services) =>
+        AddLookupServiceClient<IVeteranLookupClient, VeteranLookupClient, VeteranLookupClientOptions>(
+            services, VeteranLookupClientOptions.SectionName, PipelineName, LookupLog.Retrying);
+
+    /// <summary>The Service History registration behind <see cref="AddVeteranLookupClient"/>; tests chain a primary handler onto it.</summary>
+    internal static IHttpClientBuilder AddServiceHistoryHttpClient(IServiceCollection services) =>
+        AddLookupServiceClient<IVeteranServiceHistoryClient, VeteranServiceHistoryClient, VeteranHistoryClientOptions>(
+            services, VeteranHistoryClientOptions.SectionName, HistoryPipelineName, LookupLog.HistoryRetrying);
+
+    private static IHttpClientBuilder AddLookupServiceClient<TClient, TImplementation, TOptions>(
+        IServiceCollection services, string section, string pipelineName, Action<ILogger, int, string, int?> logRetry)
+        where TClient : class
+        where TImplementation : class, TClient
+        where TOptions : LookupServiceOptions
     {
         services.TryAddSingleton(TimeProvider.System);
         // Polly's built-in telemetry logs each attempt with the raw exception, whose message can embed request
         // details. Plan 0.3 forbids logging raw exception messages, so it is silenced for this pipeline only (below) and
         // the retry is logged by OnRetry with safe fields (attempt number, status code or exception type).
-        services.AddOptions<VeteranLookupClientOptions>()
-            .BindConfiguration(VeteranLookupClientOptions.SectionName)
+        services.AddOptions<TOptions>()
+            .BindConfiguration(section)
             .Validate(o => Uri.TryCreate(o.BaseUrl, UriKind.Absolute, out var uri) && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps),
-                "VeteranLookup:BaseUrl must be an absolute http or https URL.")
+                $"{section}:BaseUrl must be an absolute http or https URL.")
             // Polly accepts timeouts of 10 ms to 1 day and retry delays of 0 to 1 day; checked here so a bad value
             // stops startup instead of failing the first lookup.
             .Validate(o => o.AttemptTimeout >= MinimumTimeout && o.AttemptTimeout <= MaximumTimeout && o.TotalTimeout >= o.AttemptTimeout,
-                "VeteranLookup:AttemptTimeout must be between 10 ms and 1 day and VeteranLookup:TotalTimeout at least that long.")
+                $"{section}:AttemptTimeout must be between 10 ms and 1 day and {section}:TotalTimeout at least that long.")
             .Validate(o => o.RetryDelay >= TimeSpan.Zero && o.RetryDelay <= MaximumTimeout,
-                "VeteranLookup:RetryDelay must be between zero and 1 day.")
+                $"{section}:RetryDelay must be between zero and 1 day.")
             .ValidateOnStart();
 
-        var http = services.AddHttpClient<IVeteranLookupClient, VeteranLookupClient>((sp, client) =>
+        var http = services.AddHttpClient<TClient, TImplementation>((sp, client) =>
         {
-            var options = sp.GetRequiredService<IOptions<VeteranLookupClientOptions>>().Value;
+            var options = sp.GetRequiredService<IOptions<TOptions>>().Value;
             client.BaseAddress = WithTrailingSlash(new Uri(options.BaseUrl, UriKind.Absolute));
             client.Timeout = Timeout.InfiniteTimeSpan;   // the pipeline owns every timeout
         });
-        http.AddResilienceHandler(PipelineName, (pipeline, context) =>
+        http.AddResilienceHandler(pipelineName, (pipeline, context) =>
             {
-                var options = context.ServiceProvider.GetRequiredService<IOptions<VeteranLookupClientOptions>>().Value;
-                var logger = context.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<VeteranLookupClient>();
+                var options = context.ServiceProvider.GetRequiredService<IOptions<TOptions>>().Value;
+                var logger = context.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger<TImplementation>();
                 pipeline
                     .ConfigureTelemetry(NullLoggerFactory.Instance)   // scoped to this pipeline, not app-wide
                     .AddRetry(new HttpRetryStrategyOptions
@@ -74,7 +91,7 @@ public static class VeteranLookupModule
                         ShouldHandle = args => ValueTask.FromResult(IsRetryable(args.Outcome)),
                         OnRetry = args =>
                         {
-                            LookupLog.Retrying(logger, args.AttemptNumber + 1,
+                            logRetry(logger, args.AttemptNumber + 1,
                                 args.Outcome.Exception?.GetType().Name ?? "HttpStatus", (int?)args.Outcome.Result?.StatusCode);
                             return ValueTask.CompletedTask;
                         },

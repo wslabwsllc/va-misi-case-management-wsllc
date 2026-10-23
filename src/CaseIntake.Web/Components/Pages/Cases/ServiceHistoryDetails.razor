@@ -1,0 +1,72 @@
+@using CaseIntake.Domain.Cases
+@using CaseIntake.Web.Services
+
+@* Service history captured at intake (Change 2, E5-C2-1/2): the fields when the service found a record, otherwise one
+   sentence that tells "no record", "service was down" and "not requested" apart (D3). The New case page shows it in the
+   lookup result (AtIntake: the result is live, so the sentences say what the user can do); the case detail shows the
+   stored snapshot. Text and an icon carry every state, never colour alone. *@
+<div class="service-history" data-testid="service-history" data-status="@(Status?.ToString() ?? "None")">
+    <h3>Service history</h3>
+    @switch (Status)
+    {
+        case ServiceHistoryStatus.Found when History is { } h:
+            <dl class="field-list">
+                <dt>Branch</dt>
+                <dd data-testid="service-branch">@h.Branch</dd>
+                <dt>Service start</dt>
+                <dd data-testid="service-start">@UiText.Date(h.ServiceStartDate)</dd>
+                <dt>Service end</dt>
+                <dd data-testid="service-end">@(h.ServiceEndDate is { } end ? UiText.Date(end) : PresentText)</dd>
+                <dt>Character of service</dt>
+                <dd data-testid="character-of-service">@h.CharacterOfService</dd>
+                <dt>Last verified</dt>
+                <dd data-testid="service-verified">@(h.LastVerifiedOn is { } verified ? UiText.Date(verified) : NotProvidedText)</dd>
+            </dl>
+            break;
+        case ServiceHistoryStatus.NotFound when AtIntake:
+            <p class="message message--info"><Icon Name="info" /><span class="message__body">@NotFoundAtIntakeText</span></p>
+            break;
+        case ServiceHistoryStatus.NotFound:
+            <p>@NotFoundText</p>
+            break;
+        case null:
+            <p>@NotRequestedText</p>
+            break;
+        default:
+            @* Unavailable, and anything a newer caller might store that this page does not know (D6). *@
+            if (AtIntake)
+            {
+                <p class="message message--warning"><Icon Name="warning" /><span class="message__body">@UnavailableAtIntakeText</span></p>
+            }
+            else
+            {
+                <p>@UnavailableText</p>
+            }
+            break;
+    }
+</div>
+
+@code {
+    public const string PresentText = "Present";
+    public const string NotProvidedText = "Not provided";
+    public const string NotFoundAtIntakeText = "No service-history record was found for this veteran. You can still submit the case.";
+    public const string UnavailableAtIntakeText = "The service-history service is unavailable right now. You can submit without it, or look up again to retry.";
+    public const string NotFoundText = "No service-history record was found at intake.";
+    public const string UnavailableText = "The service-history service was unavailable when this case was opened.";
+    public const string NotRequestedText = "Not requested for this case.";
+
+    [Parameter] public ServiceHistoryStatus? Status { get; set; }
+    [Parameter] public ServiceHistory? History { get; set; }
+
+    /// <summary>On the New case page: the sentences say what the user can do next.</summary>
+    [Parameter] public bool AtIntake { get; set; }
+
+    /// <summary>The one-line form for the selected-veteran card and the status announcement.</summary>
+    public static string Summary(ServiceHistoryStatus? status) => status switch
+    {
+        ServiceHistoryStatus.Found => "Service history found.",
+        ServiceHistoryStatus.NotFound => "No service-history record was found.",
+        null => "Service history not requested.",
+        _ => "Service history is unavailable; you can submit without it.",
+    };
+}

@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using CaseIntake.Contracts.Security;
+using CaseIntake.VeteranHistory.Mock;
 using CaseIntake.VeteranLookup.Mock;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
@@ -87,6 +88,33 @@ public static class LookupTarget
     {
         InProcess => factory.CreateClient(),
         Compose => new HttpClient { BaseAddress = new Uri(ComposeBaseUrl!), Timeout = TimeSpan.FromSeconds(10) },
+        _ => throw new ArgumentOutOfRangeException(nameof(target)),
+    };
+}
+
+/// <summary>The real Service History mock hosted in memory, with captured logs (E4-C2-1).</summary>
+public sealed class HistoryMockServiceFactory : WebApplicationFactory<HistoryMockProgram>
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder) => builder
+        .UseEnvironment("Production")
+        .ConfigureTestServices(services => services.AddFakeLogging());
+
+    public FakeLogCollector Logs => Services.GetFakeLogCollector();
+}
+
+/// <summary>Where the Service History service runs: in process always, plus the Compose container when configured.</summary>
+public static class HistoryTarget
+{
+    public static string? ComposeBaseUrl => Environment.GetEnvironmentVariable("VeteranHistory__BaseUrl") is { Length: > 0 } url ? url : null;
+
+    public static IEnumerable<string> Names() => ComposeBaseUrl is null ? [LookupTarget.InProcess] : [LookupTarget.InProcess, LookupTarget.Compose];
+
+    public static TheoryData<string> All() => [.. Names()];
+
+    public static HttpClient CreateClient(string target, HistoryMockServiceFactory factory) => target switch
+    {
+        LookupTarget.InProcess => factory.CreateClient(),
+        LookupTarget.Compose => new HttpClient { BaseAddress = new Uri(ComposeBaseUrl!), Timeout = TimeSpan.FromSeconds(10) },
         _ => throw new ArgumentOutOfRangeException(nameof(target)),
     };
 }

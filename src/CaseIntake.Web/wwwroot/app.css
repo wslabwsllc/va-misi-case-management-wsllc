@@ -701,6 +701,10 @@ dialog.modal[open] { animation: dialog-in 140ms ease-out; }
 
 /* Lookup and side cards */
 .lookup-header { align-items: flex-start; }
+/* Service history (Change 2): a sub-section of the veteran, at intake and on the case detail. */
+.service-history { margin: var(--space-3) 0; }
+.service-history h3 { margin-bottom: var(--space-2); }
+.service-history > p:not(.message) { margin: 0; color: var(--text-secondary); }
 .lookup-header__icon { display: inline-grid; place-items: center; width: 40px; height: 40px; border-radius: 10px; background: var(--brand-tint); color: var(--brand); flex: none; }
 .side-note { display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-3); border-radius: var(--radius-m); background: var(--surface-alt); color: var(--text-secondary); font-size: 13px; margin-top: var(--space-3); }
 .side-note .icon { color: var(--success); }

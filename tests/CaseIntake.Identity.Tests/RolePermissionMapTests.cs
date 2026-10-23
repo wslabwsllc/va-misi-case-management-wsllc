@@ -70,6 +70,22 @@ public class RolePermissionMapTests
         Assert.Equal([3, 5, 8, 14, 3, 20], Columns.Select(role => RolePermissionMap.PermissionsFor([role]).Count).ToArray());
     }
 
+    /// <summary>
+    /// Change 2, D5 (E3-C2-1): the service-history lookup reuses veteran.lookup, so the matrix above is unchanged and no
+    /// permission names service history. Reuse is safe only while every role that can create a case can also look up a
+    /// veteran (C1-3), or a case worker's intake would show "unavailable" for a permission reason.
+    /// </summary>
+    [Test]
+    public void Service_history_adds_no_permission_and_every_role_that_creates_cases_can_look_up_veterans()
+    {
+        Assert.Equal(20, RolePermissionMap.AllPermissions.Length);
+        Assert.DoesNotContain(RolePermissionMap.AllPermissions, p => p.Contains("history", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(PermissionCatalog.All, p => p.Label.Contains("history", StringComparison.OrdinalIgnoreCase)
+            || p.Description.Contains("service history", StringComparison.OrdinalIgnoreCase));
+        Assert.All(RolePermissionMap.Roles.Where(role => RolePermissionMap.Grants([role], Permissions.CasesCreate)),
+            role => Assert.True(RolePermissionMap.Grants([role], Permissions.VeteranLookup), $"{role} can create cases but not look up veterans"));
+    }
+
     /// <summary>The case permissions build up along the chain; oversight (audit.view) is outside it (ADR 0014).</summary>
     [Test]
     public void Each_case_role_adds_to_the_case_permissions_of_the_one_before_it()

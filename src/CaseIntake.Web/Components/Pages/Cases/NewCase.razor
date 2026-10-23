@@ -8,6 +8,7 @@
 @using CaseIntake.Web.Services
 @inject ICaseService Cases
 @inject IVeteranLookupClient VeteranLookup
+@inject IVeteranServiceHistoryClient ServiceHistoryLookup
 @inject StatusAnnouncer Announcer
 @inject NavigationManager Navigation
 @inject ICaseAssigneeDirectory Assignees
@@ -23,7 +24,9 @@
    the new case; a failure keeps the values and shows the error. The required veteran lookup is a separate form (Enter
    in the SSN box looks up instead of creating the case). The SSN is cleared after every completed lookup; only the
    last four digits of a found veteran are kept, and only if the user chooses "Use this veteran". A new or failed
-   lookup clears any previously selected veteran. *@
+   lookup clears any previously selected veteran. When the lookup finds a veteran, the same SSN is sent to the Service
+   History service before it is cleared (Change 2, D2); its result (found, no record or unavailable) is shown and kept
+   with the veteran, and never blocks submitting. *@
 <PageShell Title="Open a new case" DocumentTitle="New case" Breadcrumbs="@([new Crumb("Dashboard", ""), new Crumb("Cases", "cases")])"
            Subtitle="The title and a veteran are required. You can add the rest later." ShowBackButton="true" />
 
@@ -76,7 +79,8 @@
                     <h2 id="lookup-heading">Veteran lookup<span class="field__asterisk" aria-hidden="true"> *</span><span class="card__subtitle">Required</span></h2>
                 </div>
                 <p class="page-header__subtitle">Attach the veteran's name and address to this case. A case cannot be submitted without a veteran.</p>
-                <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm">
+                <EditForm EditContext="_lookupContext" OnSubmit="LookUpAsync" novalidate data-testid="lookup-form" Context="lookupForm"
+                          aria-busy="@(_lookingUp ? "true" : "false")">
                     @* A missing veteran is shown here as the SSN field's error (text, aria-invalid, aria-describedby) and
                        linked from the form's error summary; it stays until a veteran is attached or a new lookup runs. *@
                     <LabeledInputText Id="lookup-ssn" Label="Social Security number" @bind-Value="_lookupModel.Ssn"
@@ -113,6 +117,7 @@
                             <p class="message__title">@found.Name</p>
                             <p class="pre-wrap">@found.Address</p>
                             <p>SSN ending @found.SsnLast4</p>
+                            <ServiceHistoryDetails Status="found.HistoryStatus" History="found.History" AtIntake="true" />
                             <button type="button" class="btn btn--primary" @onclick="UseVeteranAsync" data-testid="use-veteran">Use this veteran</button>
                         </div>
                     </div>
@@ -124,6 +129,7 @@
                         <div class="message__body">
                             <p class="message__title">Veteran attached to this case</p>
                             <p>@selected.Name, SSN ending @selected.SsnLast4</p>
+                            <p data-testid="selected-history">@ServiceHistoryDetails.Summary(selected.HistoryStatus)</p>
                             <button type="button" class="btn btn--danger" @onclick="RemoveVeteran" @ref="_removeButton"><Icon Name="trash" Small="true" /> Remove veteran</button>
                         </div>
                     </div>
@@ -375,26 +381,34 @@
         var ssn = _lookupModel.Ssn ?? string.Empty;
         var digits = new string(ssn.Where(char.IsAsciiDigit).ToArray());
         _lookingUp = true;
+        // Both calls can take up to about 10 s together; the busy state is announced in the status region (F6).
+        _lookupMessage = BusyMessage;
         try
         {
             var result = await VeteranLookup.LookupAsync(ssn, _cts.Token);
             switch (result.Outcome)
             {
                 case VeteranLookupOutcome.Found when result.Name is not null && result.Address is not null && digits.Length == 9:
-                    _found = new VeteranSnapshot(result.Name, result.Address, digits[^4..]);
-                    _lookupMessage = $"Veteran found: {result.Name}. Review the details and choose Use this veteran to attach them.";
+                    _lookupMessage = $"Veteran found: {result.Name}. Looking up their service history…";
+                    StateHasChanged();
+                    var (status, history) = await LookUpServiceHistoryAsync(ssn);
+                    _found = new VeteranSnapshot(result.Name, result.Address, digits[^4..], status, history);
+                    _lookupMessage = $"Veteran found: {result.Name}. {ServiceHistoryDetails.Summary(status)} Review the details and choose Use this veteran to attach them.";
                     break;
                 case VeteranLookupOutcome.NotFound:
                     _lookupMessage = "Not found: no veteran matches that SSN. Check the number or continue without a lookup.";
                     break;
                 case VeteranLookupOutcome.InvalidInput:
+                    _lookupMessage = null;
                     _lookupMessages.Add(new FieldIdentifier(_lookupModel, nameof(LookupModel.Ssn)), "Enter a valid SSN: nine digits, or NNN-NN-NNNN.");
                     ShowLookupProblem("Invalid SSN format. Enter nine digits, or NNN-NN-NNNN, and look up again.", "error");
                     break;
                 case VeteranLookupOutcome.Forbidden:
+                    _lookupMessage = null;
                     ShowLookupProblem("Access denied: your role is not allowed to look up veterans.", "error");
                     break;
                 default:
+                    _lookupMessage = null;
                     ShowLookupProblem("The veteran lookup service is unavailable right now. Your entries are kept; try the lookup again before submitting.", "warning");
                     break;
             }
@@ -405,6 +419,7 @@
         }
         catch (Exception ex)
         {
+            _lookupMessage = null;
             Logger.LogError(new EventId(5004, "VeteranLookupUiFailed"), "Veteran lookup from intake failed ({ExceptionType})", ex.GetType().Name);
             ShowLookupProblem("The veteran lookup service is unavailable right now. Your entries are kept; try the lookup again before submitting.", "warning");
         }
@@ -414,6 +429,37 @@
             _lookupModel.Ssn = null;
             _lookingUp = false;
             _lookupContext.NotifyValidationStateChanged();
+        }
+    }
+
+    private const string BusyMessage = "Looking up the veteran…";
+
+    /// <summary>
+    /// Service history for a veteran the lookup just found, with the same SSN (R-CR2-1). Never blocks intake: anything
+    /// other than Found or NotFound, including a client that throws, is stored as Unavailable (D6). Only the caller's
+    /// cancellation (the page closing) propagates.
+    /// </summary>
+    private async Task<(ServiceHistoryStatus Status, ServiceHistory? History)> LookUpServiceHistoryAsync(string ssn)
+    {
+        try
+        {
+            var result = await ServiceHistoryLookup.LookupAsync(ssn, _cts.Token);
+            return result.Outcome switch
+            {
+                VeteranLookupOutcome.Found when result.History is not null => (ServiceHistoryStatus.Found, result.History),
+                VeteranLookupOutcome.NotFound => (ServiceHistoryStatus.NotFound, null),
+                _ => (ServiceHistoryStatus.Unavailable, null),
+            };
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // The exception type only: its message can embed request details (the SSN).
+            Logger.LogError(new EventId(5014, "ServiceHistoryUiFailed"), "Service-history lookup from intake failed ({ExceptionType})", ex.GetType().Name);
+            return (ServiceHistoryStatus.Unavailable, null);
         }
     }
 

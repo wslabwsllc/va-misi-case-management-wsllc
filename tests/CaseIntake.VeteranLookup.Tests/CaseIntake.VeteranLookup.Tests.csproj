@@ -6,10 +6,13 @@
   <!-- E4 lookup tests: the mock service, conformance to the Government contract (specification 4.6, parsed with
        Microsoft.OpenApi.YamlReader, tests only), spec-driven behaviour, the dataset, and the resilient client. Runs
        against the in-process mock always and also against the Compose veteran-lookup service when
-       VeteranLookup__BaseUrl is set (the tests service sets it). No TestKit: that would pull in the web app. -->
+       VeteranLookup__BaseUrl is set (the tests service sets it). The Service History mock and client (Change 2,
+       E4-C2-1/3) are tested here too, against the veteran-history container when VeteranHistory__BaseUrl is set.
+       No TestKit: that would pull in the web app. -->
   <ItemGroup>
     <ProjectReference Include="..\CaseIntake.Testing\CaseIntake.Testing.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Mock\CaseIntake.VeteranLookup.Mock.csproj" />
+    <ProjectReference Include="..\..\src\CaseIntake.VeteranHistory.Mock\CaseIntake.VeteranHistory.Mock.csproj" />
     <ProjectReference Include="..\..\src\CaseIntake.VeteranLookup.Client\CaseIntake.VeteranLookup.Client.csproj" />
   </ItemGroup>
   <ItemGroup>

@@ -58,6 +58,25 @@ public partial class SyntheticSsnGuardTests
             "SSN-shaped values must use a never-issued area number (000, 666 or 900-999):\n" + string.Join("\n", violations));
     }
 
+    /// <summary>
+    /// E3-C2-2: the Service History dataset and contract (Change 2) are scanned like every other file, and every SSN in
+    /// them is in the never-issued 900-999 area. Neither has an exemption.
+    /// </summary>
+    [TestCase("src", "CaseIntake.VeteranHistory.Mock", "Data", "service-history.json")]
+    [TestCase("docs", "contracts", "veteran-service-history.openapi.yaml")]
+    public void The_service_history_data_and_contract_are_scanned_and_use_area_900_to_999_only(params string[] path)
+    {
+        var file = RepositoryRoot.File(path);
+        Assert.Contains(file, RepositoryTextFiles().ToList());
+
+        var text = File.ReadAllText(file);
+        var ssns = SsnLiteral().Matches(text).Select(m => m.Groups["area"].Value).ToList();
+
+        Assert.NotEmpty(ssns);
+        Assert.All(ssns, area => Assert.Equal('9', area[0]));
+        Assert.Empty(Violations(text));
+    }
+
     // Issuable examples are assembled from fragments so this file never contains one as a literal.
     public static TheoryData<string, string?> Samples() => new()
     {

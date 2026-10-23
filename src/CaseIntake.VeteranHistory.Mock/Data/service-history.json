@@ -1,0 +1,368 @@
+[
+  {
+    "ssn": "900-12-3456",
+    "branch": "Army",
+    "serviceStartDate": "2001-02-15",
+    "serviceEndDate": "2005-02-14",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2026-01-05"
+  },
+  {
+    "ssn": "931-29-4152",
+    "branch": "Army",
+    "serviceStartDate": "1971-08-22",
+    "serviceEndDate": "1985-01-24",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-04-29"
+  },
+  {
+    "ssn": "992-53-9029",
+    "branch": "Air Force",
+    "serviceStartDate": "2003-04-18",
+    "serviceEndDate": "2021-08-27",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-08-05"
+  },
+  {
+    "ssn": "952-71-6012",
+    "branch": "Air Force",
+    "serviceStartDate": "1972-08-23",
+    "serviceEndDate": "1988-12-12",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-10-17"
+  },
+  {
+    "ssn": "938-84-0156",
+    "branch": "Marine Corps",
+    "serviceStartDate": "1985-12-25",
+    "serviceEndDate": "2008-05-24",
+    "characterOfService": "Other Than Honorable",
+    "lastVerifiedDate": "2024-08-02"
+  },
+  {
+    "ssn": "928-98-0683",
+    "branch": "Air Force",
+    "serviceStartDate": "1990-07-28",
+    "serviceEndDate": "2012-05-22",
+    "characterOfService": "Other Than Honorable",
+    "lastVerifiedDate": "2024-06-16"
+  },
+  {
+    "ssn": "948-75-7033",
+    "branch": "Coast Guard",
+    "serviceStartDate": "1985-09-20",
+    "serviceEndDate": "2001-01-15",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-05-20"
+  },
+  {
+    "ssn": "925-15-0571",
+    "branch": "Marine Corps",
+    "serviceStartDate": "1996-12-12",
+    "serviceEndDate": "2002-10-22",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2025-03-27"
+  },
+  {
+    "ssn": "953-42-6183",
+    "branch": "Army",
+    "serviceStartDate": "2014-05-23",
+    "characterOfService": "Other Than Honorable",
+    "lastVerifiedDate": "2024-04-10"
+  },
+  {
+    "ssn": "917-36-2597",
+    "branch": "Army",
+    "serviceStartDate": "2009-02-16",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-12-16"
+  },
+  {
+    "ssn": "929-72-9238",
+    "branch": "Coast Guard",
+    "serviceStartDate": "2000-11-24",
+    "serviceEndDate": "2010-02-15",
+    "characterOfService": "Other Than Honorable",
+    "lastVerifiedDate": "2025-10-03"
+  },
+  {
+    "ssn": "991-21-2821",
+    "branch": "Marine Corps",
+    "serviceStartDate": "2014-12-10",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-05-29"
+  },
+  {
+    "ssn": "909-97-6969",
+    "branch": "Army",
+    "serviceStartDate": "2008-12-31",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-05-08"
+  },
+  {
+    "ssn": "938-12-8938",
+    "branch": "Army",
+    "serviceStartDate": "1996-02-24",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-01-09"
+  },
+  {
+    "ssn": "949-44-0484",
+    "branch": "Coast Guard",
+    "serviceStartDate": "1972-08-25",
+    "serviceEndDate": "1991-11-15",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2024-09-05"
+  },
+  {
+    "ssn": "914-63-9517",
+    "branch": "Coast Guard",
+    "serviceStartDate": "2001-03-23",
+    "serviceEndDate": "2021-12-16",
+    "characterOfService": "Other Than Honorable",
+    "lastVerifiedDate": "2024-06-17"
+  },
+  {
+    "ssn": "982-82-1618",
+    "branch": "Marine Corps",
+    "serviceStartDate": "2014-11-20",
+    "serviceEndDate": "2020-12-14",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-10-31"
+  },
+  {
+    "ssn": "980-47-2610",
+    "branch": "Navy",
+    "serviceStartDate": "2016-08-03",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-02-08"
+  },
+  {
+    "ssn": "990-97-2665",
+    "branch": "Air Force",
+    "serviceStartDate": "2018-11-08",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-08-18"
+  },
+  {
+    "ssn": "916-60-2281",
+    "branch": "Air Force",
+    "serviceStartDate": "2001-04-27",
+    "serviceEndDate": "2005-11-13",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-02-22"
+  },
+  {
+    "ssn": "910-81-4784",
+    "branch": "Space Force",
+    "serviceStartDate": "1987-02-26",
+    "serviceEndDate": "2007-10-06",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-05-16"
+  },
+  {
+    "ssn": "906-90-1848",
+    "branch": "Marine Corps",
+    "serviceStartDate": "1983-09-30",
+    "serviceEndDate": "2004-07-30",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-03-10"
+  },
+  {
+    "ssn": "965-30-6587",
+    "branch": "Air Force",
+    "serviceStartDate": "1976-01-11",
+    "serviceEndDate": "1998-10-22",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2024-04-17"
+  },
+  {
+    "ssn": "923-86-4528",
+    "branch": "Coast Guard",
+    "serviceStartDate": "2014-08-25",
+    "characterOfService": "Honorable"
+  },
+  {
+    "ssn": "988-53-3195",
+    "branch": "Space Force",
+    "serviceStartDate": "1980-04-23",
+    "serviceEndDate": "2001-07-02",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-01-02"
+  },
+  {
+    "ssn": "925-15-1754",
+    "branch": "Air Force",
+    "serviceStartDate": "2004-07-16",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-11-11"
+  },
+  {
+    "ssn": "957-67-3164",
+    "branch": "Coast Guard",
+    "serviceStartDate": "1972-12-14",
+    "serviceEndDate": "1979-04-14",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2025-03-05"
+  },
+  {
+    "ssn": "950-41-1263",
+    "branch": "Space Force",
+    "serviceStartDate": "2019-02-24",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-08-24"
+  },
+  {
+    "ssn": "981-61-3043",
+    "branch": "Space Force",
+    "serviceStartDate": "1993-10-17",
+    "serviceEndDate": "2007-02-13",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2025-10-01"
+  },
+  {
+    "ssn": "921-94-6521",
+    "branch": "Space Force",
+    "serviceStartDate": "1974-05-16",
+    "serviceEndDate": "1990-11-28",
+    "characterOfService": "Honorable"
+  },
+  {
+    "ssn": "985-63-7703",
+    "branch": "Navy",
+    "serviceStartDate": "1976-08-29",
+    "serviceEndDate": "1979-09-17",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-01-10"
+  },
+  {
+    "ssn": "930-84-7037",
+    "branch": "Navy",
+    "serviceStartDate": "1985-01-07",
+    "serviceEndDate": "2002-04-30",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-09-02"
+  },
+  {
+    "ssn": "916-19-1786",
+    "branch": "Marine Corps",
+    "serviceStartDate": "1987-01-22",
+    "serviceEndDate": "2009-07-18",
+    "characterOfService": "Other Than Honorable",
+    "lastVerifiedDate": "2025-11-27"
+  },
+  {
+    "ssn": "951-75-6703",
+    "branch": "Air Force",
+    "serviceStartDate": "2018-07-24",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2024-02-11"
+  },
+  {
+    "ssn": "955-64-8089",
+    "branch": "Coast Guard",
+    "serviceStartDate": "2018-07-20",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2025-04-12"
+  },
+  {
+    "ssn": "902-47-5786",
+    "branch": "Marine Corps",
+    "serviceStartDate": "2008-01-04",
+    "serviceEndDate": "2020-01-31",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-04-24"
+  },
+  {
+    "ssn": "997-33-9548",
+    "branch": "Marine Corps",
+    "serviceStartDate": "2011-08-06",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-03-03"
+  },
+  {
+    "ssn": "996-63-5374",
+    "branch": "Navy",
+    "serviceStartDate": "1983-07-02",
+    "serviceEndDate": "1999-10-28",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-04-01"
+  },
+  {
+    "ssn": "972-72-1984",
+    "branch": "Coast Guard",
+    "serviceStartDate": "1978-01-25",
+    "serviceEndDate": "1990-11-05",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-11-29"
+  },
+  {
+    "ssn": "998-65-4845",
+    "branch": "Coast Guard",
+    "serviceStartDate": "1986-06-08",
+    "serviceEndDate": "1991-12-20",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-03-02"
+  },
+  {
+    "ssn": "957-50-9482",
+    "branch": "Marine Corps",
+    "serviceStartDate": "1974-11-08",
+    "serviceEndDate": "1985-03-30",
+    "characterOfService": "Uncharacterized",
+    "lastVerifiedDate": "2024-09-11"
+  },
+  {
+    "ssn": "971-59-2307",
+    "branch": "Air Force",
+    "serviceStartDate": "1988-12-20",
+    "serviceEndDate": "2005-08-16",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-12-23"
+  },
+  {
+    "ssn": "962-63-8847",
+    "branch": "Navy",
+    "serviceStartDate": "1999-03-13",
+    "serviceEndDate": "2013-11-14",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2024-12-27"
+  },
+  {
+    "ssn": "933-15-6968",
+    "branch": "Coast Guard",
+    "serviceStartDate": "2007-04-20",
+    "serviceEndDate": "2023-09-23",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2025-08-22"
+  },
+  {
+    "ssn": "967-93-8893",
+    "branch": "Coast Guard",
+    "serviceStartDate": "2011-05-05",
+    "characterOfService": "Uncharacterized"
+  },
+  {
+    "ssn": "987-86-3141",
+    "branch": "Coast Guard",
+    "serviceStartDate": "1978-08-25",
+    "serviceEndDate": "1986-07-31",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2025-07-21"
+  },
+  {
+    "ssn": "970-26-0849",
+    "branch": "Air Force",
+    "serviceStartDate": "2009-01-24",
+    "characterOfService": "Honorable",
+    "lastVerifiedDate": "2024-04-29"
+  },
+  {
+    "ssn": "985-95-9503",
+    "branch": "Army",
+    "serviceStartDate": "2013-06-25",
+    "serviceEndDate": "2022-01-06",
+    "characterOfService": "General (Under Honorable Conditions)",
+    "lastVerifiedDate": "2024-12-09"
+  }
+]

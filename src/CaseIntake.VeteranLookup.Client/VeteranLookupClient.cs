@@ -8,7 +8,6 @@ using CaseIntake.Contracts.VeteranLookup;
 using CaseIntake.Domain.Cases;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using Polly.Timeout;
 
 namespace CaseIntake.VeteranLookup.Client;
 
@@ -50,27 +49,16 @@ internal sealed partial class VeteranLookupClient(
         }
 
         var started = timeProvider.GetTimestamp();
-        // The single owner of the total timeout: the pipeline bounds each attempt up to the response headers, and this
-        // budget bounds the whole call including the body, so a stalled response cannot hold intake past it.
-        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        budget.CancelAfter(options.Value.TotalTimeout);
-        try
-        {
-            using var response = await http.PostAsJsonAsync(LookupPath, new LookupRequest(normalized), ClientJsonContext.Default.LookupRequest, budget.Token);
-            return await MapAsync(response, normalized, started, budget.Token);
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception ex) when (ex is HttpRequestException or IOException or TimeoutRejectedException or OperationCanceledException)
-        {
-            // A timeout surfaces as TimeoutRejectedException (last attempt) or OperationCanceledException (total
-            // budget); either way the caller did not cancel. A connection dropped while the body is read is an IOException
-            // (HttpIOException). Never log the exception message: it can embed request details.
-            LookupLog.Unavailable(logger, ex.GetType().Name, null, Elapsed(started));
-            return Unavailable;
-        }
+        // The total budget bounds the whole call including the body, so a stalled response cannot hold intake past it.
+        return await LookupTransport.PostAsync(http, LookupPath, new LookupRequest(normalized), ClientJsonContext.Default.LookupRequest,
+            options.Value.TotalTimeout,
+            (response, budget) => MapAsync(response, normalized, started, budget),
+            exceptionType =>
+            {
+                LookupLog.Unavailable(logger, exceptionType, null, Elapsed(started));
+                return Unavailable;
+            },
+            ct);
     }
 
     /// <summary>Accepts exactly nine ASCII digits or <c>NNN-NN-NNNN</c>; returns the dashed form, or null when invalid.</summary>

@@ -5,6 +5,9 @@
     <ProjectReference Include="..\CaseIntake.ServiceDefaults\CaseIntake.ServiceDefaults.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="Data\service-history.json" LogicalName="CaseIntake.VeteranHistory.Mock.service-history.json" />
+  </ItemGroup>
+  <ItemGroup>
     <InternalsVisibleTo Include="CaseIntake.VeteranLookup.Tests" />
   </ItemGroup>
 </Project>

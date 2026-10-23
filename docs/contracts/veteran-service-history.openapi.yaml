@@ -1,0 +1,71 @@
+# Veteran Service History Service: the team's own contract (Change 2, E4-C2-2, ADR 0018).
+# The Government supplied an interface table, not an OpenAPI definition (docs/change-request-plan.md, section 0.1). This
+# document restates that table. Additions beyond it are marked with x-extension: the 400 response and the optional
+# lastVerifiedDate (decision D7: the requirement lists "date last verified", the example response omits it).
+# The example SSN is synthetic (area 900-999, never issued).
+openapi: 3.0.3
+info:
+  title: Veteran Service History Service
+  version: 1.0.0
+paths:
+  /veterans/service-history/lookup:
+    post:
+      summary: Look up a veteran's service history by SSN
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ssn]
+              properties:
+                ssn:
+                  type: string
+                  description: Nine digits, with or without dashes (the same SSN the Veteran Lookup Service accepted).
+                  example: '900-12-3456'
+      responses:
+        '200':
+          description: Found
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [branch, serviceStartDate, characterOfService]
+                properties:
+                  branch:
+                    type: string
+                    example: Army
+                  serviceStartDate:
+                    type: string
+                    format: date
+                    example: '2001-02-15'
+                  serviceEndDate:
+                    type: string
+                    format: date
+                    description: Omitted while the veteran is still serving (D7).
+                    example: '2005-02-14'
+                  characterOfService:
+                    type: string
+                    example: Honorable
+                  lastVerifiedDate:
+                    type: string
+                    format: date
+                    description: Date the source record was last verified. Optional (D7).
+                    example: '2026-01-05'
+                    x-extension: true
+        '400':
+          description: The body is not JSON, or ssn is missing, null, not a string or blank
+          x-extension: true
+          content:
+            application/problem+json:
+              schema:
+                type: object
+                properties:
+                  title:
+                    type: string
+                  status:
+                    type: integer
+        '404':
+          description: No service-history record found
+        '503':
+          description: Service temporarily unavailable
