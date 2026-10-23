@@ -5,6 +5,8 @@ using NpgsqlTypes;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-C2-2: the database repeats the service-history rules, so no inconsistent row can be stored.</summary>
+[Category("Story:E2-C2-2")]
+[Category("Req:R-CR2-2")]
 public class ServiceHistorySchemaTests : ClassFixture<ServiceHistorySchemaTests, PostgresDatabaseFixture>
 {
     private static PostgresDatabaseFixture database => Shared;

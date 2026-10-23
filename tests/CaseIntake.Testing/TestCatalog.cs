@@ -1,7 +1,8 @@
 using System.Reflection;
 using System.Text.Json;
+using NUnit.Framework;
 
-namespace CaseIntake.TestKit;
+namespace CaseIntake.Testing;
 
 /// <summary>
 /// Writes <c>&lt;TEST_RUN_DIR&gt;/catalog/&lt;assembly&gt;.json</c>: every test method with its NUnit <c>[Category]</c> values

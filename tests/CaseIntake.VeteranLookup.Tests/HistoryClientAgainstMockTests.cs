@@ -12,6 +12,10 @@ namespace CaseIntake.VeteranLookup.Tests;
 /// demo SSN of plan 0.4. In the <c>tests</c> service this also runs against the <c>veteran-history</c> container. As in
 /// <see cref="ClientAgainstMockTests"/>, one warm-up lookup with a relaxed budget runs first.
 /// </summary>
+[Category("Story:E4-C2-3")]
+[Category("Req:R-CR2-1")]
+[Category("Req:R-CR2-4")]
+[Category("Req:R-CR2-5")]
 public class HistoryClientAgainstMockTests : ClassFixture<HistoryClientAgainstMockTests, HistoryMockServiceFactory>
 {
     private static HistoryMockServiceFactory factory => Shared;

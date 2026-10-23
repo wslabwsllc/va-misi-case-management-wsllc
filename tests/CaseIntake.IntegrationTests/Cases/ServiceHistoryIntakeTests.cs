@@ -11,6 +11,9 @@ using Microsoft.Extensions.Logging.Testing;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-C2-3: the service-history outcome captured at intake is saved with the case and returned with its detail.</summary>
+[Category("Story:E2-C2-3")]
+[Category("Req:R-CR2-2")]
+[Category("Req:R-CR2-3")]
 public class ServiceHistoryIntakeTests : ClassFixture<ServiceHistoryIntakeTests, PostgresDatabaseFixture>
 {
     private static PostgresDatabaseFixture database => Shared;

@@ -4,6 +4,9 @@ using CaseIntake.Domain.Cases;
 namespace CaseIntake.Cases.Tests;
 
 /// <summary>E2-C2-1: the service-history snapshot rules, applied the same way by the request validator and the entity.</summary>
+[Category("Story:E2-C2-1")]
+[Category("Req:R-CR2-2")]
+[Category("Req:R-CR2-4")]
 public class ServiceHistoryRulesTests
 {
     private static readonly DateTimeOffset Now = new(2026, 10, 23, 12, 0, 0, TimeSpan.Zero);

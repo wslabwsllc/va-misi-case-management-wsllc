@@ -11,6 +11,8 @@ using Npgsql;
 namespace CaseIntake.IntegrationTests.Cases;
 
 /// <summary>E2-C2-2: the Change 2 migration adds six nullable columns to a seeded database and leaves its rows unchanged.</summary>
+[Category("Story:E2-C2-2")]
+[Category("Req:R-CR2-2")]
 public sealed class ServiceHistoryMigrationTests : IAsyncLifetime
 {
     private const string PreviousMigration = "20261021113919_Q1_Section508TestResults";

@@ -75,6 +75,8 @@ public class RolePermissionMapTests
     /// permission names service history. Reuse is safe only while every role that can create a case can also look up a
     /// veteran (C1-3), or a case worker's intake would show "unavailable" for a permission reason.
     /// </summary>
+    [Category("Story:E3-C2-1")]
+    [Category("Req:R-CR2-1")]
     [Test]
     public void Service_history_adds_no_permission_and_every_role_that_creates_cases_can_look_up_veterans()
     {

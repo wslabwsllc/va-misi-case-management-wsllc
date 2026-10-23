@@ -1,5 +1,5 @@
 using System.Runtime.CompilerServices;
-using CaseIntake.TestKit;
+using CaseIntake.Testing;
 
 namespace CaseIntake.Web.Tests;
 
